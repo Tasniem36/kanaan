@@ -1,0 +1,61 @@
+# Production stack: Postgres + API + web (nginx) + Caddy (HTTPS at your domain).
+# Deploy:  docker compose -f docker-compose.prod.yml up -d --build
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  api:
+    build: ./server
+    restart: unless-stopped
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      JWT_SECRET: ${JWT_SECRET}
+      PORT: 8080
+      SEED_MANAGER_EMAIL: ${SEED_MANAGER_EMAIL:-}
+      SEED_MANAGER_PASSWORD: ${SEED_MANAGER_PASSWORD:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    command: sh -c "node db/migrate.js && node index.js"
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    restart: unless-stopped
+    depends_on:
+      - api
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+
+volumes:
+  dbdata:
+  caddy_data:
+  caddy_config:

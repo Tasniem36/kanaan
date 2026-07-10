@@ -1,0 +1,50 @@
+# Full stack: Postgres + API + web (nginx). Run:  docker compose up --build
+# Then open http://localhost:8080
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-dukkan}
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  api:
+    build: ./server
+    restart: unless-stopped
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_NAME: ${DB_NAME:-dukkan}
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      PORT: 8080
+      # first manager account, created on migrate (optional)
+      SEED_MANAGER_EMAIL: ${SEED_MANAGER_EMAIL:-}
+      SEED_MANAGER_PASSWORD: ${SEED_MANAGER_PASSWORD:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    # apply schema+seed (idempotent) then start the API
+    command: sh -c "node db/migrate.js && node index.js"
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    restart: unless-stopped
+    ports:
+      - '8080:80'
+    depends_on:
+      - api
+
+volumes:
+  dbdata:
