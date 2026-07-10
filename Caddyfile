@@ -1,10 +1,11 @@
-# Caddy auto-provisions a free Let's Encrypt HTTPS certificate for your domain
-# and reverse-proxies to the web (nginx) container. DOMAIN comes from .env.
-{$DOMAIN} {
+# Caddy auto-provisions a free Let's Encrypt HTTPS certificate and reverse-proxies
+# to the web (nginx) container. Domain is written in directly (Caddy does not read
+# .env, so a {$DOMAIN} placeholder would be empty and fail to parse).
+dukkan-kanaan.com {
 	reverse_proxy web:80
 }
 
 # send www.dukkan-kanaan.com → dukkan-kanaan.com
-www.{$DOMAIN} {
-	redir https://{$DOMAIN}{uri} permanent
+www.dukkan-kanaan.com {
+	redir https://dukkan-kanaan.com{uri} permanent
 }

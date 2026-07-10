@@ -31,12 +31,13 @@ In Cloudflare → your domain → **DNS → Add record**:
 (Grey cloud matters so Caddy can issue the certificate. You can turn on the orange proxy later.)
 
 ## 5. Get the code onto the server
+The repo is public, so clone it directly (no token needed):
 ```bash
-# option A: git
-git clone <your-repo-url> app && cd app
-# option B: from your Mac, copy the folder up
-# scp -r dukkan-kanaan-vue root@SERVER_IP:/root/app   (then: cd /root/app)
+git clone https://github.com/Tasniem36/kanaan.git app
+cd app
 ```
+(If you later make the repo private: clone with a token instead —
+`git clone https://Tasniem36:YOUR_TOKEN@github.com/Tasniem36/kanaan.git app`)
 
 ## 6. Configure secrets
 ```bash
@@ -63,10 +64,22 @@ crontab -e                              # then add:
 # 0 3 * * * cd /root/app && ./scripts/backup.sh
 ```
 
+## Push to GitHub (from your Mac, one time)
+1. Create a token: GitHub → Settings → Developer settings → **Fine-grained tokens**
+   → Generate → repo access: only **kanaan** → Permissions: **Contents = Read and write**.
+2. Push:
+   ```bash
+   git push https://Tasniem36:YOUR_TOKEN@github.com/Tasniem36/kanaan.git main
+   git branch --set-upstream-to=origin/main main
+   ```
+   (After this, plain `git push` works from your Mac.)
+
 ## Updating later
 ```bash
-git pull                                 # or re-copy the files
-docker compose -f docker-compose.prod.yml up -d --build
+# on your Mac: commit + push changes
+git add -A && git commit -m "update" && git push
+# on the server:
+git pull && docker compose -f docker-compose.prod.yml up -d --build
 ```
 
 ## Troubleshooting
