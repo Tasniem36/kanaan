@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { query } from '../lib/db.js'
 import { hashPassword, verifyPassword, signToken, requireAuth } from '../lib/auth.js'
+import { EMAIL_RE, STRONG_PW_RE, normalizeUaePhone } from '../lib/validate.js'
 
 export const authRouter = Router()
 
@@ -10,14 +11,19 @@ const publicUser = (u) => ({ id: u.id, email: u.email, full_name: u.full_name, p
 authRouter.post('/register', async (req, res) => {
   const { email, password, full_name, phone } = req.body || {}
   if (!email || !password) return res.status(400).json({ error: 'البريد وكلمة المرور مطلوبان' })
-  if (String(password).length < 6) return res.status(400).json({ error: 'كلمة المرور قصيرة جدًا (٦ أحرف على الأقل)' })
+  if (!EMAIL_RE.test(String(email))) return res.status(400).json({ error: 'بريد إلكتروني غير صالح' })
+  const phoneNorm = normalizeUaePhone(phone)
+  if (!phoneNorm) return res.status(400).json({ error: 'رقم هاتفٍ إماراتيٍّ غير صالح' })
+  if (!STRONG_PW_RE.test(String(password))) {
+    return res.status(400).json({ error: 'كلمة المرور ضعيفة: ٨ أحرفٍ على الأقل مع حرفٍ كبيرٍ وصغيرٍ ورقم' })
+  }
   try {
     const hash = await hashPassword(password)
     const { rows } = await query(
       `insert into users (email, password_hash, full_name, phone)
        values ($1, $2, $3, $4)
        returning id, email, full_name, phone, role`,
-      [String(email).toLowerCase().trim(), hash, full_name || null, phone || null]
+      [String(email).toLowerCase().trim(), hash, full_name || null, phoneNorm]
     )
     const user = rows[0]
     res.status(201).json({ token: signToken(user), user: publicUser(user) })

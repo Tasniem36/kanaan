@@ -34,6 +34,7 @@ import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '../stores/auth'
 import LangToggle from '../components/LangToggle.vue'
 import PasswordInput from '../components/PasswordInput.vue'
+import { normalizeUaePhone } from '../utils/phone'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -55,15 +56,6 @@ const STRONG_PW_RE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/
 // strip anything that isn't a digit / + - space ( ) as the user types
 function onPhone(e) {
   phone.value = e.target.value.replace(/[^\d+\-\s()]/g, '')
-}
-
-// Validate a UAE mobile and return it normalized as +9715XXXXXXXX, or null.
-// Accepts 05XXXXXXXX, 5XXXXXXXX, 9715XXXXXXXX, +9715XXXXXXXX (with spaces/dashes).
-function normalizeUaePhone(raw) {
-  let d = (raw || '').replace(/\D/g, '')
-  if (d.startsWith('971')) d = d.slice(3)
-  else if (d.startsWith('0')) d = d.slice(1)
-  return /^5\d{8}$/.test(d) ? '+971' + d : null
 }
 
 function validate() {

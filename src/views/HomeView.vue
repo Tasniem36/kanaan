@@ -3,7 +3,7 @@
 
   <PortalBar :scrolled="scrolled">
     <nav class="tabs store-nav" aria-label="nav">
-      <a href="#home" :class="{ active: activeSection === 'home' }">{{ t('nav.home') }}</a><a href="#pantry" :class="{ active: activeSection === 'pantry' }">{{ t('nav.pantry') }}</a><a href="#story" :class="{ active: activeSection === 'story' }">{{ t('nav.story') }}</a><a href="#pottery" :class="{ active: activeSection === 'pottery' }">{{ t('nav.pottery') }}</a><a href="#contact" :class="{ active: activeSection === 'contact' }">{{ t('nav.contact') }}</a>
+      <a href="#home" :class="{ active: activeSection === 'home' }">{{ t('nav.home') }}</a><a href="#pantry" :class="{ active: activeSection === 'pantry' }">{{ t('nav.pantry') }}</a><a href="#pottery" :class="{ active: activeSection === 'pottery' }">{{ t('nav.pottery') }}</a><a href="#story" :class="{ active: activeSection === 'story' }">{{ t('nav.story') }}</a><a href="#contact" :class="{ active: activeSection === 'contact' }">{{ t('nav.contact') }}</a>
     </nav>
     <template #actions>
       <button class="cart-btn" @click="openCart = true" aria-label="cart">
@@ -58,6 +58,16 @@
 
   <div class="divider" aria-hidden="true"><img src="/images/dome.jpg" alt=""></div>
 
+  <!-- pottery -->
+  <section class="pottery" id="pottery">
+    <div class="wrap">
+      <div class="sec-head reveal"><span class="eyebrow">{{ t('home.potteryEyebrow') }}</span><h2 class="display">{{ t('home.potteryTitle') }}</h2><p>{{ t('home.potteryDesc') }}</p></div>
+      <div class="grid">
+        <ProductCard v-for="(p, i) in catalog.pottery" :key="p.id" :product="p" :index="i" @added="onAdded" />
+      </div>
+    </div>
+  </section>
+
   <!-- story -->
   <section class="story" id="story">
     <div class="wrap inner">
@@ -67,16 +77,6 @@
         <p>{{ t('home.storyText') }}</p>
       </div>
       <div class="pic reveal"><img src="/images/tatreez.jpg" alt="قبة الصخرة"></div>
-    </div>
-  </section>
-
-  <!-- pottery -->
-  <section class="pottery" id="pottery">
-    <div class="wrap">
-      <div class="sec-head reveal"><span class="eyebrow">{{ t('home.potteryEyebrow') }}</span><h2 class="display">{{ t('home.potteryTitle') }}</h2><p>{{ t('home.potteryDesc') }}</p></div>
-      <div class="grid">
-        <ProductCard v-for="(p, i) in catalog.pottery" :key="p.id" :product="p" :index="i" @added="onAdded" />
-      </div>
     </div>
   </section>
 
@@ -139,7 +139,7 @@
         <label class="co-l">{{ t('checkout.fullName') }} *</label>
         <input class="a-input" v-model.trim="co.name">
         <label class="co-l">{{ t('checkout.phone') }} *</label>
-        <input class="a-input" v-model.trim="co.phone" type="tel" inputmode="tel" dir="ltr" placeholder="059 000 0000">
+        <input class="a-input" v-model.trim="co.phone" type="tel" inputmode="tel" dir="ltr" placeholder="050 123 4567">
         <div class="grid2">
           <div><label class="co-l">{{ t('checkout.city') }} *</label><input class="a-input" v-model.trim="co.city"></div>
           <div><label class="co-l">{{ t('checkout.street') }} *</label><input class="a-input" v-model.trim="co.street"></div>
@@ -180,6 +180,7 @@ import { useAddressesStore } from '../stores/addresses'
 import ProductCard from '../components/ProductCard.vue'
 import CartDrawer from '../components/CartDrawer.vue'
 import PortalBar from '../components/PortalBar.vue'
+import { normalizeUaePhone } from '../utils/phone'
 
 const { t } = useI18n()
 const cart = useCartStore()
@@ -274,6 +275,11 @@ async function placeOrder() {
     delivery = { customer_name: co.name, phone: co.phone, city: co.city, street: co.street, house: co.house, notes: co.notes }
   }
 
+  // delivery phone must be a valid UAE mobile
+  const normPhone = normalizeUaePhone(delivery.phone)
+  if (!normPhone) { coErr.value = t('auth.errPhoneUAE'); return }
+  delivery.phone = normPhone
+
   placing.value = true
   try {
     const items = cart.list.map((i) => ({ product_id: i.id, qty: i.q }))
@@ -298,7 +304,7 @@ watch(() => auth.isAuthenticated, () => {}) // keep header reactive
 
 onMounted(() => {
   catalog.fetch()
-  const navSections = ['home', 'pantry', 'story', 'pottery', 'contact']
+  const navSections = ['home', 'pantry', 'pottery', 'story', 'contact']
   function updateActiveSection() {
     const line = scrollY + innerHeight * 0.3 // a bit below the sticky header
     let current = navSections[0]

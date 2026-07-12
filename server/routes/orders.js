@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { query, withTransaction } from '../lib/db.js'
 import { requireAuth, requireManager } from '../lib/auth.js'
+import { normalizeUaePhone } from '../lib/validate.js'
 
 export const ordersRouter = Router()
 
@@ -12,6 +13,8 @@ ordersRouter.post('/', async (req, res) => {
   if (!customer_name || !phone || !city || !street || !house) {
     return res.status(400).json({ error: 'فضلًا أكمل الحقول المطلوبة' })
   }
+  const phoneNorm = normalizeUaePhone(phone)
+  if (!phoneNorm) return res.status(400).json({ error: 'رقم هاتفٍ إماراتيٍّ غير صالح' })
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: 'السلّة فارغة' })
   }
@@ -42,7 +45,7 @@ ordersRouter.post('/', async (req, res) => {
         `insert into orders (user_id, customer_name, phone, city, street, house, notes, total)
          values ($1, $2, $3, $4, $5, $6, $7, $8)
          returning *`,
-        [req.user?.id || null, customer_name, phone, city, street, house, notes || null, total]
+        [req.user?.id || null, customer_name, phoneNorm, city, street, house, notes || null, total]
       )
       const newOrder = orderRows[0]
 
