@@ -2,8 +2,8 @@
   <div class="topbar"><transition name="fade" mode="out-in"><span class="tb-msg" :key="tbi" v-html="topbarMsgs[tbi]"></span></transition></div>
 
   <PortalBar :scrolled="scrolled">
-    <nav class="tabs" aria-label="nav">
-      <a href="#home">{{ t('nav.home') }}</a><a href="#pantry">{{ t('nav.pantry') }}</a><a href="#pottery">{{ t('nav.pottery') }}</a><a href="#story">{{ t('nav.story') }}</a><a href="#contact">{{ t('nav.contact') }}</a>
+    <nav class="tabs store-nav" aria-label="nav">
+      <a href="#home" :class="{ active: activeSection === 'home' }">{{ t('nav.home') }}</a><a href="#pantry" :class="{ active: activeSection === 'pantry' }">{{ t('nav.pantry') }}</a><a href="#story" :class="{ active: activeSection === 'story' }">{{ t('nav.story') }}</a><a href="#pottery" :class="{ active: activeSection === 'pottery' }">{{ t('nav.pottery') }}</a><a href="#contact" :class="{ active: activeSection === 'contact' }">{{ t('nav.contact') }}</a>
     </nav>
     <template #actions>
       <button class="cart-btn" @click="openCart = true" aria-label="cart">
@@ -207,6 +207,7 @@ const email = ref('')
 const modal = ref(null)
 const showTop = ref(false)
 const tbi = ref(0)
+const activeSection = ref('home')
 
 const checkoutOpen = ref(false)
 const coErr = ref('')
@@ -297,10 +298,24 @@ watch(() => auth.isAuthenticated, () => {}) // keep header reactive
 
 onMounted(() => {
   catalog.fetch()
+  const navSections = ['home', 'pantry', 'story', 'pottery', 'contact']
+  function updateActiveSection() {
+    const line = scrollY + innerHeight * 0.3 // a bit below the sticky header
+    let current = navSections[0]
+    for (const id of navSections) {
+      const el = document.getElementById(id)
+      if (el && el.offsetTop <= line) current = id
+    }
+    // near the very bottom, force the last section active
+    if (innerHeight + scrollY >= document.body.scrollHeight - 4) current = navSections[navSections.length - 1]
+    activeSection.value = current
+  }
   addEventListener('scroll', () => {
     scrolled.value = scrollY > 10
     showTop.value = scrollY > 620
+    updateActiveSection()
   }, { passive: true })
+  updateActiveSection()
   const io = new IntersectionObserver((es) => {
     es.forEach((e) => {
       if (e.isIntersecting) {

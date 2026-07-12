@@ -123,8 +123,11 @@ export default {
     errEmail: 'Please enter a valid email',
     errPhone: 'Phone number must contain digits only',
     errPhoneLen: 'Please enter a valid phone number',
+    errPhoneUAE: 'Enter a valid UAE phone number (e.g. 050 123 4567)',
     errPwLen: 'Password must be at least 6 characters',
+    errPwStrong: 'Password must be at least 8 characters and include an uppercase letter, a lowercase letter, and a number',
     errPwMatch: 'Passwords do not match',
+    pwHint: 'At least 8 characters, with an uppercase, a lowercase, and a number',
   },
   account: {
     title: 'My account',
