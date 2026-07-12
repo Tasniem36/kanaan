@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 
 const SECRET = process.env.JWT_SECRET || 'dev-secret-change-me'
-const EXPIRES_IN = '7d'
+const EXPIRES_IN = '24h' // keep users signed in for 24 hours
 
 export const hashPassword = (pw) => bcrypt.hash(pw, 10)
 export const verifyPassword = (pw, hash) => bcrypt.compare(pw, hash)
