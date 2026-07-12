@@ -21,7 +21,7 @@
         <button class="a-btn" :disabled="pBusy" @click="addProduct">{{ pBusy ? '…' : t('manager.addBtn') }}</button>
       </div>
 
-      <div>
+      <div class="table-wrap">
         <table class="a-table">
           <thead><tr><th>{{ t('manager.colProduct') }}</th><th>{{ t('manager.colPrice') }}</th><th>{{ t('manager.colStock') }}</th><th>{{ t('manager.colRestock') }}</th><th></th></tr></thead>
           <tbody>

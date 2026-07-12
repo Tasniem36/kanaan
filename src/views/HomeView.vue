@@ -13,11 +13,23 @@
       <button class="burger" @click="mobileMenu = !mobileMenu" aria-label="menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
     </template>
   </PortalBar>
-  <div class="wrap mobile-menu" :class="{ show: mobileMenu }">
-    <a href="#pantry" @click="mobileMenu = false">{{ t('nav.pantry') }}</a><a href="#pottery" @click="mobileMenu = false">{{ t('nav.pottery') }}</a><a href="#story" @click="mobileMenu = false">{{ t('nav.story') }}</a><a href="#contact" @click="mobileMenu = false">{{ t('nav.contact') }}</a>
-    <RouterLink v-if="auth.isAuthenticated" to="/account">{{ t('nav.account') }}</RouterLink>
-    <RouterLink v-else to="/login">{{ t('auth.loginTitle') }}</RouterLink>
-  </div>
+  <!-- mobile nav sidebar -->
+  <transition name="v"><div v-if="mobileMenu" class="mm-overlay" @click="mobileMenu = false"></div></transition>
+  <aside class="mobile-menu" :class="{ show: mobileMenu }" aria-label="القائمة">
+    <div class="mm-head">
+      <span class="mm-brand"><span class="g">دكّان</span> كنعان</span>
+      <button class="mm-close" @click="mobileMenu = false" aria-label="إغلاق"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+    <nav class="mm-links">
+      <a href="#home" :class="{ active: activeSection === 'home' }" @click="mobileMenu = false">{{ t('nav.home') }}</a>
+      <a href="#pantry" :class="{ active: activeSection === 'pantry' }" @click="mobileMenu = false">{{ t('nav.pantry') }}</a>
+      <a href="#pottery" :class="{ active: activeSection === 'pottery' }" @click="mobileMenu = false">{{ t('nav.pottery') }}</a>
+      <a href="#story" :class="{ active: activeSection === 'story' }" @click="mobileMenu = false">{{ t('nav.story') }}</a>
+      <a href="#contact" :class="{ active: activeSection === 'contact' }" @click="mobileMenu = false">{{ t('nav.contact') }}</a>
+      <RouterLink v-if="auth.isAuthenticated" to="/account" @click="mobileMenu = false">{{ t('nav.account') }}</RouterLink>
+      <RouterLink v-else to="/login" @click="mobileMenu = false">{{ t('auth.loginTitle') }}</RouterLink>
+    </nav>
+  </aside>
 
   <!-- hero -->
   <section class="hero" id="home">
