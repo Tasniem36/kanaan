@@ -68,6 +68,9 @@
   .mm-links a{padding:.85rem 1rem;border-radius:11px;font-weight:700;color:var(--green);font-size:1rem}
   .mm-links a.active,.mm-links a.router-link-active{background:var(--green);color:#fff}
   .mm-links a:not(.active):not(.router-link-active):hover{background:rgba(60,74,39,.08)}
+  /* account/manager tabs reused inside the mobile sidebar → vertical list */
+  .portal-drawer .tabs{flex-direction:column;background:none;padding:0;gap:.15rem;flex-wrap:nowrap;justify-content:flex-start}
+  .portal-drawer .tabs a{padding:.85rem 1rem;border-radius:11px;font-size:1rem;text-align:start}
 
   /* hero */
   .hero{position:relative;background:var(--cream);padding:0 0 1.4rem;text-align:center}
@@ -291,6 +294,7 @@
   }
   @media (max-width:820px){
     .links,.store-nav{display:none}.burger{display:grid}
+    .portal-bar.has-drawer .pb-center{display:none}
   }
   @media (max-width:560px){
     .values .row{grid-template-columns:1fr}.fcols{grid-template-columns:1fr}section{padding:3.4rem 0}

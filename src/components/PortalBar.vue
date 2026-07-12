@@ -1,6 +1,7 @@
 <template>
-  <header class="portal-bar" :class="{ scrolled }">
+  <header class="portal-bar" :class="{ scrolled, 'has-drawer': drawer }">
     <div class="pb-lead">
+      <button v-if="drawer" class="burger" @click="open = true" aria-label="menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
       <UserMenu />
       <RouterLink to="/" class="pbrand"><span class="g">دكّان</span> كنعان</RouterLink>
     </div>
@@ -9,13 +10,27 @@
       <slot name="actions" />
     </div>
   </header>
+
+  <!-- mobile sidebar for the nav tabs (opt-in via the `drawer` prop) -->
+  <template v-if="drawer">
+    <transition name="v"><div v-if="open" class="mm-overlay" @click="open = false"></div></transition>
+    <aside class="mobile-menu portal-drawer" :class="{ show: open }" aria-label="القائمة">
+      <div class="mm-head">
+        <span class="mm-brand"><span class="g">دكّان</span> كنعان</span>
+        <button class="mm-close" @click="open = false" aria-label="إغلاق"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </div>
+      <div class="mm-links" @click="open = false"><slot /></div>
+    </aside>
+  </template>
 </template>
 
 <script setup>
+import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import UserMenu from './UserMenu.vue'
 
-defineProps({ scrolled: { type: Boolean, default: false } })
+defineProps({ scrolled: { type: Boolean, default: false }, drawer: { type: Boolean, default: false } })
+const open = ref(false)
 </script>
 
 <style scoped>

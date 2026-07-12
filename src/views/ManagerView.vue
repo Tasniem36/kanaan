@@ -1,6 +1,6 @@
 <template>
   <div class="portal">
-    <PortalBar>
+    <PortalBar drawer>
       <nav class="tabs">
         <RouterLink :to="{ name: 'manager-orders' }">{{ t('manager.orders') }}</RouterLink>
         <RouterLink :to="{ name: 'manager-products' }">{{ t('manager.products') }}</RouterLink>
