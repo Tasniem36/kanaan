@@ -29,6 +29,8 @@ services:
       PORT: 8080
       SEED_MANAGER_EMAIL: ${SEED_MANAGER_EMAIL:-}
       SEED_MANAGER_PASSWORD: ${SEED_MANAGER_PASSWORD:-}
+      WHATSAPP_PHONE: ${WHATSAPP_PHONE:-}
+      WHATSAPP_APIKEY: ${WHATSAPP_APIKEY:-}
     depends_on:
       db:
         condition: service_healthy

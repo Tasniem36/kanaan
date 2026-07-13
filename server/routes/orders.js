@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { query, withTransaction } from '../lib/db.js'
 import { requireAuth, requireManager } from '../lib/auth.js'
 import { normalizeUaePhone } from '../lib/validate.js'
+import { notifyNewOrder } from '../lib/notify.js'
 
 export const ordersRouter = Router()
 
@@ -61,6 +62,7 @@ ordersRouter.post('/', async (req, res) => {
       return newOrder
     })
 
+    notifyNewOrder(order) // fire-and-forget WhatsApp alert to the manager
     res.status(201).json({ order })
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message })

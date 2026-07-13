@@ -198,6 +198,7 @@ export default {
     toastRemoved: 'تمّ حذف المنتج',
     toastSaved: 'تمّ حفظ التعديلات',
     toastStatus: 'تمّ تحديث حالة الطلب',
+    newOrder: '🛒 طلبٌ جديد وصل!',
   },
   status: {
     pending: 'بانتظار الدفع',

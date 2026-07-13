@@ -198,6 +198,7 @@ export default {
     toastRemoved: 'Product deleted',
     toastSaved: 'Changes saved',
     toastStatus: 'Order status updated',
+    newOrder: '🛒 New order received!',
   },
   status: {
     pending: 'Awaiting payment',

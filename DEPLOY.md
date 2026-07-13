@@ -74,6 +74,21 @@ crontab -e                              # then add:
    ```
    (After this, plain `git push` works from your Mac.)
 
+## WhatsApp order alerts (optional, free)
+Get a WhatsApp message whenever a customer places an order, using CallMeBot (free):
+1. Save the CallMeBot number **+34 644 51 95 23** to your contacts.
+2. From your WhatsApp, send it: **`I allow callmebot to send me messages`**
+3. It replies with your **apikey**.
+4. On the server, edit `.env` and set:
+   ```
+   WHATSAPP_PHONE=9715XXXXXXXX      # your number, international form, no + or spaces
+   WHATSAPP_APIKEY=the-apikey-it-gave-you
+   ```
+5. Re-deploy: `docker compose -f docker-compose.prod.yml up -d --build`
+
+Now every new order sends you a WhatsApp with the customer, items, and total.
+(The in-app dashboard badge + chime work with no setup at all.)
+
 ## Updating later
 ```bash
 # on your Mac: commit + push changes
