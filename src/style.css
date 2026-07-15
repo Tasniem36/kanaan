@@ -56,8 +56,9 @@
   .burger{display:none;width:48px;height:48px;border-radius:14px;background:var(--green);color:var(--cream);place-items:center}
   .burger svg{width:24px;height:24px}
   .mm-overlay{position:fixed;inset:0;background:rgba(44,55,25,.55);z-index:95}
-  .mobile-menu{position:fixed;top:0;left:0;height:100%;height:100dvh;width:min(300px,82vw);z-index:100;background:var(--cream);box-shadow:0 0 60px rgba(0,0,0,.35);transform:translateX(-110%);transition:transform .35s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;overflow-y:auto}
-  .mobile-menu.show{transform:translateX(0)}
+  .mobile-menu{position:fixed;top:0;inset-inline-start:0;height:100%;height:100dvh;width:min(300px,82vw);z-index:100;background:var(--cream);box-shadow:0 0 60px rgba(0,0,0,.35);transform:translateX(-110%);transition:transform .35s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;overflow-y:auto}
+  [dir="rtl"] .mobile-menu{transform:translateX(110%)}
+  .mobile-menu.show,[dir="rtl"] .mobile-menu.show{transform:translateX(0)}
   .mm-head{display:flex;align-items:center;justify-content:space-between;padding:1.2rem 1.3rem;background:var(--green);color:var(--cream)}
   .mm-brand{font-family:"Aref Ruqaa","Amiri",serif;font-size:1.5rem}
   .mm-brand .g{color:var(--gold-2)}
