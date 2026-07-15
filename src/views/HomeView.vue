@@ -33,7 +33,7 @@
 
   <!-- hero -->
   <section class="hero" id="home">
-    <img class="hero-img" src="/images/hero.jpg" alt="دكّان كنعان — مونة وفخّار فلسطيني" /><a class="scroll-cue" href="#pantry" aria-label="استكشف المتجر"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></a>
+    <img class="hero-img" src="/images/hero.jpg" alt="دكّان كنعان — مونة وخزف فلسطيني" /><a class="scroll-cue" href="#pantry" aria-label="استكشف المتجر"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></a>
     <div class="cta">
       <a href="#pantry" class="btn btn-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6h15l-1.5 9h-12L6 6Z"/><path d="M6 6 5 3H2"/></svg>{{ t('hero.shopPantry') }}</a>
       <a href="#pottery" class="btn btn-gold">{{ t('hero.discoverPottery') }}</a>
