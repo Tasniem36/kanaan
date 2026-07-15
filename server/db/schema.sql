@@ -74,6 +74,10 @@ create table if not exists orders (
 );
 create index if not exists orders_user_id_idx on orders (user_id);
 create index if not exists orders_created_at_idx on orders (created_at desc);
+-- payment fields (added after initial launch; idempotent)
+alter table orders add column if not exists payment_method text not null default 'cod';
+alter table orders add column if not exists payment_status text not null default 'unpaid';
+alter table orders add column if not exists ziina_payment_id text;
 
 -- ---------- order_items -----------------------------------------------------
 create table if not exists order_items (

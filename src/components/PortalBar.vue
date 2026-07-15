@@ -3,10 +3,7 @@
     <div class="pb-lead">
       <button v-if="drawer" class="burger" @click="open = true" aria-label="menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
       <UserMenu />
-      <RouterLink to="/" class="pbrand">
-        <svg class="dome-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.2v1.5"/><path d="M6.6 11c0-4 2.4-6.8 5.4-6.8s5.4 2.8 5.4 6.8"/><path d="M6.1 14l.5-3h10.8l.5 3"/><path d="M4.6 20l1-6h12.8l1 6Z"/><path d="M10 20v-3.1h4V20"/></svg>
-        <span><span class="g">دكّان</span> كنعان</span>
-      </RouterLink>
+      <RouterLink to="/" class="pbrand"><span class="g">دكّان</span> كنعان</RouterLink>
     </div>
     <div class="pb-center"><slot /></div>
     <div class="pb-actions">
@@ -50,8 +47,7 @@ const open = ref(false)
 }
 .portal-bar.scrolled { box-shadow: 0 10px 30px -18px rgba(44, 55, 25, 0.5); }
 .pb-lead { flex: 1; display: flex; align-items: center; gap: 0.7rem; }
-.pbrand { display: inline-flex; align-items: center; gap: 0.45rem; font-family: 'Aref Ruqaa', 'Amiri', serif; font-size: 1.6rem; color: var(--green, #3c4a27); white-space: nowrap; }
-.dome-ic { width: 26px; height: 26px; color: var(--gold, #b8902f); flex-shrink: 0; }
+.pbrand { font-family: 'Aref Ruqaa', 'Amiri', serif; font-size: 1.6rem; color: var(--green, #3c4a27); white-space: nowrap; }
 .pbrand .g { color: var(--gold, #b8902f); }
 .pb-center { display: flex; justify-content: center; }
 .pb-actions { flex: 1; display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; }

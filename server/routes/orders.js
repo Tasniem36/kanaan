@@ -3,14 +3,27 @@ import { query, withTransaction } from '../lib/db.js'
 import { requireAuth, requireManager } from '../lib/auth.js'
 import { normalizeUaePhone } from '../lib/validate.js'
 import { notifyNewOrder } from '../lib/notify.js'
+import { createPaymentIntent, getPaymentIntent } from '../lib/ziina.js'
 
 export const ordersRouter = Router()
+
+// restore stock + cancel an order (used if a payment can't be started)
+async function cancelAndRestore(orderId) {
+  await withTransaction(async (c) => {
+    const { rows: its } = await c.query('select product_id, qty from order_items where order_id = $1', [orderId])
+    for (const it of its) {
+      if (it.product_id) await c.query('update products set stock = stock + $1 where id = $2', [it.qty, it.product_id])
+    }
+    await c.query("update orders set status = 'cancelled' where id = $1", [orderId])
+  })
+}
 
 // POST /api/orders — customer or guest. Body:
 //   { customer_name, phone, city, street, house, notes, items: [{ product_id, qty }] }
 // Prices/stock are validated server-side against the DB (never trust the client).
 ordersRouter.post('/', async (req, res) => {
   const { customer_name, phone, city, street, house, notes, items } = req.body || {}
+  const paymentMethod = req.body?.payment_method === 'ziina' ? 'ziina' : 'cod'
   if (!customer_name || !phone || !city || !street || !house) {
     return res.status(400).json({ error: 'فضلًا أكمل الحقول المطلوبة' })
   }
@@ -43,10 +56,10 @@ ordersRouter.post('/', async (req, res) => {
       }
 
       const { rows: orderRows } = await client.query(
-        `insert into orders (user_id, customer_name, phone, city, street, house, notes, total)
-         values ($1, $2, $3, $4, $5, $6, $7, $8)
+        `insert into orders (user_id, customer_name, phone, city, street, house, notes, total, payment_method)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          returning *`,
-        [req.user?.id || null, customer_name, phoneNorm, city, street, house, notes || null, total]
+        [req.user?.id || null, customer_name, phoneNorm, city, street, house, notes || null, total, paymentMethod]
       )
       const newOrder = orderRows[0]
 
@@ -62,12 +75,58 @@ ordersRouter.post('/', async (req, res) => {
       return newOrder
     })
 
-    notifyNewOrder(order) // fire-and-forget WhatsApp alert to the manager
+    // Ziina: create a payment intent and hand the redirect URL back to the client.
+    if (order.payment_method === 'ziina') {
+      const appUrl = process.env.APP_URL || req.headers.origin || ''
+      try {
+        const intent = await createPaymentIntent({
+          amountFils: Math.round(Number(order.total) * 100),
+          successUrl: `${appUrl}/pay/return?order=${order.id}`,
+          cancelUrl: `${appUrl}/pay/return?order=${order.id}&cancel=1`,
+          message: `دكّان كنعان — طلب #${String(order.id).slice(0, 8)}`,
+        })
+        await query('update orders set ziina_payment_id = $1 where id = $2', [intent.id, order.id])
+        return res.status(201).json({ order, redirect_url: intent.redirect_url })
+      } catch (e) {
+        await cancelAndRestore(order.id).catch(() => {})
+        return res.status(e.status || 502).json({ error: e.message || 'تعذّر بدء الدفع عبر Ziina' })
+      }
+    }
+
+    notifyNewOrder(order) // COD: alert the manager now (Ziina alerts once paid)
     res.status(201).json({ order })
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message })
     console.error(err)
     res.status(500).json({ error: 'تعذّر إنشاء الطلب' })
+  }
+})
+
+// POST /api/orders/:id/confirm-payment — verify a Ziina payment, mark paid, alert
+ordersRouter.post('/:id/confirm-payment', async (req, res) => {
+  try {
+    const { rows } = await query('select * from orders where id = $1', [req.params.id])
+    const order = rows[0]
+    if (!order) return res.status(404).json({ error: 'الطلب غير موجود' })
+    if (order.payment_status === 'paid') return res.json({ paid: true, status: order.status })
+    if (order.payment_method !== 'ziina' || !order.ziina_payment_id) {
+      return res.json({ paid: false, status: order.status })
+    }
+    const intent = await getPaymentIntent(order.ziina_payment_id)
+    if (intent.status === 'completed') {
+      const { rows: upd } = await query(
+        "update orders set payment_status = 'paid', status = 'paid' where id = $1 returning *",
+        [order.id]
+      )
+      const { rows: its } = await query('select name, price, qty from order_items where order_id = $1', [order.id])
+      notifyNewOrder({ ...upd[0], items: its })
+      return res.json({ paid: true, status: 'paid' })
+    }
+    return res.json({ paid: false, status: intent.status })
+  } catch (e) {
+    if (e.status) return res.status(e.status).json({ error: e.message })
+    console.error(e)
+    res.status(500).json({ error: 'تعذّر التحقق من الدفع' })
   }
 })
 

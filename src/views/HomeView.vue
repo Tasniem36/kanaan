@@ -168,11 +168,18 @@
         <button v-if="auth.isAuthenticated && addresses.addresses.length" class="a-btn" style="margin-top:.5rem;background:var(--cream-2);color:var(--green)" @click="newAddress = false">{{ t('checkout.savedAddresses') }}</button>
       </template>
 
+      <label class="co-l" style="margin-top:.8rem">{{ t('checkout.payMethod') }}</label>
+      <label class="addr-pick" :class="{ on: payMethod === 'cod' }">
+        <input type="radio" value="cod" v-model="payMethod" style="display:none"> {{ t('checkout.cod') }}
+      </label>
+      <label class="addr-pick" :class="{ on: payMethod === 'ziina' }">
+        <input type="radio" value="ziina" v-model="payMethod" style="display:none"> {{ t('checkout.ziina') }}
+      </label>
+
       <p v-if="coErr" style="color:var(--red);font-size:.85rem;margin-top:.6rem">{{ coErr }}</p>
       <button class="btn btn-green" style="width:100%;justify-content:center;margin-top:1rem" :disabled="placing" @click="placeOrder">
-        {{ placing ? t('checkout.placing') : `${t('checkout.confirm')} — ${ar(cart.total)}` }} <span v-if="!placing" class='dh' role='img' aria-label='درهم'></span>
+        {{ placing ? t('checkout.placing') : `${payMethod === 'ziina' ? t('checkout.payAndConfirm') : t('checkout.confirm')} — ${ar(cart.total)}` }} <span v-if="!placing" class='dh' role='img' aria-label='درهم'></span>
       </button>
-      <p class="a-muted" style="text-align:center;margin-top:.6rem;font-size:.78rem">{{ t('checkout.cod') }}</p>
     </div>
   </div>
   </transition>
@@ -231,6 +238,7 @@ const co = reactive({ name: '', phone: '', city: '', street: '', house: '', note
 const selectedAddressId = ref(null)
 const newAddress = ref(false)
 const saveAddress = ref(false)
+const payMethod = ref('cod')
 
 let toastTimer
 function showToast(m) {
@@ -297,16 +305,24 @@ async function placeOrder() {
   placing.value = true
   try {
     const items = cart.list.map((i) => ({ product_id: i.id, qty: i.q }))
-    const order = await ordersStore.place(delivery, items)
+    // save a new address before any redirect happens
     if (saveAddress.value && auth.isAuthenticated && !usingSaved) {
       await addresses.add({ city: co.city, street: co.street, house: co.house, notes: co.notes, label: 'المنزل' }).catch(() => {})
     }
+    const result = await ordersStore.place(delivery, items, payMethod.value)
+    // Ziina → hand off to the hosted payment page
+    if (result.redirect_url) {
+      cart.clear()
+      window.location.href = result.redirect_url
+      return
+    }
+    // Cash on delivery
     cart.clear()
     checkoutOpen.value = false
     saveAddress.value = false
     Object.assign(co, { name: '', phone: '', city: '', street: '', house: '', notes: '' })
     await catalog.fetch() // refresh stock
-    showToast(t('checkout.received', { id: order.id.slice(0, 8) }))
+    showToast(t('checkout.received', { id: result.order.id.slice(0, 8) }))
   } catch (e) {
     coErr.value = e.message
   } finally {

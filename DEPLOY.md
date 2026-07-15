@@ -89,6 +89,21 @@ Get a WhatsApp message whenever a customer places an order, using CallMeBot (fre
 Now every new order sends you a WhatsApp with the customer, items, and total.
 (The in-app dashboard badge + chime work with no setup at all.)
 
+## Online payments with Ziina (optional)
+Lets customers pay by card / Apple Pay / Google Pay at checkout (alongside cash on delivery).
+1. In your **Ziina Business** dashboard, create an **API key** (with payment-intent write access).
+2. On the server, edit `.env`:
+   ```
+   ZIINA_API_KEY=your-ziina-api-key
+   ZIINA_TEST=true      # true = test mode (no real charges); set false to go live
+   ```
+   (`APP_URL` is set automatically from your DOMAIN in docker-compose.)
+3. Re-deploy: `docker compose -f docker-compose.prod.yml up -d --build`
+
+Checkout then offers "Pay now with Ziina" and "Cash on delivery". Ziina orders are
+marked **paid** only after the payment is confirmed, and the WhatsApp alert is sent then.
+Test with `ZIINA_TEST=true` first, then flip to `false` for real payments.
+
 ## Updating later
 ```bash
 # on your Mac: commit + push changes
