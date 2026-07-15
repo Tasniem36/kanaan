@@ -92,19 +92,21 @@
     </div>
   </section>
 
-  <!-- newsletter -->
-  <section class="news" id="contact"><div class="wrap inner">
-    <div class="reveal"><h2 class="display">{{ t('home.newsTitle') }}</h2><p>{{ t('home.newsDesc') }}</p></div>
-    <form class="reveal" @submit.prevent="subscribe"><input type="email" v-model="email" :placeholder="t('home.newsPlaceholder')" :aria-label="t('home.newsPlaceholder')" required><button type="submit" class="btn btn-gold">{{ t('home.subscribe') }}</button></form>
-  </div></section>
-
-  <footer class="site">
+  <footer class="site" id="contact">
     <div class="band" aria-hidden="true"></div>
     <div class="wrap fcols">
       <div class="about"><div class="name display"><span class="g">دكّان</span> كنعان</div><p>{{ t('footer.about') }}</p></div>
       <div><h5>{{ t('footer.shop') }}</h5><a href="#pantry">{{ t('nav.pantry') }}</a><a href="#pottery">{{ t('nav.pottery') }}</a><a href="#pantry">{{ t('footer.harvest') }}</a><a href="#pantry">{{ t('footer.gifts') }}</a></div>
       <div><h5>{{ t('footer.links') }}</h5><a href="#story">{{ t('nav.story') }}</a><a href="#contact">{{ t('footer.contactUs') }}</a><RouterLink to="/account">{{ t('nav.account') }}</RouterLink><a href="#">{{ t('footer.faq') }}</a></div>
-      <div><h5>{{ t('footer.contact') }}</h5><a href="#">واتساب: 059 000 000</a><a href="#">ahla@kanaan.ps</a><a href="#">إنستغرام @dukkan.kanaan</a></div>
+      <div><h5>{{ t('footer.contact') }}</h5>
+        <a href="https://wa.me/971522981187" target="_blank" rel="noopener"><span dir="ltr">واتساب: +971 52 298 1187</span></a>
+        <a href="mailto:mmn00@hotmail.com">mmn00@hotmail.com</a>
+        <a href="https://www.instagram.com/dukkan_kanaan" target="_blank" rel="noopener">إنستغرام @dukkan_kanaan</a>
+        <a class="ig-qr" href="https://www.instagram.com/dukkan_kanaan" target="_blank" rel="noopener" :aria-label="t('footer.followQr')">
+          <img src="/images/instagram-qr.svg" alt="Instagram QR" width="92" height="92">
+          <span>{{ t('footer.followQr') }}</span>
+        </a>
+      </div>
     </div>
     <div class="copy">{{ t('footer.copy') }}</div>
   </footer>

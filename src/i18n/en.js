@@ -61,6 +61,7 @@ export default {
     contactUs: 'Contact us',
     faq: 'FAQ',
     contact: 'Contact',
+    followQr: 'Scan to follow us on Instagram',
     copy: '© 2026 Dukkan Kanaan — made with ♥ in Palestine.',
   },
   product: {
