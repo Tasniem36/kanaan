@@ -303,6 +303,10 @@
   @media (max-width:560px){
     .values .row{grid-template-columns:1fr}.fcols{grid-template-columns:1fr}section{padding:3.4rem 0}
     .grid{grid-template-columns:repeat(2,1fr);gap:1rem}
+    /* narrow cards: stack price then a full-width, centered add button */
+    .card .foot{flex-direction:column;align-items:stretch;gap:.6rem}
+    .card .foot .price{text-align:center}
+    .card .add,.card .stepper{width:100%;justify-content:center}
     .co .grid2,.a-grid{grid-template-columns:1fr}
     .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
     .a-table{min-width:520px}

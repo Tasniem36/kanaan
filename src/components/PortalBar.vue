@@ -1,13 +1,13 @@
 <template>
   <header class="portal-bar" :class="{ scrolled, 'has-drawer': drawer }">
     <div class="pb-lead">
-      <button v-if="drawer" class="burger" @click="open = true" aria-label="menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
       <UserMenu />
       <RouterLink to="/" class="pbrand"><span class="g">دكّان</span> كنعان</RouterLink>
     </div>
     <div class="pb-center"><slot /></div>
     <div class="pb-actions">
       <slot name="actions" />
+      <button v-if="drawer" class="burger" @click="open = true" aria-label="menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
     </div>
   </header>
 
