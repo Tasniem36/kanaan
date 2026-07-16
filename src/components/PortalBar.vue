@@ -51,4 +51,8 @@ const open = ref(false)
 .pbrand .g { color: var(--gold, #b8902f); }
 .pb-center { display: flex; justify-content: center; }
 .pb-actions { flex: 1; display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; }
+@media (max-width: 560px) {
+  .portal-bar { padding: 0.55rem 1rem; gap: 0.5rem; }
+  .pbrand { font-size: 1.35rem; }
+}
 </style>
