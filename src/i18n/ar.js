@@ -174,6 +174,7 @@ export default {
     backToStore: 'العودة للمتجر',
     allOrders: 'كل الطلبات',
     noOrders: 'لا توجد طلبات بعد.',
+    ordersLabel: 'طلب',
     guest: 'زائر',
     productsTitle: 'المنتجات والمخزون',
     addProduct: 'إضافة منتجٍ جديد',

@@ -174,6 +174,7 @@ export default {
     backToStore: 'Back to store',
     allOrders: 'All orders',
     noOrders: 'No orders yet.',
+    ordersLabel: 'orders',
     guest: 'Guest',
     productsTitle: 'Products & inventory',
     addProduct: 'Add a new product',
