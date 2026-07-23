@@ -96,6 +96,7 @@ export default {
     landmark: 'علامة مميّزة (اختياري)',
     saveAddress: 'احفظ هذا العنوان في حسابي',
     confirm: 'تأكيد الطلب',
+    loginRequired: 'سجّل الدخول لإتمام الطلب وتتبّعه',
     payMethod: 'طريقة الدفع',
     cod: 'الدفع عند الاستلام',
     ziina: 'ادفع الآن عبر Ziina (بطاقة / Apple Pay)',

@@ -96,6 +96,7 @@ export default {
     landmark: 'Landmark (optional)',
     saveAddress: 'Save this address to my account',
     confirm: 'Confirm order',
+    loginRequired: 'Please sign in to place and track your order',
     payMethod: 'Payment method',
     cod: 'Cash on delivery',
     ziina: 'Pay now with Ziina (card / Apple Pay)',

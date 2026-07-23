@@ -21,7 +21,8 @@ async function cancelAndRestore(orderId) {
 // POST /api/orders — customer or guest. Body:
 //   { customer_name, phone, city, street, house, notes, items: [{ product_id, qty }] }
 // Prices/stock are validated server-side against the DB (never trust the client).
-ordersRouter.post('/', async (req, res) => {
+// Requires login so every order is tied to a customer account (and trackable).
+ordersRouter.post('/', requireAuth, async (req, res) => {
   const { customer_name, phone, city, street, house, notes, items } = req.body || {}
   const paymentMethod = req.body?.payment_method === 'ziina' ? 'ziina' : 'cod'
   if (!customer_name || !phone || !city || !street || !house) {

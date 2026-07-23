@@ -191,7 +191,7 @@
 
 <script setup>
 import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useCartStore } from '../stores/cart'
 import { useAuthStore } from '../stores/auth'
@@ -209,6 +209,7 @@ const auth = useAuthStore()
 const catalog = useCatalogStore()
 const ordersStore = useOrdersStore()
 const addresses = useAddressesStore()
+const router = useRouter()
 const ar = (n) => String(n)
 
 // rotating topbar messages + "why us" cards, from the active locale
@@ -268,15 +269,19 @@ function toTop() {
 async function openCheckout() {
   if (!cart.list.length) return
   openCart.value = false
+  // checkout requires an account so the order is trackable under the customer
+  if (!auth.isAuthenticated) {
+    showToast(t('checkout.loginRequired'))
+    router.push({ name: 'login', query: { redirect: '/' } })
+    return
+  }
   coErr.value = ''
   newAddress.value = false
-  if (auth.user) {
-    co.name = co.name || auth.user.full_name || ''
-    co.phone = co.phone || auth.user.phone || ''
-    await addresses.fetch().catch(() => {})
-    selectedAddressId.value = addresses.default?.id || null
-    if (!addresses.addresses.length) newAddress.value = true
-  }
+  co.name = co.name || auth.user.full_name || ''
+  co.phone = co.phone || auth.user.phone || ''
+  await addresses.fetch().catch(() => {})
+  selectedAddressId.value = addresses.default?.id || null
+  if (!addresses.addresses.length) newAddress.value = true
   checkoutOpen.value = true
 }
 
