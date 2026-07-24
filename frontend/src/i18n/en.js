@@ -238,6 +238,8 @@ export default {
     price: 'Price',
     stock: 'Stock',
     image: 'Image',
+    tag: 'Badge (tag)',
+    tagPh: 'No badge — type or pick',
     addBtn: 'Add product',
     colProduct: 'Product',
     colPrice: 'Price',

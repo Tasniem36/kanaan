@@ -14,9 +14,13 @@
           <div class="a-field"><label>{{ t('manager.price') }} *</label><input class="a-input" type="number" step="0.01" v-model="np.price"></div>
           <div class="a-field"><label>{{ t('manager.stock') }}</label><input class="a-input" type="number" v-model="np.stock"></div>
         </div>
+        <div class="a-field" style="margin-bottom:.6rem"><label>{{ t('manager.tag') }}</label>
+          <input class="a-input" v-model.trim="np.tag" :placeholder="t('manager.tagPh')" list="tag-presets">
+        </div>
         <div class="a-field" style="margin-bottom:.6rem"><label>{{ t('manager.image') }}</label>
           <ImagePicker v-model="np.images" />
         </div>
+        <datalist id="tag-presets"><option value="حصاد جديد"></option><option value="الأكثر مبيعًا"></option><option value="يدويّ"></option></datalist>
         <p v-if="pErr" class="auth-err">{{ pErr }}</p>
         <button class="a-btn" :disabled="pBusy" @click="addProduct">{{ pBusy ? '…' : t('manager.addBtn') }}</button>
       </div>
@@ -66,6 +70,7 @@
           </div>
           <div class="grid2">
             <div><label class="co-l">{{ t('manager.price') }}</label><input class="a-input" type="number" step="0.01" v-model="ep.price"></div>
+            <div><label class="co-l">{{ t('manager.tag') }}</label><input class="a-input" v-model.trim="ep.tag" :placeholder="t('manager.tagPh')" list="tag-presets"></div>
           </div>
           <p v-if="epErr" class="auth-err">{{ epErr }}</p>
           <button class="btn btn-green" style="width:100%;justify-content:center;margin-top:1rem" :disabled="epBusy" @click="saveEdit">{{ epBusy ? '…' : t('manager.save') }}</button>
@@ -89,12 +94,12 @@ const confirm = useConfirmStore()
 const toast = useToastStore()
 
 const restockQty = reactive({})
-const np = reactive({ name: '', description: '', category: 'pantry', unit: '', price: '', stock: '', images: [] })
+const np = reactive({ name: '', description: '', category: 'pantry', unit: '', price: '', stock: '', tag: '', images: [] })
 const pErr = ref('')
 const pBusy = ref(false)
 
 const editing = ref(null)
-const ep = reactive({ name: '', description: '', category: 'pantry', unit: '', price: '', images: [] })
+const ep = reactive({ name: '', description: '', category: 'pantry', unit: '', price: '', tag: '', images: [] })
 const epErr = ref('')
 const epBusy = ref(false)
 
@@ -104,7 +109,7 @@ async function addProduct() {
   pBusy.value = true
   try {
     await catalog.create({ ...np, images: [...np.images], price: Number(np.price), stock: Number(np.stock) || 0 })
-    Object.assign(np, { name: '', description: '', category: np.category, unit: '', price: '', stock: '', images: [] })
+    Object.assign(np, { name: '', description: '', category: np.category, unit: '', price: '', stock: '', tag: '', images: [] })
     toast.show(t('manager.toastAdded'))
   } catch (e) { pErr.value = e.message } finally { pBusy.value = false }
 }
@@ -132,7 +137,7 @@ function openEdit(p) {
   editing.value = p
   epErr.value = ''
   const imgs = Array.isArray(p.images) && p.images.length ? [...p.images] : (p.image_url ? [p.image_url] : [])
-  Object.assign(ep, { name: p.name, description: p.description || '', category: p.category, unit: p.unit || '', price: p.price, images: imgs })
+  Object.assign(ep, { name: p.name, description: p.description || '', category: p.category, unit: p.unit || '', price: p.price, tag: p.tag || '', images: imgs })
 }
 async function saveEdit() {
   epErr.value = ''
@@ -141,7 +146,7 @@ async function saveEdit() {
   try {
     await catalog.update(editing.value.id, {
       name: ep.name, description: ep.description, category: ep.category, unit: ep.unit,
-      price: Number(ep.price), images: [...ep.images],
+      price: Number(ep.price), tag: ep.tag || null, images: [...ep.images],
     })
     editing.value = null
     toast.show(t('manager.toastSaved'))

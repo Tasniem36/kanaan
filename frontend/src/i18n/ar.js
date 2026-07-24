@@ -238,6 +238,8 @@ export default {
     price: 'السعر',
     stock: 'المخزون',
     image: 'الصورة',
+    tag: 'الشارة (وسم)',
+    tagPh: 'بلا شارة — اكتب أو اختر',
     addBtn: 'إضافة المنتج',
     colProduct: 'المنتج',
     colPrice: 'السعر',
