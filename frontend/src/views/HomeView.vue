@@ -97,7 +97,7 @@
         <a href="mailto:mmn00@hotmail.com">mmn00@hotmail.com</a>
         <a href="https://www.instagram.com/dukkan_kanaan" target="_blank" rel="noopener">{{ t('footer.instagram') }} @dukkan_kanaan</a>
         <a class="ig-qr" href="https://www.instagram.com/dukkan_kanaan" target="_blank" rel="noopener" :aria-label="t('footer.followQr')">
-          <img src="/images/instagram-qr.svg" alt="Instagram QR" style="max-height:75px;width:auto">
+          <img src="/images/instagram-qr.svg" alt="Instagram QR">
           <span>{{ t('footer.followQr') }}</span>
         </a>
       </div>
