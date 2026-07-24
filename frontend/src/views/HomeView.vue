@@ -204,7 +204,7 @@
 
 <script setup>
 import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
+import { RouterLink, useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useCartStore } from '../stores/cart'
 import { useAuthStore } from '../stores/auth'
@@ -223,6 +223,7 @@ const catalog = useCatalogStore()
 const ordersStore = useOrdersStore()
 const addresses = useAddressesStore()
 const router = useRouter()
+const route = useRoute()
 const ar = (n) => String(n)
 
 // rotating topbar messages + "why us" cards, from the active locale
@@ -381,6 +382,11 @@ watch(() => auth.isAuthenticated, () => {}) // keep header reactive
 
 onMounted(() => {
   catalog.fetch()
+  // arriving from the product page's "checkout" button
+  if (route.query.checkout && cart.list.length) {
+    openCheckout()
+    router.replace({ query: {} })
+  }
   const navSections = ['home', 'pantry', 'pottery', 'story', 'contact']
   function updateActiveSection() {
     const line = scrollY + innerHeight * 0.3 // a bit below the sticky header

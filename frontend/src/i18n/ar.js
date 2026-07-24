@@ -67,6 +67,11 @@ export default {
   product: {
     add: 'أضِف',
     outOfStock: 'نفد',
+    inStock: 'متوفّر',
+    fewLeft: 'باقٍ {n} فقط',
+    viewCart: 'عرض السلّة',
+    notFound: 'المنتج غير موجود',
+    backToStore: 'العودة للمتجر',
   },
   cart: {
     title: 'سلّة المشتريات',
@@ -246,6 +251,9 @@ export default {
     delMsg: 'هل تريد حذف «{name}»؟ لا يمكن التراجع عن هذا الإجراء.',
     toastAdded: 'تمّت إضافة المنتج',
     toastRestocked: 'تمّت إضافة الكمية',
+    toastReduced: 'تمّ خفض المخزون إلى {stock}',
+    increase: 'زيادة المخزون',
+    decrease: 'خفض المخزون',
     toastRemoved: 'تمّ حذف المنتج',
     toastSaved: 'تمّ حفظ التعديلات',
     toastStatus: 'تمّ تحديث حالة الطلب',
@@ -268,10 +276,16 @@ export default {
   },
   image: {
     upload: 'رفع من الجهاز',
+    addPhoto: 'أضف صورة',
+    primary: 'الرئيسية',
+    makePrimary: 'اجعلها الرئيسية',
+    remove: 'إزالة',
     processing: '…جارٍ المعالجة',
     noImage: 'لا صورة',
     loadError: 'تعذّر تحميل الصورة',
     orUrl: 'أو ألصق رابط صورة',
+    prev: 'الصورة السابقة',
+    next: 'الصورة التالية',
   },
   confirm: {
     ok: 'حسنًا',

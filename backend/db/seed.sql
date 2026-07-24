@@ -11,3 +11,7 @@ select * from (values
   ('زبديّة خزف مزخرفة', 'للتقديم أو للزينة، بنقوشٍ خضراء أنيقة.', 75, 'قطعة', 'pottery', null, '/images/bowl.jpg', 20)
 ) as v(name, description, price, unit, category, tag, image_url, stock)
 where not exists (select 1 from products);
+
+-- Give seeded (and any legacy) products a one-item gallery from their primary image.
+update products set images = jsonb_build_array(image_url)
+  where (images is null or images = '[]'::jsonb) and coalesce(image_url, '') <> '';

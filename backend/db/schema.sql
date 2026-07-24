@@ -58,6 +58,13 @@ create table if not exists products (
   created_at  timestamptz not null default now()
 );
 
+-- multiple product photos (ordered; images[0] mirrors image_url as the primary).
+-- Added via ALTER so existing databases pick it up on re-migrate.
+alter table products add column if not exists images jsonb not null default '[]'::jsonb;
+-- Backfill: any product with a primary image but no gallery gets a one-item gallery.
+update products set images = jsonb_build_array(image_url)
+  where (images is null or images = '[]'::jsonb) and coalesce(image_url, '') <> '';
+
 -- ---------- orders ----------------------------------------------------------
 create table if not exists orders (
   id            uuid primary key default gen_random_uuid(),

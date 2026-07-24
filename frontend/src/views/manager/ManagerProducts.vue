@@ -15,7 +15,7 @@
           <div class="a-field"><label>{{ t('manager.stock') }}</label><input class="a-input" type="number" v-model="np.stock"></div>
         </div>
         <div class="a-field" style="margin-bottom:.6rem"><label>{{ t('manager.image') }}</label>
-          <ImagePicker v-model="np.image_url" />
+          <ImagePicker v-model="np.images" />
         </div>
         <p v-if="pErr" class="auth-err">{{ pErr }}</p>
         <button class="a-btn" :disabled="pBusy" @click="addProduct">{{ pBusy ? '…' : t('manager.addBtn') }}</button>
@@ -30,7 +30,11 @@
               <td>{{ p.price }}</td>
               <td><span class="a-pill" :class="p.stock === 0 ? 'pill-low' : (p.stock <= 5 ? 'pill-warn' : 'pill-ok')">{{ p.stock }}</span></td>
               <td>
-                <div class="a-row" style="gap:.3rem"><input type="number" min="1" class="a-input" style="width:64px" v-model.number="restockQty[p.id]" placeholder="0"><button class="a-btn" style="padding:.35rem .6rem" @click="doRestock(p.id)">+</button></div>
+                <div class="stock-adjust">
+                  <button class="sa-btn" :title="t('manager.decrease')" :disabled="p.stock === 0" @click="doAdjust(p.id, -1)">−</button>
+                  <input type="number" min="1" class="a-input sa-qty" v-model.number="restockQty[p.id]" placeholder="1">
+                  <button class="sa-btn add" :title="t('manager.increase')" @click="doAdjust(p.id, 1)">+</button>
+                </div>
               </td>
               <td style="white-space:nowrap"><button class="ed-btn" @click="openEdit(p)">{{ t('manager.edit') }}</button> <button class="rm-btn" @click="removeProduct(p)">{{ t('manager.remove') }}</button></td>
             </tr>
@@ -46,14 +50,22 @@
           <button @click="editing = null" aria-label="إغلاق" style="position:absolute;top:.8rem;inset-inline-start:.8rem;width:34px;height:34px;border-radius:10px;background:var(--cream-2);color:var(--green);display:grid;place-items:center"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
           <h3 style="font-family:'Amiri',serif;font-size:1.5rem;color:var(--green);text-align:center;margin-bottom:.8rem">{{ t('manager.editProduct') }}</h3>
           <label class="co-l">{{ t('manager.image') }}</label>
-          <ImagePicker v-model="ep.image_url" />
+          <ImagePicker v-model="ep.images" />
           <label class="co-l">{{ t('manager.name') }}</label>
           <input class="a-input" v-model.trim="ep.name">
           <label class="co-l">{{ t('manager.description') }}</label>
           <input class="a-input" v-model.trim="ep.description">
           <div class="grid2">
-            <div><label class="co-l">{{ t('manager.price') }}</label><input class="a-input" type="number" step="0.01" v-model="ep.price"></div>
+            <div><label class="co-l">{{ t('manager.category') }}</label>
+              <select class="a-select" style="width:100%" v-model="ep.category">
+                <option value="pantry">{{ t('manager.pantry') }}</option>
+                <option value="pottery">{{ t('manager.pottery') }}</option>
+              </select>
+            </div>
             <div><label class="co-l">{{ t('manager.unit') }}</label><input class="a-input" v-model.trim="ep.unit"></div>
+          </div>
+          <div class="grid2">
+            <div><label class="co-l">{{ t('manager.price') }}</label><input class="a-input" type="number" step="0.01" v-model="ep.price"></div>
           </div>
           <p v-if="epErr" class="auth-err">{{ epErr }}</p>
           <button class="btn btn-green" style="width:100%;justify-content:center;margin-top:1rem" :disabled="epBusy" @click="saveEdit">{{ epBusy ? '…' : t('manager.save') }}</button>
@@ -77,12 +89,12 @@ const confirm = useConfirmStore()
 const toast = useToastStore()
 
 const restockQty = reactive({})
-const np = reactive({ name: '', description: '', category: 'pantry', unit: '', price: '', stock: '', image_url: '/images/zaatar.jpg' })
+const np = reactive({ name: '', description: '', category: 'pantry', unit: '', price: '', stock: '', images: [] })
 const pErr = ref('')
 const pBusy = ref(false)
 
 const editing = ref(null)
-const ep = reactive({ name: '', description: '', unit: '', price: '', image_url: '' })
+const ep = reactive({ name: '', description: '', category: 'pantry', unit: '', price: '', images: [] })
 const epErr = ref('')
 const epBusy = ref(false)
 
@@ -91,16 +103,19 @@ async function addProduct() {
   if (!np.name || !np.price) { pErr.value = t('manager.errNamePrice'); return }
   pBusy.value = true
   try {
-    await catalog.create({ ...np, price: Number(np.price), stock: Number(np.stock) || 0 })
-    Object.assign(np, { name: '', description: '', category: np.category, unit: '', price: '', stock: '', image_url: np.image_url })
+    await catalog.create({ ...np, images: [...np.images], price: Number(np.price), stock: Number(np.stock) || 0 })
+    Object.assign(np, { name: '', description: '', category: np.category, unit: '', price: '', stock: '', images: [] })
     toast.show(t('manager.toastAdded'))
   } catch (e) { pErr.value = e.message } finally { pBusy.value = false }
 }
-async function doRestock(id) {
-  const qty = Number(restockQty[id])
-  if (!qty || qty <= 0) return
-  try { await catalog.restock(id, qty); restockQty[id] = 0; toast.show(t('manager.toastRestocked')) }
-  catch (e) { toast.show(e.message) }
+async function doAdjust(id, sign) {
+  const qty = Math.abs(Number(restockQty[id]) || 1)
+  const delta = sign * qty
+  try {
+    const p = await catalog.restock(id, delta)
+    restockQty[id] = 1
+    toast.show(delta > 0 ? t('manager.toastRestocked') : t('manager.toastReduced', { stock: p.stock }))
+  } catch (e) { toast.show(e.message) }
 }
 async function removeProduct(p) {
   const ok = await confirm.ask({
@@ -116,7 +131,8 @@ async function removeProduct(p) {
 function openEdit(p) {
   editing.value = p
   epErr.value = ''
-  Object.assign(ep, { name: p.name, description: p.description || '', unit: p.unit || '', price: p.price, image_url: p.image_url || '' })
+  const imgs = Array.isArray(p.images) && p.images.length ? [...p.images] : (p.image_url ? [p.image_url] : [])
+  Object.assign(ep, { name: p.name, description: p.description || '', category: p.category, unit: p.unit || '', price: p.price, images: imgs })
 }
 async function saveEdit() {
   epErr.value = ''
@@ -124,8 +140,8 @@ async function saveEdit() {
   epBusy.value = true
   try {
     await catalog.update(editing.value.id, {
-      name: ep.name, description: ep.description, unit: ep.unit,
-      price: Number(ep.price), image_url: ep.image_url,
+      name: ep.name, description: ep.description, category: ep.category, unit: ep.unit,
+      price: Number(ep.price), images: [...ep.images],
     })
     editing.value = null
     toast.show(t('manager.toastSaved'))
@@ -143,4 +159,16 @@ h1 { font-family: 'Amiri', serif; color: var(--green); font-size: 1.9rem; margin
 .ed-btn { font-size: .82rem; padding: .35rem .7rem; border-radius: 8px; background: rgba(60,74,39,.1); color: var(--green, #3c4a27); cursor: pointer; }
 .auth-err { color: var(--red, #9c2b2b); font-size: .85rem; margin: .4rem 0; }
 .a-thumb { width: 38px; height: 38px; border-radius: 8px; object-fit: cover; }
+/* stock +/- stepper */
+.stock-adjust { display: inline-flex; align-items: center; gap: .3rem; }
+.sa-btn {
+  width: 30px; height: 30px; flex: 0 0 auto;
+  border-radius: 8px; font-size: 1.15rem; font-weight: 700; line-height: 1;
+  display: grid; place-items: center;
+  background: rgba(60,74,39,.1); color: var(--green, #3c4a27);
+}
+.sa-btn.add { background: var(--green, #3c4a27); color: #fff; }
+.sa-btn:hover:not(:disabled) { filter: brightness(1.08); }
+.sa-btn:disabled { opacity: .4; cursor: default; }
+.sa-qty { width: 52px; text-align: center; padding-inline: .3rem; }
 </style>

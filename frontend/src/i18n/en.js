@@ -67,6 +67,11 @@ export default {
   product: {
     add: 'Add',
     outOfStock: 'Out of stock',
+    inStock: 'In stock',
+    fewLeft: 'Only {n} left',
+    viewCart: 'View cart',
+    notFound: 'Product not found',
+    backToStore: 'Back to store',
   },
   cart: {
     title: 'Shopping cart',
@@ -246,6 +251,9 @@ export default {
     delMsg: 'Delete “{name}”? This action cannot be undone.',
     toastAdded: 'Product added',
     toastRestocked: 'Stock added',
+    toastReduced: 'Stock reduced to {stock}',
+    increase: 'Increase stock',
+    decrease: 'Decrease stock',
     toastRemoved: 'Product deleted',
     toastSaved: 'Changes saved',
     toastStatus: 'Order status updated',
@@ -268,10 +276,16 @@ export default {
   },
   image: {
     upload: 'Upload from device',
+    addPhoto: 'Add photo',
+    primary: 'Primary',
+    makePrimary: 'Set as primary',
+    remove: 'Remove',
     processing: 'Processing…',
     noImage: 'No image',
     loadError: 'Could not load image',
     orUrl: 'or paste an image URL',
+    prev: 'Previous image',
+    next: 'Next image',
   },
   confirm: {
     ok: 'OK',
