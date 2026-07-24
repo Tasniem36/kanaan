@@ -27,6 +27,7 @@ const routes = [
       { path: 'products', name: 'manager-products', component: () => import('../views/manager/ManagerProducts.vue') },
       { path: 'clients', name: 'manager-clients', component: () => import('../views/manager/ManagerClients.vue') },
       { path: 'codes', name: 'manager-codes', component: () => import('../views/manager/ManagerCodes.vue') },
+      { path: 'audit', name: 'manager-audit', component: () => import('../views/manager/ManagerAudit.vue') },
     ],
   },
   { path: '/:pathMatch(.*)*', redirect: '/' },
