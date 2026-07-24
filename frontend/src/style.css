@@ -130,6 +130,8 @@
   .car-nav svg{width:18px;height:18px}
   .car-nav.prev{inset-inline-start:8px}
   .car-nav.next{inset-inline-end:8px}
+  /* positions flip via inset-inline in RTL; flip the chevron glyphs to match */
+  [dir="rtl"] .car-nav svg{transform:scaleX(-1)}
   .card:hover .car-nav,.car-nav:focus-visible{opacity:1}
   .car-nav:hover{background:#fff}
   .car-dots{position:absolute;bottom:8px;inset-inline:0;display:flex;justify-content:center;gap:.35rem;z-index:2}
