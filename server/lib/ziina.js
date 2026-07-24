@@ -33,5 +33,8 @@ export async function getPaymentIntent(id) {
   const res = await fetch(`${BASE}/payment_intent/${id}`, { headers: authHeader() })
   const data = await res.json().catch(() => null)
   if (!res.ok) throw { status: 502, message: data?.message || 'تعذّر التحقق من الدفعة' }
-  return data
+  // be resilient if Ziina nests the object under a key
+  const pi = data?.payment_intent || data?.result || data || {}
+  console.log('[ziina] intent', id, 'status =', pi.status, '| response keys:', Object.keys(data || {}).join(','))
+  return pi
 }
