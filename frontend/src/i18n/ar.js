@@ -210,6 +210,7 @@ export default {
     allOrders: 'كل الطلبات',
     noOrders: 'لا توجد طلبات بعد.',
     ordersLabel: 'طلب',
+    orderAddr: '{city}، {street}، منزل {house}',
     testNotify: 'إرسال إشعار تجريبي',
     testSent: 'تمّ إرسال الإشعار التجريبي ✅',
     testNotConfigured: 'إشعارات واتساب غير مُهيّأة على الخادم',

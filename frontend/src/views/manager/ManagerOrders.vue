@@ -15,13 +15,13 @@
       </div>
 
       <div class="a-card" v-for="o in g.orders" :key="o.id">
-        <div class="a-row">
+        <div class="a-row order-top">
           <div>
             <div><span style="font-family:monospace;color:var(--green)">#{{ o.id.slice(0, 8) }}</span> <span class="a-muted">· {{ fmtDate(o.created_at) }}</span></div>
             <div style="margin:.25rem 0"><span class="a-pill" :class="payClass(o)">{{ payLabel(o) }}</span></div>
-            <div class="a-muted">📍 {{ o.city }}، {{ o.street }}، منزل {{ o.house }}<span v-if="o.notes"> ({{ o.notes }})</span></div>
+            <div class="a-muted">📍 {{ t('manager.orderAddr', { city: o.city, street: o.street, house: o.house }) }}<span v-if="o.notes"> ({{ o.notes }})</span></div>
           </div>
-          <div class="a-row" style="gap:.6rem">
+          <div class="a-row order-ctrls" style="gap:.6rem">
             <span class="a-total">{{ o.total }} <span class='dh' role='img' aria-label='درهم'></span></span>
             <select class="a-status" :value="o.status" @change="changeStatus(o, $event.target.value)">
               <option value="pending">{{ t('status.pending') }}</option><option value="paid">{{ t('status.paid') }}</option><option value="fulfilled">{{ t('status.fulfilled') }}</option><option value="cancelled">{{ t('status.cancelled') }}</option>
@@ -102,4 +102,11 @@ h1 { font-family: 'Amiri', serif; color: var(--green); font-size: 1.9rem; }
 .cust-group { margin-bottom: 1.8rem; }
 .cust-head { display: flex; justify-content: space-between; align-items: center; gap: .6rem; flex-wrap: wrap; padding: .5rem .2rem; margin-bottom: .5rem; border-bottom: 2px solid rgba(60,74,39,.15); }
 .cust-head b { color: var(--green); font-size: 1.05rem; }
+.a-status { max-width: 100%; }
+/* on phones, stack the card: info on top, then total + status on their own row */
+@media (max-width: 560px) {
+  .order-top { flex-direction: column; align-items: stretch; gap: .6rem; }
+  .order-ctrls { width: 100%; justify-content: space-between; }
+  .order-ctrls .a-status { flex: 1 1 auto; min-width: 0; }
+}
 </style>

@@ -210,6 +210,7 @@ export default {
     allOrders: 'All orders',
     noOrders: 'No orders yet.',
     ordersLabel: 'orders',
+    orderAddr: '{city}, {street}, house {house}',
     testNotify: 'Send test notification',
     testSent: 'Test notification sent ✅',
     testNotConfigured: 'WhatsApp notifications not configured on the server',

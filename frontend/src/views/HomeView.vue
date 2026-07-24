@@ -62,9 +62,7 @@
       <div class="sec-head reveal"><span class="eyebrow">{{ t('home.pantryEyebrow') }}</span><h2 class="display">{{ t('home.pantryTitle') }}</h2><p>{{ t('home.pantryDesc') }}</p></div>
       <p v-if="catalog.loading" class="a-muted" style="text-align:center">{{ t('common.loading') }}</p>
       <p v-else-if="catalog.error" class="a-muted" style="text-align:center;color:var(--red)">{{ t('home.loadError') }}: {{ catalog.error }}</p>
-      <div class="grid">
-        <ProductCard v-for="(p, i) in catalog.pantry" :key="p.id" :product="p" :index="i" @added="onAdded" />
-      </div>
+      <ProductGrid :items="catalog.pantry" @added="onAdded" />
     </div>
   </section>
 
@@ -74,9 +72,7 @@
   <section class="pottery" id="pottery">
     <div class="wrap">
       <div class="sec-head reveal"><span class="eyebrow">{{ t('home.potteryEyebrow') }}</span><h2 class="display">{{ t('home.potteryTitle') }}</h2><p>{{ t('home.potteryDesc') }}</p></div>
-      <div class="grid">
-        <ProductCard v-for="(p, i) in catalog.pottery" :key="p.id" :product="p" :index="i" @added="onAdded" />
-      </div>
+      <ProductGrid :items="catalog.pottery" @added="onAdded" />
     </div>
   </section>
 
@@ -211,7 +207,7 @@ import { useAuthStore } from '../stores/auth'
 import { useCatalogStore } from '../stores/catalog'
 import { useOrdersStore } from '../stores/orders'
 import { useAddressesStore } from '../stores/addresses'
-import ProductCard from '../components/ProductCard.vue'
+import ProductGrid from '../components/ProductGrid.vue'
 import CartDrawer from '../components/CartDrawer.vue'
 import PortalBar from '../components/PortalBar.vue'
 import { normalizeUaePhone } from '../utils/phone'
