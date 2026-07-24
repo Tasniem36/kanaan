@@ -74,7 +74,7 @@
   .portal-drawer .tabs a{padding:.85rem 1rem;border-radius:11px;font-size:1rem;text-align:start}
 
   /* hero */
-  .hero{position:relative;background:#fdf5ea;padding:0 0 1.4rem;text-align:center}
+  .hero{position:relative;background:var(--cream);padding:0 0 1.4rem;text-align:center}
   .hero-img{max-height:75vh;object-fit:contain;display:block;margin-inline:auto;background:#fdf5ea;opacity:0;transform:scale(1.04);animation:heroIn 1.1s cubic-bezier(.2,.7,.2,1) .05s forwards}
   @keyframes heroIn{to{opacity:1;transform:scale(1)}}
   @keyframes rise{to{opacity:1;transform:none}}
