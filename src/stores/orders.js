@@ -15,6 +15,9 @@ export const useOrdersStore = defineStore('orders', {
     async confirmPayment(orderId) {
       return api(`/orders/${orderId}/confirm-payment`, { method: 'POST', auth: false })
     },
+    async cancelPayment(orderId) {
+      return api(`/orders/${orderId}/cancel-payment`, { method: 'POST', auth: false })
+    },
     async fetch() {
       this.loading = true
       try {

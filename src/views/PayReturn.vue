@@ -42,7 +42,13 @@ const orderId = String(route.query.order || '')
 const shortId = computed(() => orderId.slice(0, 8))
 
 onMounted(async () => {
-  if (!orderId || route.query.cancel) { state.value = 'failed'; return }
+  if (!orderId) { state.value = 'failed'; return }
+  // customer cancelled on Ziina → release the reserved stock, show failed
+  if (route.query.cancel) {
+    await ordersStore.cancelPayment(orderId).catch(() => {})
+    state.value = 'failed'
+    return
+  }
   // Ziina may take a moment to mark the intent completed — retry a few times.
   for (let i = 0; i < 3; i++) {
     try {

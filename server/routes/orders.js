@@ -123,11 +123,46 @@ ordersRouter.post('/:id/confirm-payment', async (req, res) => {
       notifyNewOrder({ ...upd[0], items: its })
       return res.json({ paid: true, status: 'paid' })
     }
-    return res.json({ paid: false, status: intent.status })
+    // declined/failed → release the reserved stock and cancel the order
+    if (intent.status === 'failed') {
+      await cancelAndRestore(order.id).catch(() => {})
+      return res.json({ paid: false, status: 'failed' })
+    }
+    return res.json({ paid: false, status: intent.status }) // still pending / in progress
   } catch (e) {
     if (e.status) return res.status(e.status).json({ error: e.message })
     console.error(e)
     res.status(500).json({ error: 'تعذّر التحقق من الدفع' })
+  }
+})
+
+// POST /api/orders/:id/cancel-payment — customer backed out of Ziina; release stock
+ordersRouter.post('/:id/cancel-payment', async (req, res) => {
+  try {
+    const { rows } = await query('select * from orders where id = $1', [req.params.id])
+    const order = rows[0]
+    if (!order) return res.status(404).json({ error: 'الطلب غير موجود' })
+    if (order.payment_status === 'paid') return res.json({ cancelled: false, paid: true })
+    // safety: make sure they didn't actually complete payment before cancelling
+    if (order.payment_method === 'ziina' && order.ziina_payment_id) {
+      try {
+        const intent = await getPaymentIntent(order.ziina_payment_id)
+        if (intent.status === 'completed') {
+          const { rows: upd } = await query(
+            "update orders set payment_status = 'paid', status = 'paid' where id = $1 returning *",
+            [order.id]
+          )
+          const { rows: its } = await query('select name, price, qty from order_items where order_id = $1', [order.id])
+          notifyNewOrder({ ...upd[0], items: its })
+          return res.json({ cancelled: false, paid: true })
+        }
+      } catch { /* fall through to cancel */ }
+    }
+    await cancelAndRestore(order.id).catch(() => {})
+    res.json({ cancelled: true })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: 'تعذّر الإلغاء' })
   }
 })
 
