@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { query, withTransaction } from '../lib/db.js'
 import { requireAuth, requireManager } from '../lib/auth.js'
 import { normalizeUaePhone } from '../lib/validate.js'
-import { notifyNewOrder } from '../lib/notify.js'
+import { notifyNewOrder, sendTestNotification } from '../lib/notify.js'
 import { createPaymentIntent, getPaymentIntent } from '../lib/ziina.js'
 
 export const ordersRouter = Router()
@@ -151,6 +151,12 @@ ordersRouter.get('/', requireAuth, async (req, res) => {
     orders.forEach((o) => (o.items = byOrder.get(o.id) || []))
   }
   res.json({ orders })
+})
+
+// POST /api/orders/notify-test — manager only: fire a test WhatsApp + report result
+ordersRouter.post('/notify-test', requireManager, async (_req, res) => {
+  const result = await sendTestNotification()
+  res.json(result) // { configured, ok, error? }
 })
 
 // PATCH /api/orders/:id/status — manager only
