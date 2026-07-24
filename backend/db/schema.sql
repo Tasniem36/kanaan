@@ -123,3 +123,18 @@ create table if not exists order_items (
   qty        integer not null check (qty > 0)
 );
 create index if not exists order_items_order_id_idx on order_items (order_id);
+
+-- ---------- content_values (editable "why us" cards, admin-managed) ---------
+create table if not exists content_values (
+  id         uuid primary key default gen_random_uuid(),
+  sort       integer not null default 0,
+  image_url  text,
+  link       text,
+  title_ar   text not null default '',
+  title_en   text not null default '',
+  desc_ar    text not null default '',
+  desc_en    text not null default '',
+  more_ar    text not null default '',
+  more_en    text not null default '',
+  updated_at timestamptz not null default now()
+);

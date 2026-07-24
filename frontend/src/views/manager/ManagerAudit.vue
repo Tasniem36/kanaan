@@ -5,14 +5,13 @@
     <p v-else-if="!logs.length" class="a-muted">{{ t('manager.noAudit') }}</p>
     <div v-else class="table-wrap">
       <table class="a-table">
-        <thead><tr><th>{{ t('manager.colWhen') }}</th><th>{{ t('manager.colWho') }}</th><th>{{ t('manager.colAction') }}</th><th>{{ t('manager.colDetail') }}</th><th>IP</th></tr></thead>
+        <thead><tr><th>{{ t('manager.colWhen') }}</th><th>{{ t('manager.colWho') }}</th><th>{{ t('manager.colEmail') }}</th><th>{{ t('manager.colRole') }}</th><th>{{ t('manager.colAction') }}</th><th>{{ t('manager.colDetail') }}</th><th>IP</th></tr></thead>
         <tbody>
           <tr v-for="a in logs" :key="a.id">
             <td class="a-muted" style="white-space:nowrap">{{ fmtDateTime(a.created_at) }}</td>
-            <td>
-              <template v-if="a.email"><b style="color:var(--green)">{{ a.full_name || '—' }}</b><br><span class="a-muted" dir="ltr">{{ a.email }}</span></template>
-              <span v-else class="a-muted">{{ t('manager.guestVisitor') }}</span>
-            </td>
+            <td><b v-if="a.email" style="color:var(--green)">{{ a.full_name || '—' }}</b><span v-else class="a-muted">{{ t('manager.guestVisitor') }}</span></td>
+            <td class="a-muted" dir="ltr" style="font-size:.85rem">{{ a.email || '—' }}</td>
+            <td><span class="a-pill" :class="roleClass(a)">{{ roleLabel(a) }}</span></td>
             <td><span class="a-pill" :class="pillClass(a.action)">{{ actionLabel(a.action) }}</span></td>
             <td class="a-muted" style="font-size:.85rem">{{ detailText(a) }}</td>
             <td class="a-muted" dir="ltr" style="font-size:.8rem">{{ a.ip || '—' }}</td>
@@ -36,6 +35,15 @@ const fmtDateTime = (d) =>
   new Date(d).toLocaleString(locale.value, { dateStyle: 'medium', timeStyle: 'short' })
 
 const actionLabel = (a) => (te(`audit.${a}`) ? t(`audit.${a}`) : a)
+
+function roleLabel(a) {
+  if (!a.email) return t('manager.guestVisitor')
+  return a.role === 'manager' ? t('manager.roleAdmin') : t('manager.roleCustomer')
+}
+function roleClass(a) {
+  if (!a.email) return ''
+  return a.role === 'manager' ? 'pill-warn' : 'pill-ok'
+}
 
 function pillClass(action) {
   if (action === 'payment_confirmed') return 'pill-ok'

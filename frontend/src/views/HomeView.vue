@@ -53,7 +53,7 @@
 
   <!-- values -->
   <div class="values"><div class="wrap row">
-    <button class="value reveal" v-for="v in values" :key="v.t" @click="modal = v"><span class="ic" v-html="v.icon"></span><div><b>{{ v.t }}</b><span>{{ v.d }}</span></div></button>
+    <button class="value reveal" v-for="v in values" :key="v.id || v.t" @click="onValueClick(v)"><span class="ic" v-html="v.icon"></span><div><b>{{ v.t }}</b><span>{{ v.d }}</span></div><span v-if="auth.isManager && v.id" class="v-edit" :title="t('manager.vcEditHint')" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span></button>
   </div></div>
 
   <!-- pantry -->
@@ -65,8 +65,6 @@
       <ProductGrid :items="catalog.pantry" @added="onAdded" />
     </div>
   </section>
-
-  <div class="divider" aria-hidden="true"><img src="/images/dome.jpg" alt=""></div>
 
   <!-- pottery -->
   <section class="pottery" id="pottery">
@@ -95,11 +93,11 @@
       <div><h5>{{ t('footer.shop') }}</h5><a href="#pantry">{{ t('nav.pantry') }}</a><a href="#pottery">{{ t('nav.pottery') }}</a><a href="#pantry">{{ t('footer.harvest') }}</a><a href="#pantry">{{ t('footer.gifts') }}</a></div>
       <div><h5>{{ t('footer.links') }}</h5><a href="#story">{{ t('nav.story') }}</a><a href="#contact">{{ t('footer.contactUs') }}</a><RouterLink to="/account">{{ t('nav.account') }}</RouterLink><a href="#">{{ t('footer.faq') }}</a></div>
       <div><h5>{{ t('footer.contact') }}</h5>
-        <a href="https://wa.me/971522981187" target="_blank" rel="noopener"><span dir="ltr">واتساب: +971 52 298 1187</span></a>
+        <a href="https://wa.me/971522981187" target="_blank" rel="noopener">{{ t('footer.whatsapp') }}: <span dir="ltr">+971 52 298 1187</span></a>
         <a href="mailto:mmn00@hotmail.com">mmn00@hotmail.com</a>
-        <a href="https://www.instagram.com/dukkan_kanaan" target="_blank" rel="noopener">إنستغرام @dukkan_kanaan</a>
+        <a href="https://www.instagram.com/dukkan_kanaan" target="_blank" rel="noopener">{{ t('footer.instagram') }} @dukkan_kanaan</a>
         <a class="ig-qr" href="https://www.instagram.com/dukkan_kanaan" target="_blank" rel="noopener" :aria-label="t('footer.followQr')">
-          <img src="/images/instagram-qr.svg" alt="Instagram QR" width="92" height="92">
+          <img src="/images/instagram-qr.svg" alt="Instagram QR" style="max-height:75px;width:auto">
           <span>{{ t('footer.followQr') }}</span>
         </a>
       </div>
@@ -123,6 +121,31 @@
     </div>
   </transition>
 
+  <!-- edit value card (managers only) -->
+  <transition name="v">
+    <div class="modal-overlay" v-if="editingValue" @click.self="editingValue = null">
+      <div class="co" style="max-width:560px">
+        <button @click="editingValue = null" aria-label="إغلاق" style="position:absolute;top:.8rem;inset-inline-start:.8rem;width:34px;height:34px;border-radius:10px;background:var(--cream-2);color:var(--green);display:grid;place-items:center"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        <h3 style="font-family:'Amiri',serif;font-size:1.6rem;color:var(--green);text-align:center;margin-bottom:.8rem">{{ t('manager.vcEditTitle') }}</h3>
+        <label class="co-l">{{ t('manager.vcImage') }}</label>
+        <ImagePicker v-model="evImages" />
+        <div class="grid2">
+          <div><label class="co-l">{{ t('manager.vcTitle') }} (ع)</label><input class="a-input" v-model.trim="editingValue.title_ar"></div>
+          <div><label class="co-l">{{ t('manager.vcTitle') }} (EN)</label><input class="a-input" dir="ltr" v-model.trim="editingValue.title_en"></div>
+        </div>
+        <div class="grid2">
+          <div><label class="co-l">{{ t('manager.vcDesc') }} (ع)</label><input class="a-input" v-model.trim="editingValue.desc_ar"></div>
+          <div><label class="co-l">{{ t('manager.vcDesc') }} (EN)</label><input class="a-input" dir="ltr" v-model.trim="editingValue.desc_en"></div>
+        </div>
+        <label class="co-l">{{ t('manager.vcMore') }} (ع)</label>
+        <textarea class="a-input" rows="3" v-model.trim="editingValue.more_ar"></textarea>
+        <label class="co-l">{{ t('manager.vcMore') }} (EN)</label>
+        <textarea class="a-input" rows="3" dir="ltr" v-model.trim="editingValue.more_en"></textarea>
+        <button class="btn btn-green" style="width:100%;justify-content:center;margin-top:1rem" :disabled="evBusy" @click="saveValue">{{ evBusy ? '…' : t('manager.save') }}</button>
+      </div>
+    </div>
+  </transition>
+
   <!-- checkout modal -->
   <transition name="v">
   <div class="modal-overlay" v-if="checkoutOpen" @click.self="checkoutOpen = false">
@@ -136,7 +159,7 @@
         <label class="co-l">{{ t('checkout.chooseAddress') }}</label>
         <label v-for="a in addresses.addresses" :key="a.id" class="addr-pick" :class="{ on: selectedAddressId === a.id }">
           <input type="radio" :value="a.id" v-model="selectedAddressId" style="display:none">
-          <b>{{ a.label || '—' }}</b> — {{ a.city }}، {{ a.street }}، {{ a.house }}
+          <b>{{ a.label || '—' }}</b> — {{ t('account.addrLine', { city: a.city, street: a.street, house: a.house }) }}
           <span v-if="a.notes" class="a-muted"> ({{ a.notes }})</span>
         </label>
         <button class="a-btn" style="margin-top:.5rem;background:var(--cream-2);color:var(--green)" @click="newAddress = true">{{ t('checkout.newAddress') }}</button>
@@ -207,29 +230,83 @@ import { useAuthStore } from '../stores/auth'
 import { useCatalogStore } from '../stores/catalog'
 import { useOrdersStore } from '../stores/orders'
 import { useAddressesStore } from '../stores/addresses'
+import { useContentStore } from '../stores/content'
 import ProductGrid from '../components/ProductGrid.vue'
 import CartDrawer from '../components/CartDrawer.vue'
 import PortalBar from '../components/PortalBar.vue'
+import ImagePicker from '../components/ImagePicker.vue'
 import { normalizeUaePhone } from '../utils/phone'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const cart = useCartStore()
 const auth = useAuthStore()
 const catalog = useCatalogStore()
 const ordersStore = useOrdersStore()
 const addresses = useAddressesStore()
+const content = useContentStore()
 const router = useRouter()
 const route = useRoute()
 const ar = (n) => String(n)
 
 // rotating topbar messages + "why us" cards, from the active locale
 const topbarMsgs = computed(() => [t('topbar.m1'), t('topbar.m2'), t('topbar.m3')])
-const values = computed(() => [
+// bundled defaults — used until the editable cards load (and for the nav link labels)
+const fallbackValues = computed(() => [
   { icon: `<img src='/images/badge-asli.png' alt=''>`, link: '#pantry', t: t('values.v1.t'), d: t('values.v1.d'), more: t('values.v1.more'), linkLabel: t('values.v1.linkLabel') },
   { icon: `<img src='/images/badge-ard.png' alt=''>`, link: '#story', t: t('values.v2.t'), d: t('values.v2.d'), more: t('values.v2.more'), linkLabel: t('values.v2.linkLabel') },
   { icon: `<img src='/images/badge-jawda.png' alt=''>`, link: '#pantry', t: t('values.v3.t'), d: t('values.v3.d'), more: t('values.v3.more'), linkLabel: t('values.v3.linkLabel') },
   { icon: `<img src='/images/badge-tawsil.png' alt=''>`, link: '#contact', t: t('values.v4.t'), d: t('values.v4.d'), more: t('values.v4.more'), linkLabel: t('values.v4.linkLabel') },
 ])
+// admin-editable cards from the backend, mapped to the active language (falls back to Arabic, then to the bundled defaults)
+const values = computed(() => {
+  if (!content.values.length) return fallbackValues.value
+  return content.values.map((row, i) => {
+    const fb = fallbackValues.value[i] || {}
+    const pick = (ar, en) => (locale.value === 'ar' ? ar : (en || ar)) || ''
+    return {
+      id: row.id,
+      raw: row,
+      icon: row.image_url ? `<img src='${row.image_url}' alt=''>` : fb.icon,
+      link: row.link || fb.link,
+      linkLabel: fb.linkLabel,
+      t: pick(row.title_ar, row.title_en),
+      d: pick(row.desc_ar, row.desc_en),
+      more: pick(row.more_ar, row.more_en),
+    }
+  })
+})
+
+// inline editing (managers only)
+const editingValue = ref(null)
+const evImages = ref([])
+const evBusy = ref(false)
+
+function onValueClick(v) {
+  if (auth.isManager && v.id) {
+    editingValue.value = { ...v.raw }
+    evImages.value = v.raw.image_url ? [v.raw.image_url] : []
+  } else {
+    modal.value = v
+  }
+}
+async function saveValue() {
+  evBusy.value = true
+  try {
+    const r = editingValue.value
+    await content.updateValue(r.id, {
+      image_url: evImages.value[0] || null,
+      title_ar: r.title_ar, title_en: r.title_en,
+      desc_ar: r.desc_ar, desc_en: r.desc_en,
+      more_ar: r.more_ar, more_en: r.more_en,
+    })
+    editingValue.value = null
+    showToast(t('manager.vcSaved'))
+  } catch (e) {
+    showToast(e.message)
+  } finally {
+    evBusy.value = false
+  }
+}
 
 const scrolled = ref(false)
 const mobileMenu = ref(false)
@@ -351,7 +428,7 @@ async function placeOrder() {
     const items = cart.list.map((i) => ({ product_id: i.id, qty: i.q }))
     // save a new address before any redirect happens
     if (saveAddress.value && auth.isAuthenticated && !usingSaved) {
-      await addresses.add({ city: co.city, street: co.street, house: co.house, notes: co.notes, label: 'المنزل' }).catch(() => {})
+      await addresses.add({ city: co.city, street: co.street, house: co.house, notes: co.notes, label: t('checkout.defaultAddrLabel') }).catch(() => {})
     }
     const result = await ordersStore.place(delivery, items, payMethod.value, appliedCode.value)
     // Ziina → hand off to the hosted payment page
@@ -378,6 +455,7 @@ watch(() => auth.isAuthenticated, () => {}) // keep header reactive
 
 onMounted(() => {
   catalog.fetch()
+  content.fetch()
   // arriving from the product page's "checkout" button
   if (route.query.checkout && cart.list.length) {
     openCheckout()
@@ -438,4 +516,11 @@ onMounted(() => {
   transition: border-color .15s, background .15s;
 }
 .addr-pick.on { border-color: var(--green); background: rgba(60,74,39,.06); }
+.value { position: relative; }
+.v-edit {
+  position: absolute; top: 6px; inset-inline-end: 6px;
+  width: 22px; height: 22px; display: grid; place-items: center;
+  border-radius: 6px; color: var(--gold, #b8902f); background: rgba(184,144,47,.14);
+}
+.v-edit svg { width: 13px; height: 13px; }
 </style>

@@ -15,3 +15,25 @@ where not exists (select 1 from products);
 -- Give seeded (and any legacy) products a one-item gallery from their primary image.
 update products set images = jsonb_build_array(image_url)
   where (images is null or images = '[]'::jsonb) and coalesce(image_url, '') <> '';
+
+-- Seed the four "why us" value cards (only when the table is empty).
+insert into content_values (sort, image_url, link, title_ar, title_en, desc_ar, desc_en, more_ar, more_en)
+select * from (values
+  (1, '/images/badge-asli.png', '#pantry',
+   'منتجاتٌ أصليّة', 'Authentic products',
+   'من مصادرها مباشرةً، بلا وسطاء', 'Straight from the source, no middlemen',
+   'نتعامل مباشرةً مع المزارعين والحِرفيّين الفلسطينيّين بلا وسطاء، وكلّ صنفٍ موثَّقُ المصدر والمنشأ.', 'We deal directly with Palestinian farmers and artisans with no middlemen, and every item has a documented source and origin.'),
+  (2, '/images/badge-ard.png', '#story',
+   'من أرض فلسطين', 'From the land of Palestine',
+   'حصادٌ وحِرفةٌ من القرى', 'Harvest and craft from the villages',
+   'مونتنا من قرى الضفّة وحقولها، وخزفنا من أفران الخليل العتيقة. أصلٌ واحدٌ لا يتبدّل.', 'Our mouneh comes from the villages and fields of the West Bank, and our ceramics from the old kilns of Hebron. One unchanging origin.'),
+  (3, '/images/badge-jawda.png', '#pantry',
+   'جودةٌ عالية', 'High quality',
+   'طبيعيٌّ بلا إضافاتٍ حافظة', 'Natural, no preservatives',
+   'بلا موادَّ حافظةٍ أو إضافات. نفحص كلّ دفعةٍ يدويًّا قبل أن تصل إليك طازجةً كما يجب.', 'No preservatives or additives. We inspect every batch by hand before it reaches you, fresh as it should be.'),
+  (4, '/images/badge-tawsil.png', '#contact',
+   'توصيلٌ سريع', 'Fast delivery',
+   'يصل طازجًا إلى بابك', 'Arrives fresh at your door',
+   'نشحن خلال 24–48 ساعة داخل دولة الإمارات، وشحنٌ مجّانيٌّ لكلّ طلبٍ تتجاوز قيمته 250 درهمًا.', 'We ship within 24-48 hours inside the UAE, with free shipping on every order above 250 dirham.')
+) as v(sort, image_url, link, title_ar, title_en, desc_ar, desc_en, more_ar, more_en)
+where not exists (select 1 from content_values);

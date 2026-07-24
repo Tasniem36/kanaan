@@ -16,14 +16,14 @@ def list_audit(request: Request, _m=Depends(require_manager)):
     action = request.query_params.get("action")
     if action:
         rows = fetch_all(
-            """select a.id, a.action, a.detail, a.ip, a.created_at, u.email, u.full_name
+            """select a.id, a.action, a.detail, a.ip, a.created_at, u.email, u.full_name, u.role
                from audit_logs a left join users u on u.id = a.user_id
                where a.action = %s order by a.created_at desc limit %s""",
             [action, limit],
         )
     else:
         rows = fetch_all(
-            """select a.id, a.action, a.detail, a.ip, a.created_at, u.email, u.full_name
+            """select a.id, a.action, a.detail, a.ip, a.created_at, u.email, u.full_name, u.role
                from audit_logs a left join users u on u.id = a.user_id
                order by a.created_at desc limit %s""",
             [limit],

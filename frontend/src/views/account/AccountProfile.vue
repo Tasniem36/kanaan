@@ -7,7 +7,7 @@
           <b>{{ a.label || '—' }}</b>
           <span v-if="a.is_default" class="a-pill pill-ok">{{ t('account.default') }}</span>
         </div>
-        <p>{{ a.city }}، {{ a.street }}، {{ a.house }}<span v-if="a.notes" class="a-muted"> — {{ a.notes }}</span></p>
+        <p>{{ t('account.addrLine', { city: a.city, street: a.street, house: a.house }) }}<span v-if="a.notes" class="a-muted"> — {{ a.notes }}</span></p>
         <div class="addr-actions">
           <button v-if="!a.is_default" @click="addr.makeDefault(a.id)">{{ t('account.makeDefault') }}</button>
           <button class="danger" @click="removeAddr(a)">{{ t('account.delete') }}</button>
@@ -48,7 +48,7 @@ const addrErr = ref('')
 const addrBusy = ref(false)
 
 async function removeAddr(a) {
-  const ok = await confirm.ask({ title: t('account.delete'), message: `${a.city}، ${a.street}، ${a.house}`, confirmText: t('account.delete'), danger: true })
+  const ok = await confirm.ask({ title: t('account.delete'), message: t('account.addrLine', { city: a.city, street: a.street, house: a.house }), confirmText: t('account.delete'), danger: true })
   if (ok) addr.remove(a.id)
 }
 
