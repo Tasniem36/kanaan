@@ -81,6 +81,18 @@ alter table orders add column if not exists ziina_payment_id text;
 alter table orders add column if not exists discount_code text;
 alter table orders add column if not exists discount_amount numeric(10, 2) not null default 0;
 
+-- ---------- audit_logs (customer action trail, admin-only) ------------------
+create table if not exists audit_logs (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid references users (id) on delete set null,
+  action     text not null,
+  detail     jsonb,
+  ip         text,
+  created_at timestamptz not null default now()
+);
+create index if not exists audit_logs_created_idx on audit_logs (created_at desc);
+create index if not exists audit_logs_user_idx on audit_logs (user_id);
+
 -- ---------- discount_codes -------------------------------------------------
 create table if not exists discount_codes (
   id               uuid primary key default gen_random_uuid(),
