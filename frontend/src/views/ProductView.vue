@@ -133,6 +133,8 @@ onBeforeUnmount(() => removeEventListener('scroll', onScroll))
 .pdp-missing { text-align: center; padding: 4rem 0; display: grid; gap: 1.2rem; place-items: center; }
 .pdp-back { display: inline-flex; align-items: center; gap: .3rem; color: var(--green); font-weight: 700; margin-bottom: 1.2rem; }
 .pdp-back:hover { color: var(--gold); }
+/* the chevron points "back": left in LTR, right in RTL (Arabic) */
+[dir="rtl"] .pdp-back svg { transform: scaleX(-1); }
 .pdp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2.2rem; align-items: start; }
 
 .pdp-main {

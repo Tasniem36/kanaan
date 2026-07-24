@@ -125,7 +125,7 @@ async function onFiles(e) {
 <style scoped>
 .imgpick-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
   gap: 0.5rem;
 }
 .imgpick-item {
@@ -136,7 +136,12 @@ async function onFiles(e) {
   background: rgba(60, 74, 39, 0.06);
   border: 1px solid rgba(60, 74, 39, 0.12);
 }
-.imgpick-item.primary { border-color: var(--gold, #b8902f); }
+/* the primary photo gets a large, full preview (whole image, never cropped) */
+.imgpick-item.primary {
+  border-color: var(--gold, #b8902f);
+  grid-column: 1 / -1;
+  aspect-ratio: 4 / 3;
+}
 .imgpick-item img { width: 100%; height: 100%; object-fit: contain; }
 .imgpick-badge {
   position: absolute;
