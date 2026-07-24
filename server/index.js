@@ -14,6 +14,8 @@ const app = express()
 
 app.use(cors({ origin: process.env.CORS_ORIGIN?.split(',') || true }))
 app.use(express.json({ limit: '6mb' })) // headroom for uploaded (base64) product images
+// never let the browser cache API responses/redirects (avoids stale 308s etc.)
+app.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next() })
 app.use(attachUser) // populates req.user when a valid Bearer token is present
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }))
