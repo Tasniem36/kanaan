@@ -78,6 +78,21 @@ create index if not exists orders_created_at_idx on orders (created_at desc);
 alter table orders add column if not exists payment_method text not null default 'cod';
 alter table orders add column if not exists payment_status text not null default 'unpaid';
 alter table orders add column if not exists ziina_payment_id text;
+alter table orders add column if not exists discount_code text;
+alter table orders add column if not exists discount_amount numeric(10, 2) not null default 0;
+
+-- ---------- discount_codes -------------------------------------------------
+create table if not exists discount_codes (
+  id               uuid primary key default gen_random_uuid(),
+  code             text not null unique,           -- stored uppercased
+  percent          integer not null check (percent between 1 and 100),
+  first_order_only boolean not null default true,  -- only valid on a customer's first order
+  active           boolean not null default true,
+  max_uses         integer,                        -- null = unlimited
+  used_count       integer not null default 0,
+  expires_at       timestamptz,                    -- null = no expiry
+  created_at       timestamptz not null default now()
+);
 
 -- ---------- order_items -----------------------------------------------------
 create table if not exists order_items (

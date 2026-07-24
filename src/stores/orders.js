@@ -9,8 +9,11 @@ export const useOrdersStore = defineStore('orders', {
   actions: {
     // items: [{ product_id, qty }]; delivery: {...}; paymentMethod: 'cod' | 'ziina'
     // returns { order, redirect_url? } — redirect_url is present for Ziina
-    async place(delivery, items, paymentMethod = 'cod') {
-      return api('/orders', { method: 'POST', body: { ...delivery, items, payment_method: paymentMethod }, auth: true })
+    async place(delivery, items, paymentMethod = 'cod', code = null) {
+      return api('/orders', { method: 'POST', body: { ...delivery, items, payment_method: paymentMethod, code }, auth: true })
+    },
+    async validateCode(code, subtotal) {
+      return api('/discounts/validate', { method: 'POST', body: { code, subtotal } })
     },
     async confirmPayment(orderId) {
       return api(`/orders/${orderId}/confirm-payment`, { method: 'POST', auth: false })

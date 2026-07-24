@@ -4,6 +4,7 @@ import { requireAuth, requireManager } from '../lib/auth.js'
 import { normalizeUaePhone } from '../lib/validate.js'
 import { notifyNewOrder, sendTestNotification } from '../lib/notify.js'
 import { createPaymentIntent, getPaymentIntent } from '../lib/ziina.js'
+import { evaluateCode } from './discounts.js'
 
 export const ordersRouter = Router()
 
@@ -56,13 +57,26 @@ ordersRouter.post('/', requireAuth, async (req, res) => {
         lines.push({ product_id: p.id, name: p.name, price: p.price, qty })
       }
 
+      // apply a discount code if provided (validated authoritatively here)
+      let discount = 0
+      let discountCode = null
+      if (req.body?.code) {
+        const q = (sql, p) => client.query(sql, p)
+        const r = await evaluateCode(q, { code: req.body.code, userId: req.user.id, subtotal: total })
+        if (r.error) throw { status: 400, message: r.error }
+        discount = r.discount
+        discountCode = r.dc.code
+      }
+      const finalTotal = Math.max(0, Math.round((total - discount) * 100) / 100)
+
       const { rows: orderRows } = await client.query(
-        `insert into orders (user_id, customer_name, phone, city, street, house, notes, total, payment_method)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        `insert into orders (user_id, customer_name, phone, city, street, house, notes, total, payment_method, discount_code, discount_amount)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
          returning *`,
-        [req.user?.id || null, customer_name, phoneNorm, city, street, house, notes || null, total, paymentMethod]
+        [req.user.id, customer_name, phoneNorm, city, street, house, notes || null, finalTotal, paymentMethod, discountCode, discount]
       )
       const newOrder = orderRows[0]
+      if (discountCode) await client.query('update discount_codes set used_count = used_count + 1 where code = $1', [discountCode])
 
       for (const line of lines) {
         await client.query(

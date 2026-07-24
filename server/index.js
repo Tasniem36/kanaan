@@ -8,6 +8,7 @@ import { productsRouter } from './routes/products.js'
 import { ordersRouter } from './routes/orders.js'
 import { addressesRouter } from './routes/addresses.js'
 import { usersRouter } from './routes/users.js'
+import { discountsRouter } from './routes/discounts.js'
 
 const app = express()
 
@@ -21,6 +22,7 @@ app.use('/api/products', productsRouter)
 app.use('/api/orders', ordersRouter)
 app.use('/api/addresses', addressesRouter)
 app.use('/api/users', usersRouter)
+app.use('/api/discounts', discountsRouter)
 
 app.use((_req, res) => res.status(404).json({ error: 'المسار غير موجود' }))
 

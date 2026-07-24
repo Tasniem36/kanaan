@@ -168,6 +168,19 @@
         <button v-if="auth.isAuthenticated && addresses.addresses.length" class="a-btn" style="margin-top:.5rem;background:var(--cream-2);color:var(--green)" @click="newAddress = false">{{ t('checkout.savedAddresses') }}</button>
       </template>
 
+      <label class="co-l" style="margin-top:.8rem">{{ t('checkout.promo') }}</label>
+      <div style="display:flex;gap:.5rem">
+        <input class="a-input" v-model.trim="promoCode" :disabled="discount > 0" dir="ltr" style="text-align:start">
+        <button class="a-btn" style="white-space:nowrap" :disabled="promoBusy || !promoCode" @click="applyPromo">{{ t('checkout.apply') }}</button>
+      </div>
+      <p v-if="promoErr" style="color:var(--red);font-size:.82rem;margin-top:.3rem">{{ promoErr }}</p>
+      <p v-if="discount > 0" style="color:var(--green);font-size:.85rem;margin-top:.3rem">✓ {{ t('checkout.promoApplied', { p: appliedPercent, amount: ar(discount) }) }}</p>
+
+      <div v-if="discount > 0" style="margin-top:.7rem;font-size:.9rem">
+        <div class="a-row"><span class="a-muted">{{ t('checkout.subtotal') }}</span><span>{{ ar(cart.total) }} <span class='dh' role='img' aria-label='درهم'></span></span></div>
+        <div class="a-row"><span class="a-muted">{{ t('checkout.discountLine') }}</span><span style="color:var(--green)">− {{ ar(discount) }} <span class='dh' role='img' aria-label='درهم'></span></span></div>
+      </div>
+
       <label class="co-l" style="margin-top:.8rem">{{ t('checkout.payMethod') }}</label>
       <label class="addr-pick" :class="{ on: payMethod === 'cod' }">
         <input type="radio" value="cod" v-model="payMethod" style="display:none"> {{ t('checkout.cod') }}
@@ -178,7 +191,7 @@
 
       <p v-if="coErr" style="color:var(--red);font-size:.85rem;margin-top:.6rem">{{ coErr }}</p>
       <button class="btn btn-green" style="width:100%;justify-content:center;margin-top:1rem" :disabled="placing" @click="placeOrder">
-        {{ placing ? t('checkout.placing') : `${payMethod === 'ziina' ? t('checkout.payAndConfirm') : t('checkout.confirm')} — ${ar(cart.total)}` }} <span v-if="!placing" class='dh' role='img' aria-label='درهم'></span>
+        {{ placing ? t('checkout.placing') : `${payMethod === 'ziina' ? t('checkout.payAndConfirm') : t('checkout.confirm')} — ${ar(finalTotal)}` }} <span v-if="!placing" class='dh' role='img' aria-label='درهم'></span>
       </button>
     </div>
   </div>
@@ -240,6 +253,30 @@ const selectedAddressId = ref(null)
 const newAddress = ref(false)
 const saveAddress = ref(false)
 const payMethod = ref('cod')
+const promoCode = ref('')
+const promoBusy = ref(false)
+const promoErr = ref('')
+const discount = ref(0)
+const appliedPercent = ref(0)
+const appliedCode = ref(null)
+const finalTotal = computed(() => Math.max(0, Math.round((cart.total - discount.value) * 100) / 100))
+
+async function applyPromo() {
+  promoErr.value = ''
+  promoBusy.value = true
+  try {
+    const r = await ordersStore.validateCode(promoCode.value, cart.total)
+    discount.value = r.discount
+    appliedPercent.value = r.percent
+    appliedCode.value = r.code
+  } catch (e) {
+    promoErr.value = e.message
+    discount.value = 0
+    appliedCode.value = null
+  } finally {
+    promoBusy.value = false
+  }
+}
 
 let toastTimer
 function showToast(m) {
@@ -269,6 +306,11 @@ function toTop() {
 async function openCheckout() {
   if (!cart.list.length) return
   openCart.value = false
+  // reset any previously-applied promo
+  promoCode.value = ''
+  promoErr.value = ''
+  discount.value = 0
+  appliedCode.value = null
   // checkout requires an account so the order is trackable under the customer
   if (!auth.isAuthenticated) {
     showToast(t('checkout.loginRequired'))
@@ -314,7 +356,7 @@ async function placeOrder() {
     if (saveAddress.value && auth.isAuthenticated && !usingSaved) {
       await addresses.add({ city: co.city, street: co.street, house: co.house, notes: co.notes, label: 'المنزل' }).catch(() => {})
     }
-    const result = await ordersStore.place(delivery, items, payMethod.value)
+    const result = await ordersStore.place(delivery, items, payMethod.value, appliedCode.value)
     // Ziina → hand off to the hosted payment page
     if (result.redirect_url) {
       cart.clear()
