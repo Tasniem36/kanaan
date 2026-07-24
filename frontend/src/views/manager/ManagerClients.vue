@@ -5,10 +5,11 @@
     <p v-else-if="!clients.length" class="a-muted">{{ t('manager.noClients') }}</p>
     <div v-else class="table-wrap">
       <table class="a-table">
-        <thead><tr><th>{{ t('manager.colClient') }}</th><th>{{ t('manager.colPhone') }}</th><th>{{ t('manager.colOrders') }}</th><th>{{ t('manager.colSpent') }}</th><th>{{ t('manager.colLast') }}</th></tr></thead>
+        <thead><tr><th>{{ t('manager.colClient') }}</th><th>{{ t('manager.colRole') }}</th><th>{{ t('manager.colPhone') }}</th><th>{{ t('manager.colOrders') }}</th><th>{{ t('manager.colSpent') }}</th><th>{{ t('manager.colLast') }}</th></tr></thead>
         <tbody>
           <tr v-for="c in clients" :key="c.id">
             <td><b style="color:var(--green)">{{ c.full_name || '—' }}</b><br><span class="a-muted" dir="ltr">{{ c.email }}</span></td>
+            <td><span class="a-pill" :class="c.role === 'manager' ? 'pill-warn' : 'pill-ok'">{{ c.role === 'manager' ? t('manager.roleAdmin') : t('manager.roleCustomer') }}</span></td>
             <td dir="ltr">{{ c.phone || '—' }}</td>
             <td>{{ c.orders_count }}</td>
             <td>{{ c.total_spent }} <span class='dh' role='img' aria-label='درهم'></span></td>

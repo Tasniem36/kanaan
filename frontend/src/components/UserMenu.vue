@@ -68,6 +68,7 @@ const initial = computed(() => (auth.user?.email || '?').trim().charAt(0).toUppe
 
 function toggleLang() {
   setLocale(locale.value === 'ar' ? 'en' : 'ar')
+  open.value = false
 }
 
 function logout() {

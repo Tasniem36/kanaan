@@ -186,6 +186,8 @@ export default {
     clients: 'Clients',
     codesTab: 'Discount codes',
     auditTab: 'Activity log',
+    contentTab: 'Content',
+    contentTitle: 'Page content — value cards',
     logout: 'Sign out',
     auditTitle: 'Customer activity log',
     noAudit: 'No activity yet.',

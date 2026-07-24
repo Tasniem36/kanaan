@@ -186,6 +186,8 @@ export default {
     clients: 'العملاء',
     codesTab: 'أكواد الخصم',
     auditTab: 'السجلّات',
+    contentTab: 'المحتوى',
+    contentTitle: 'محتوى الصفحة — بطاقات المميّزات',
     logout: 'خروج',
     auditTitle: 'سجلّ نشاط العملاء',
     noAudit: 'لا يوجد نشاطٌ بعد.',
