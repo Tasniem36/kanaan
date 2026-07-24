@@ -8,7 +8,7 @@
     <p v-else-if="!ordersStore.orders.length" class="a-muted">{{ t('manager.noOrders') }}</p>
 
     <!-- orders grouped by customer -->
-    <div class="cust-group" v-for="g in groups" :key="g.key">
+    <div class="cust-group" v-for="g in visibleGroups" :key="g.key">
       <div class="cust-head">
         <div><b>{{ g.name }}</b> · <span class="a-muted" dir="ltr">☎ {{ g.phone }}</span></div>
         <div class="a-muted">{{ g.orders.length }} {{ t('manager.ordersLabel') }} · {{ g.total }} <span class='dh' role='img' aria-label='درهم'></span></div>
@@ -35,6 +35,7 @@
         </div>
       </div>
     </div>
+    <div v-if="hasMore" ref="sentinel" class="load-more"><span class="ld-spin"></span></div>
   </section>
 </template>
 
@@ -44,6 +45,7 @@ import { useI18n } from 'vue-i18n'
 import { useOrdersStore } from '../../stores/orders'
 import { useToastStore } from '../../stores/toast'
 import { api } from '../../services/api'
+import { useInfiniteScroll } from '../../composables/useInfiniteScroll'
 
 const { t, locale } = useI18n()
 const ordersStore = useOrdersStore()
@@ -85,6 +87,8 @@ const groups = computed(() => {
   }
   return [...map.values()]
 })
+
+const { visible: visibleGroups, sentinel, hasMore } = useInfiniteScroll(() => groups.value, 8)
 
 const fmtDate = (d) => new Date(d).toLocaleDateString(locale.value, { year: 'numeric', month: 'long', day: 'numeric' })
 
