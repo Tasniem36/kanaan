@@ -60,9 +60,9 @@
   <section id="pantry">
     <div class="wrap">
       <div class="sec-head reveal"><span class="eyebrow">{{ t('home.pantryEyebrow') }}</span><h2 class="display">{{ t('home.pantryTitle') }}</h2><p>{{ t('home.pantryDesc') }}</p></div>
-      <p v-if="catalog.loading" class="a-muted" style="text-align:center">{{ t('common.loading') }}</p>
+      <div v-if="catalog.loading" class="load-more"><span class="ld-spin"></span></div>
       <p v-else-if="catalog.error" class="a-muted" style="text-align:center;color:var(--red)">{{ t('home.loadError') }}: {{ catalog.error }}</p>
-      <ProductGrid :items="catalog.pantry" @added="onAdded" />
+      <ProductGrid v-else :items="catalog.pantry" @added="onAdded" />
     </div>
   </section>
 
@@ -70,7 +70,8 @@
   <section class="pottery" id="pottery">
     <div class="wrap">
       <div class="sec-head reveal"><span class="eyebrow">{{ t('home.potteryEyebrow') }}</span><h2 class="display">{{ t('home.potteryTitle') }}</h2><p>{{ t('home.potteryDesc') }}</p></div>
-      <ProductGrid :items="catalog.pottery" @added="onAdded" />
+      <div v-if="catalog.loading" class="load-more"><span class="ld-spin"></span></div>
+      <ProductGrid v-else :items="catalog.pottery" @added="onAdded" />
     </div>
   </section>
 

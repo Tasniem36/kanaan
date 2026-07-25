@@ -30,7 +30,6 @@ const shown = ref(props.pageSize)
 const visible = computed(() => props.items.slice(0, shown.value))
 
 let loadIO = null
-let revealIO = null
 
 function loadMore() {
   shown.value = Math.min(shown.value + props.pageSize, props.items.length)
@@ -48,28 +47,22 @@ function attachLoader() {
   loadIO.observe(sentinel.value)
 }
 
-// fade-in newly rendered cards (same .reveal/.in effect the page uses)
+// Reveal rendered cards immediately (a light fade via .reveal→.in). We do NOT
+// gate visibility on scroll here — otherwise cards below the fold can stay
+// hidden on mobile and look like "missing products".
 function revealCards() {
-  if (!revealIO || !root.value) return
-  root.value.querySelectorAll('.reveal:not(.in)').forEach((el) => revealIO.observe(el))
+  if (!root.value) return
+  root.value.querySelectorAll('.reveal:not(.in)').forEach((el) => el.classList.add('in'))
 }
 
-onMounted(() => {
-  revealIO = new IntersectionObserver(
-    (entries) => entries.forEach((e) => {
-      if (e.isIntersecting) { e.target.classList.add('in'); revealIO.unobserve(e.target) }
-    }),
-    { threshold: 0.14 }
-  )
-  nextTick(() => { revealCards(); attachLoader() })
-})
+onMounted(() => nextTick(() => { revealCards(); attachLoader() }))
 
 watch([() => props.items.length, shown], () => nextTick(() => { revealCards(); attachLoader() }))
 
 // if the source list shrinks (e.g. a product is removed), keep shown in range
 watch(() => props.items.length, (n) => { if (shown.value > n) shown.value = Math.max(props.pageSize, n) })
 
-onBeforeUnmount(() => { loadIO && loadIO.disconnect(); revealIO && revealIO.disconnect() })
+onBeforeUnmount(() => loadIO && loadIO.disconnect())
 </script>
 
 <style scoped>
