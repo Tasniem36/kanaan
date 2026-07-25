@@ -23,7 +23,10 @@
             <textarea class="a-input" rows="2" v-model.trim="f.more_ar"></textarea>
             <label class="co-l">{{ t('manager.vcMore') }} (EN)</label>
             <textarea class="a-input" rows="2" dir="ltr" v-model.trim="f.more_en"></textarea>
-            <button class="a-btn" style="margin-top:.7rem" :disabled="f.busy" @click="save(f)">{{ f.busy ? '…' : t('manager.save') }}</button>
+            <div style="display:flex;gap:.6rem;margin-top:.7rem">
+              <button class="a-btn" :disabled="f.busy" @click="save(f)">{{ f.busy ? '…' : t('manager.save') }}</button>
+              <button class="a-btn" style="background:rgba(156,43,43,.1);color:var(--red)" :disabled="f.busy" @click="removeCard(f)">{{ t('manager.remove') }}</button>
+            </div>
           </div>
         </div>
       </div>
@@ -36,11 +39,13 @@ import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useContentStore } from '../../stores/content'
 import { useToastStore } from '../../stores/toast'
+import { useConfirmStore } from '../../stores/confirm'
 import ImagePicker from '../../components/ImagePicker.vue'
 
 const { t } = useI18n()
 const content = useContentStore()
 const toast = useToastStore()
+const confirm = useConfirmStore()
 const forms = ref([])
 
 // build editable copies whenever the source cards load/change
@@ -58,6 +63,16 @@ watch(
   },
   { immediate: true }
 )
+
+async function removeCard(f) {
+  const ok = await confirm.ask({
+    title: t('manager.remove'), message: t('manager.vcRemoveMsg'),
+    confirmText: t('manager.remove'), danger: true,
+  })
+  if (!ok) return
+  try { await content.deleteValue(f.id); toast.show(t('manager.vcRemoved')) }
+  catch (e) { toast.show(e.message) }
+}
 
 async function save(f) {
   f.busy = true

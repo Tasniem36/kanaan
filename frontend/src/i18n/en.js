@@ -277,6 +277,8 @@ export default {
     vcMore: 'Details',
     vcImage: 'Icon',
     vcSaved: 'Card saved',
+    vcRemoved: 'Card removed',
+    vcRemoveMsg: 'Remove this card? This cannot be undone.',
     vcEditHint: 'Click to edit',
   },
   audit: {

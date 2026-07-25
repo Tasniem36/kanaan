@@ -20,5 +20,9 @@ export const useContentStore = defineStore('content', {
       if (i !== -1) this.values[i] = value
       return value
     },
+    async deleteValue(id) {
+      await api(`/content/values/${id}`, { method: 'DELETE' })
+      this.values = this.values.filter((v) => v.id !== id)
+    },
   },
 })

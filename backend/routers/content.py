@@ -29,3 +29,12 @@ def update_value(vid: str, _m=Depends(require_manager), payload: dict = Body(def
     if not row:
         raise HTTPException(404, "البطاقة غير موجودة")
     return {"value": row}
+
+
+# DELETE /api/content/values/{vid} — manager: remove a card
+@router.delete("/values/{vid}")
+def delete_value(vid: str, _m=Depends(require_manager)):
+    row = fetch_one("delete from content_values where id = %s returning id", [vid])
+    if not row:
+        raise HTTPException(404, "البطاقة غير موجودة")
+    return {"ok": True}

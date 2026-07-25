@@ -277,6 +277,8 @@ export default {
     vcMore: 'التفاصيل',
     vcImage: 'الأيقونة',
     vcSaved: 'تمّ حفظ البطاقة',
+    vcRemoved: 'تمّ حذف البطاقة',
+    vcRemoveMsg: 'حذف هذه البطاقة؟ لا يمكن التراجع عن هذا الإجراء.',
     vcEditHint: 'اضغط للتعديل',
   },
   audit: {
