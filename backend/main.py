@@ -60,13 +60,13 @@ async def no_store(request: Request, call_next):
 # match the Node error shape the frontend reads: { "error": "..." }
 @app.exception_handler(StarletteHTTPException)
 async def _http_error(_request, exc):
-    detail = exc.detail if exc.detail and exc.detail != "Not Found" else "المسار غير موجود"
+    detail = exc.detail if exc.detail and exc.detail != "Not Found" else "Not found"
     return JSONResponse(status_code=exc.status_code, content={"error": detail})
 
 
 @app.exception_handler(RequestValidationError)
 async def _validation_error(_request, _exc):
-    return JSONResponse(status_code=400, content={"error": "طلبٌ غير صالح"})
+    return JSONResponse(status_code=400, content={"error": "Invalid request"})
 
 
 @app.get("/api/health")

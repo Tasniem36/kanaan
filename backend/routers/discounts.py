@@ -16,15 +16,15 @@ def evaluate_code(run, code, user_id, subtotal):
     rows = run("select * from discount_codes where code = %s", [str(code).upper().strip()])
     dc = rows[0] if rows else None
     if not dc or not dc["active"]:
-        return {"error": "كود الخصم غير صالح"}
+        return {"error": "Invalid discount code"}
     if dc["expires_at"] and dc["expires_at"] < datetime.now(timezone.utc):
-        return {"error": "انتهت صلاحية كود الخصم"}
+        return {"error": "This discount code has expired"}
     if dc["max_uses"] is not None and dc["used_count"] >= dc["max_uses"]:
-        return {"error": "انتهت مرّات استخدام هذا الكود"}
+        return {"error": "This code has reached its usage limit"}
     if dc["first_order_only"]:
         c = run("select count(*)::int as n from orders where user_id = %s and status <> 'cancelled'", [user_id])
         if c[0]["n"] > 0:
-            return {"error": "هذا الكود صالحٌ للطلب الأوّل فقط"}
+            return {"error": "This code is valid on your first order only"}
     discount = round(float(subtotal) * dc["percent"]) / 100
     return {"dc": dc, "percent": dc["percent"], "discount": discount}
 
@@ -47,13 +47,13 @@ def list_codes(_m=Depends(require_manager)):
 def create_code(response: Response, _m=Depends(require_manager), payload: dict = Body(default={})):
     code, percent = payload.get("code"), payload.get("percent")
     if not code or not percent:
-        raise HTTPException(400, "الكود والنسبة مطلوبان")
+        raise HTTPException(400, "Code and percentage are required")
     try:
         p = int(percent)
     except (TypeError, ValueError):
         p = 0
     if p < 1 or p > 100:
-        raise HTTPException(400, "النسبة يجب أن تكون بين ١ و ١٠٠")
+        raise HTTPException(400, "Percentage must be between 1 and 100")
     try:
         row = fetch_one(
             """insert into discount_codes (code, percent, first_order_only, active, max_uses, expires_at)
@@ -64,7 +64,7 @@ def create_code(response: Response, _m=Depends(require_manager), payload: dict =
              payload.get("expires_at") or None],
         )
     except pg_errors.UniqueViolation:
-        raise HTTPException(409, "هذا الكود موجودٌ مسبقًا")
+        raise HTTPException(409, "This code already exists")
     response.status_code = 201
     return {"code": row}
 
@@ -74,12 +74,12 @@ def update_code(cid: str, _m=Depends(require_manager), payload: dict = Body(defa
     allowed = ["percent", "first_order_only", "active", "max_uses", "expires_at"]
     fields = [k for k in (payload or {}) if k in allowed]
     if not fields:
-        raise HTTPException(400, "لا توجد حقول للتحديث")
+        raise HTTPException(400, "No fields to update")
     set_clause = ", ".join(f"{f} = %s" for f in fields)
     values = [payload[f] for f in fields] + [cid]
     row = fetch_one(f"update discount_codes set {set_clause} where id = %s returning *", values)
     if not row:
-        raise HTTPException(404, "الكود غير موجود")
+        raise HTTPException(404, "Code not found")
     return {"code": row}
 
 
@@ -87,6 +87,6 @@ def update_code(cid: str, _m=Depends(require_manager), payload: dict = Body(defa
 def delete_code(cid: str, response: Response, _m=Depends(require_manager)):
     row = fetch_one("delete from discount_codes where id = %s returning id", [cid])
     if not row:
-        raise HTTPException(404, "الكود غير موجود")
+        raise HTTPException(404, "Code not found")
     response.status_code = 204
     return None

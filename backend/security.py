@@ -50,12 +50,12 @@ def optional_user(request: Request):
 def current_user(request: Request):
     u = _user_from_request(request)
     if not u:
-        raise HTTPException(status_code=401, detail="مطلوب تسجيل الدخول")
+        raise HTTPException(status_code=401, detail="Authentication required")
     return u
 
 
 def require_manager(request: Request):
     u = current_user(request)
     if u["role"] != "manager":
-        raise HTTPException(status_code=403, detail="صلاحيات المدير مطلوبة")
+        raise HTTPException(status_code=403, detail="Manager access required")
     return u

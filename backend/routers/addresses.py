@@ -17,7 +17,7 @@ def list_addresses(user=Depends(current_user)):
 def add_address(request: Request, response: Response, user=Depends(current_user), payload: dict = Body(default={})):
     city, street, house = payload.get("city"), payload.get("street"), payload.get("house")
     if not city or not street or not house:
-        raise HTTPException(400, "المدينة والشارع ورقم المنزل مطلوبة")
+        raise HTTPException(400, "City, street and house number are required")
     is_default = bool(payload.get("is_default"))
     with pool.connection() as conn, conn.transaction(), conn.cursor() as cur:
         if is_default:
@@ -38,7 +38,7 @@ def update_address(aid: str, user=Depends(current_user), payload: dict = Body(de
     allowed = ["label", "city", "street", "house", "notes", "is_default"]
     fields = [k for k in (payload or {}) if k in allowed]
     if not fields:
-        raise HTTPException(400, "لا توجد حقول للتحديث")
+        raise HTTPException(400, "No fields to update")
     with pool.connection() as conn, conn.transaction(), conn.cursor() as cur:
         if payload.get("is_default"):
             cur.execute("update addresses set is_default = false where user_id = %s", [user["id"]])
@@ -47,7 +47,7 @@ def update_address(aid: str, user=Depends(current_user), payload: dict = Body(de
         cur.execute(f"update addresses set {set_clause} where id = %s and user_id = %s returning *", values)
         address = cur.fetchone()
     if not address:
-        raise HTTPException(404, "العنوان غير موجود")
+        raise HTTPException(404, "Address not found")
     return {"address": address}
 
 
@@ -55,7 +55,7 @@ def update_address(aid: str, user=Depends(current_user), payload: dict = Body(de
 def delete_address(aid: str, response: Response, request: Request, user=Depends(current_user)):
     row = fetch_one("delete from addresses where id = %s and user_id = %s returning id", [aid, user["id"]])
     if not row:
-        raise HTTPException(404, "العنوان غير موجود")
+        raise HTTPException(404, "Address not found")
     log_action(user_id=user["id"], action="address_removed", request=request)
     response.status_code = 204
     return None

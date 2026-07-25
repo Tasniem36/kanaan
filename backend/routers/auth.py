@@ -18,14 +18,14 @@ def register(request: Request, response: Response, payload: dict = Body(default=
     email = (payload.get("email") or "").strip()
     password = payload.get("password") or ""
     if not email or not password:
-        raise HTTPException(400, "البريد وكلمة المرور مطلوبان")
+        raise HTTPException(400, "Email and password are required")
     if not is_email(email):
-        raise HTTPException(400, "بريد إلكتروني غير صالح")
+        raise HTTPException(400, "Invalid email address")
     phone_norm = normalize_uae_phone(payload.get("phone"))
     if not phone_norm:
-        raise HTTPException(400, "رقم هاتفٍ إماراتيٍّ غير صالح")
+        raise HTTPException(400, "Invalid UAE phone number")
     if not is_strong_password(password):
-        raise HTTPException(400, "كلمة المرور ضعيفة: ٨ أحرفٍ على الأقل مع حرفٍ كبيرٍ وصغيرٍ ورقم")
+        raise HTTPException(400, "Weak password: at least 8 characters with an uppercase letter, a lowercase letter, and a number")
     try:
         user = fetch_one(
             """insert into users (email, password_hash, full_name, phone)
@@ -33,7 +33,7 @@ def register(request: Request, response: Response, payload: dict = Body(default=
             [email.lower(), hash_password(password), payload.get("full_name"), phone_norm],
         )
     except pg_errors.UniqueViolation:
-        raise HTTPException(409, "هذا البريد مسجّلٌ مسبقًا")
+        raise HTTPException(409, "This email is already registered")
     log_action(user_id=user["id"], action="register", request=request)
     response.status_code = 201
     return {"token": sign_token(user), "user": public_user(user)}
@@ -44,10 +44,10 @@ def login(request: Request, payload: dict = Body(default={})):
     email = (payload.get("email") or "").strip().lower()
     password = payload.get("password") or ""
     if not email or not password:
-        raise HTTPException(400, "البريد وكلمة المرور مطلوبان")
+        raise HTTPException(400, "Email and password are required")
     user = fetch_one("select * from users where email = %s", [email])
     if not user or not verify_password(password, user["password_hash"]):
-        raise HTTPException(401, "بيانات الدخول غير صحيحة")
+        raise HTTPException(401, "Invalid login credentials")
     log_action(user_id=user["id"], action="login", request=request)
     return {"token": sign_token(user), "user": public_user(user)}
 
@@ -56,5 +56,5 @@ def login(request: Request, payload: dict = Body(default={})):
 def me(user=Depends(current_user)):
     row = fetch_one("select id, email, full_name, phone, role from users where id = %s", [user["id"]])
     if not row:
-        raise HTTPException(404, "المستخدم غير موجود")
+        raise HTTPException(404, "User not found")
     return {"user": row}

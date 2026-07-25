@@ -22,12 +22,12 @@ def list_values():
 def update_value(vid: str, _m=Depends(require_manager), payload: dict = Body(default={})):
     data = {k: payload[k] for k in (payload or {}) if k in _EDITABLE}
     if not data:
-        raise HTTPException(400, "لا توجد حقول للتحديث")
+        raise HTTPException(400, "No fields to update")
     set_clause = ", ".join(f"{f} = %s" for f in data) + ", updated_at = now()"
     values = list(data.values()) + [vid]
     row = fetch_one(f"update content_values set {set_clause} where id = %s returning *", values)
     if not row:
-        raise HTTPException(404, "البطاقة غير موجودة")
+        raise HTTPException(404, "Card not found")
     return {"value": row}
 
 
@@ -36,5 +36,5 @@ def update_value(vid: str, _m=Depends(require_manager), payload: dict = Body(def
 def delete_value(vid: str, _m=Depends(require_manager)):
     row = fetch_one("delete from content_values where id = %s returning id", [vid])
     if not row:
-        raise HTTPException(404, "البطاقة غير موجودة")
+        raise HTTPException(404, "Card not found")
     return {"ok": True}

@@ -29,13 +29,13 @@ def create_order(request: Request, user=Depends(current_user), payload: dict = B
     city, street, house = payload.get("city"), payload.get("street"), payload.get("house")
     payment_method = "ziina" if payload.get("payment_method") == "ziina" else "cod"
     if not customer_name or not payload.get("phone") or not city or not street or not house:
-        raise HTTPException(400, "فضلًا أكمل الحقول المطلوبة")
+        raise HTTPException(400, "Please complete the required fields")
     phone_norm = normalize_uae_phone(payload.get("phone"))
     if not phone_norm:
-        raise HTTPException(400, "رقم هاتفٍ إماراتيٍّ غير صالح")
+        raise HTTPException(400, "Invalid UAE phone number")
     items = payload.get("items")
     if not isinstance(items, list) or not items:
-        raise HTTPException(400, "السلّة فارغة")
+        raise HTTPException(400, "Your cart is empty")
 
     with pool.connection() as conn, conn.transaction(), conn.cursor() as cur:
         def run(sql, params=None):
@@ -55,11 +55,11 @@ def create_order(request: Request, user=Depends(current_user), payload: dict = B
             except (TypeError, ValueError):
                 qty = 0
             if not p:
-                raise HTTPException(400, "منتجٌ غير موجود")
+                raise HTTPException(400, "Product not found")
             if qty <= 0:
-                raise HTTPException(400, "كمية غير صالحة")
+                raise HTTPException(400, "Invalid quantity")
             if p["stock"] < qty:
-                raise HTTPException(409, f"الكمية المتوفّرة من «{p['name']}» غير كافية")
+                raise HTTPException(409, f"Not enough stock for “{p['name']}”")
             total += float(p["price"]) * qty
             lines.append({"product_id": str(p["id"]), "name": p["name"], "price": float(p["price"]), "qty": qty})
 
@@ -137,7 +137,7 @@ def list_orders(user=Depends(current_user)):
 def confirm_payment(oid: str, request: Request):
     order = fetch_one("select * from orders where id = %s", [oid])
     if not order:
-        raise HTTPException(404, "الطلب غير موجود")
+        raise HTTPException(404, "Order not found")
     if order["payment_status"] == "paid":
         return {"paid": True, "status": order["status"]}
     if order["payment_method"] != "ziina" or not order["ziina_payment_id"]:
@@ -160,7 +160,7 @@ def confirm_payment(oid: str, request: Request):
 def cancel_payment(oid: str):
     order = fetch_one("select * from orders where id = %s", [oid])
     if not order:
-        raise HTTPException(404, "الطلب غير موجود")
+        raise HTTPException(404, "Order not found")
     if order["payment_status"] == "paid":
         return {"cancelled": False, "paid": True}
     if order["payment_method"] == "ziina" and order["ziina_payment_id"]:
@@ -181,8 +181,8 @@ def cancel_payment(oid: str):
 def set_status(oid: str, _m=Depends(require_manager), payload: dict = Body(default={})):
     status = payload.get("status")
     if status not in ("pending", "paid", "fulfilled", "cancelled"):
-        raise HTTPException(400, "حالة غير صالحة")
+        raise HTTPException(400, "Invalid status")
     row = fetch_one("update orders set status = %s where id = %s returning *", [status, oid])
     if not row:
-        raise HTTPException(404, "الطلب غير موجود")
+        raise HTTPException(404, "Order not found")
     return {"order": row}

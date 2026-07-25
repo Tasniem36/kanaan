@@ -35,9 +35,9 @@ def list_products(request: Request):
 def create_product(response: Response, _m=Depends(require_manager), payload: dict = Body(default={})):
     name, price, category = payload.get("name"), payload.get("price"), payload.get("category")
     if not name or price is None or not category:
-        raise HTTPException(400, "الاسم والسعر والقسم مطلوبة")
+        raise HTTPException(400, "Name, price and category are required")
     if category not in ("pantry", "pottery"):
-        raise HTTPException(400, "قسم غير صالح")
+        raise HTTPException(400, "Invalid category")
     images = _clean_images(payload.get("images"))
     # image_url stays as the primary (first) image, for cart/order snapshots
     image_url = payload.get("image_url") or (images[0] if images else None)
@@ -64,12 +64,12 @@ def update_product(pid: str, _m=Depends(require_manager), payload: dict = Body(d
         if "image_url" not in data:
             data["image_url"] = imgs[0] if imgs else None
     if not data:
-        raise HTTPException(400, "لا توجد حقول للتحديث")
+        raise HTTPException(400, "No fields to update")
     set_clause = ", ".join(f"{f} = %s" for f in data)
     values = [Json(data[f]) if f == "images" else data[f] for f in data] + [pid]
     row = fetch_one(f"update products set {set_clause} where id = %s returning *", values)
     if not row:
-        raise HTTPException(404, "المنتج غير موجود")
+        raise HTTPException(404, "Product not found")
     return {"product": row}
 
 
@@ -79,11 +79,11 @@ def delete_product(pid: str, _m=Depends(require_manager)):
     if referenced:
         row = fetch_one("update products set is_active = false where id = %s returning id", [pid])
         if not row:
-            raise HTTPException(404, "المنتج غير موجود")
+            raise HTTPException(404, "Product not found")
         return {"removed": "soft"}
     row = fetch_one("delete from products where id = %s returning id", [pid])
     if not row:
-        raise HTTPException(404, "المنتج غير موجود")
+        raise HTTPException(404, "Product not found")
     return {"removed": "hard"}
 
 
@@ -94,12 +94,12 @@ def restock(pid: str, _m=Depends(require_manager), payload: dict = Body(default=
     except (TypeError, ValueError):
         qty = 0
     if qty == 0:
-        raise HTTPException(400, "كمية غير صالحة")
+        raise HTTPException(400, "Invalid quantity")
     # qty may be negative to reduce stock; never let it drop below zero
     row = fetch_one(
         "update products set stock = greatest(0, stock + %s) where id = %s returning *",
         [qty, pid],
     )
     if not row:
-        raise HTTPException(404, "المنتج غير موجود")
+        raise HTTPException(404, "Product not found")
     return {"product": row}
