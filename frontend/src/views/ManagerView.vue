@@ -10,6 +10,7 @@
         <RouterLink :to="{ name: 'manager-codes' }">{{ t('manager.codesTab') }}</RouterLink>
         <RouterLink :to="{ name: 'manager-audit' }">{{ t('manager.auditTab') }}</RouterLink>
         <RouterLink :to="{ name: 'manager-content' }">{{ t('manager.contentTab') }}</RouterLink>
+        <RouterLink :to="{ name: 'manager-delivery' }">{{ t('manager.deliveryTab') }}</RouterLink>
       </nav>
     </PortalBar>
     <main class="portal-body">

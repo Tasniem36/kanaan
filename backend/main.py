@@ -34,6 +34,7 @@ from routers.users import router as users_router
 from routers.discounts import router as discounts_router
 from routers.audit import router as audit_router
 from routers.content import router as content_router
+from routers.settings import router as settings_router
 
 app = FastAPI(
     title="Dukkan Kanaan API",
@@ -82,3 +83,4 @@ app.include_router(users_router, prefix="/api/users")
 app.include_router(discounts_router, prefix="/api/discounts")
 app.include_router(audit_router, prefix="/api/audit")
 app.include_router(content_router, prefix="/api/content")
+app.include_router(settings_router, prefix="/api/settings")

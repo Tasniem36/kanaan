@@ -30,6 +30,7 @@ const routes = [
       { path: 'codes', name: 'manager-codes', component: () => import('../views/manager/ManagerCodes.vue') },
       { path: 'audit', name: 'manager-audit', component: () => import('../views/manager/ManagerAudit.vue') },
       { path: 'content', name: 'manager-content', component: () => import('../views/manager/ManagerContent.vue') },
+      { path: 'delivery', name: 'manager-delivery', component: () => import('../views/manager/ManagerDelivery.vue') },
     ],
   },
   { path: '/:pathMatch(.*)*', redirect: '/' },

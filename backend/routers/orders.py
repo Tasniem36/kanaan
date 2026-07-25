@@ -8,6 +8,7 @@ from validate import normalize_uae_phone
 from audit import log_action
 from ziina import create_payment_intent, get_payment_intent
 from notify import notify_new_order, send_test_notification
+from delivery import compute_fee as compute_delivery_fee
 from routers.discounts import evaluate_code
 
 router = APIRouter()
@@ -69,14 +70,16 @@ def create_order(request: Request, user=Depends(current_user), payload: dict = B
             if r.get("error"):
                 raise HTTPException(400, r["error"])
             discount, discount_code = r["discount"], r["dc"]["code"]
-        final_total = max(0, round((total - discount) * 100) / 100)
+        # delivery fee (recomputed server-side from the delivery city + subtotal)
+        delivery_fee = compute_delivery_fee(city, total)
+        final_total = max(0, round((total - discount + delivery_fee) * 100) / 100)
 
         order = run(
             """insert into orders (user_id, customer_name, phone, city, street, house, notes, total,
-                                   payment_method, discount_code, discount_amount)
-               values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) returning *""",
+                                   payment_method, discount_code, discount_amount, delivery_fee)
+               values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) returning *""",
             [user["id"], customer_name, phone_norm, city, street, house, payload.get("notes"),
-             final_total, payment_method, discount_code, discount],
+             final_total, payment_method, discount_code, discount, delivery_fee],
         )[0]
         for line in lines:
             run("insert into order_items (order_id, product_id, name, price, qty) values (%s, %s, %s, %s, %s)",

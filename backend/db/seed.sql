@@ -16,6 +16,11 @@ where not exists (select 1 from products);
 update products set images = jsonb_build_array(image_url)
   where (images is null or images = '[]'::jsonb) and coalesce(image_url, '') <> '';
 
+-- Default delivery settings (Abu Dhabi/Al Ain = 30, rest = 25, free over 250).
+insert into settings (key, value)
+select 'delivery', '{"fee_high": 30, "fee_low": 25, "free_threshold": 250}'::jsonb
+where not exists (select 1 from settings where key = 'delivery');
+
 -- Seed the four "why us" value cards (only when the table is empty).
 insert into content_values (sort, image_url, link, title_ar, title_en, desc_ar, desc_en, more_ar, more_en)
 select * from (values

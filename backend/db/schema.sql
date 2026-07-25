@@ -124,6 +124,16 @@ create table if not exists order_items (
 );
 create index if not exists order_items_order_id_idx on order_items (order_id);
 
+-- ---------- settings (admin-editable key/value config) ---------------------
+create table if not exists settings (
+  key        text primary key,
+  value      jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+
+-- delivery fee charged per order (recomputed server-side at checkout)
+alter table orders add column if not exists delivery_fee numeric(10, 2) not null default 0;
+
 -- ---------- content_values (editable "why us" cards, admin-managed) ---------
 create table if not exists content_values (
   id         uuid primary key default gen_random_uuid(),

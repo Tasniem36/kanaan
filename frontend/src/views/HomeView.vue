@@ -196,9 +196,14 @@
       <p v-if="promoErr" style="color:var(--red);font-size:.82rem;margin-top:.3rem">{{ promoErr }}</p>
       <p v-if="discount > 0" style="color:var(--green);font-size:.85rem;margin-top:.3rem">✓ {{ t('checkout.promoApplied', { p: appliedPercent, amount: ar(discount) }) }}</p>
 
-      <div v-if="discount > 0" style="margin-top:.7rem;font-size:.9rem">
+      <div style="margin-top:.7rem;font-size:.9rem;border-top:1px solid rgba(60,74,39,.12);padding-top:.6rem">
         <div class="a-row"><span class="a-muted">{{ t('checkout.subtotal') }}</span><span>{{ ar(cart.total) }} <span class='dh' role='img' aria-label='درهم'></span></span></div>
-        <div class="a-row"><span class="a-muted">{{ t('checkout.discountLine') }}</span><span style="color:var(--green)">− {{ ar(discount) }} <span class='dh' role='img' aria-label='درهم'></span></span></div>
+        <div v-if="discount > 0" class="a-row"><span class="a-muted">{{ t('checkout.discountLine') }}</span><span style="color:var(--green)">− {{ ar(discount) }} <span class='dh' role='img' aria-label='درهم'></span></span></div>
+        <div class="a-row"><span class="a-muted">{{ t('checkout.deliveryFee') }}</span>
+          <span v-if="deliveryFeeAmount > 0">{{ ar(deliveryFeeAmount) }} <span class='dh' role='img' aria-label='درهم'></span></span>
+          <span v-else style="color:var(--green)">{{ t('checkout.freeDelivery') }}</span>
+        </div>
+        <div class="a-row" style="font-weight:700;margin-top:.2rem"><span>{{ t('checkout.total') }}</span><span>{{ ar(finalTotal) }} <span class='dh' role='img' aria-label='درهم'></span></span></div>
       </div>
 
       <label class="co-l" style="margin-top:.8rem">{{ t('checkout.payMethod') }}</label>
@@ -232,6 +237,8 @@ import { useCatalogStore } from '../stores/catalog'
 import { useOrdersStore } from '../stores/orders'
 import { useAddressesStore } from '../stores/addresses'
 import { useContentStore } from '../stores/content'
+import { useSettingsStore } from '../stores/settings'
+import { deliveryFee } from '../utils/delivery'
 import ProductGrid from '../components/ProductGrid.vue'
 import CartDrawer from '../components/CartDrawer.vue'
 import PortalBar from '../components/PortalBar.vue'
@@ -245,6 +252,7 @@ const catalog = useCatalogStore()
 const ordersStore = useOrdersStore()
 const addresses = useAddressesStore()
 const content = useContentStore()
+const settings = useSettingsStore()
 const router = useRouter()
 const route = useRoute()
 const ar = (n) => String(n)
@@ -334,7 +342,14 @@ const promoErr = ref('')
 const discount = ref(0)
 const appliedPercent = ref(0)
 const appliedCode = ref(null)
-const finalTotal = computed(() => Math.max(0, Math.round((cart.total - discount.value) * 100) / 100))
+// delivery city = the chosen saved address, or the typed one
+const deliveryCity = computed(() => {
+  const usingSaved = auth.isAuthenticated && addresses.addresses.length && !newAddress.value
+  if (usingSaved) return addresses.addresses.find((a) => a.id === selectedAddressId.value)?.city || ''
+  return co.city
+})
+const deliveryFeeAmount = computed(() => deliveryFee(deliveryCity.value, cart.total, settings.delivery))
+const finalTotal = computed(() => Math.max(0, Math.round((cart.total - discount.value + deliveryFeeAmount.value) * 100) / 100))
 
 async function applyPromo() {
   promoErr.value = ''
@@ -457,6 +472,7 @@ watch(() => auth.isAuthenticated, () => {}) // keep header reactive
 onMounted(() => {
   catalog.fetch()
   content.fetch()
+  settings.fetchDelivery()
   // arriving from the product page's "checkout" button
   if (route.query.checkout && cart.list.length) {
     openCheckout()

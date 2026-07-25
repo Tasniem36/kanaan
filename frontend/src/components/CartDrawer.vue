@@ -37,20 +37,26 @@
       <button class="checkout" @click="emit('checkout')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l4 4 10-10"/></svg>{{ t('cart.checkout') }}
       </button>
-      <p class="free-note" v-if="cart.total < 250">{{ t('cart.freeNoteAdd', { amount: ar(250 - cart.total) }) }}</p>
-      <p class="free-note" v-else>{{ t('cart.freeNoteQualified') }}</p>
+      <template v-if="freeThreshold > 0">
+        <p class="free-note" v-if="cart.total < freeThreshold">{{ t('cart.freeNoteAdd', { amount: ar(freeThreshold - cart.total) }) }}</p>
+        <p class="free-note" v-else>{{ t('cart.freeNoteQualified') }}</p>
+      </template>
     </div>
   </aside>
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useCartStore } from '../stores/cart'
+import { useSettingsStore } from '../stores/settings'
 
 defineProps({ open: { type: Boolean, default: false } })
 const emit = defineEmits(['close', 'checkout'])
 
 const { t } = useI18n()
 const cart = useCartStore()
+const settings = useSettingsStore()
 const ar = (n) => String(n)
+const freeThreshold = computed(() => Number(settings.delivery?.free_threshold) || 0)
 </script>
