@@ -48,7 +48,6 @@
             <div class="pdp-price">{{ product.price }} <span class='dh' role='img' aria-label='درهم'></span> <small>/ {{ product.unit }}</small></div>
 
             <p v-if="product.stock === 0" class="pdp-stock out">{{ t('product.outOfStock') }}</p>
-            <p v-else-if="product.stock <= 5" class="pdp-stock low">{{ t('product.fewLeft', { n: product.stock }) }}</p>
             <p v-else class="pdp-stock in">{{ t('product.inStock') }}</p>
 
             <div class="pdp-actions">
@@ -121,7 +120,8 @@ function goCheckout() {
 function onScroll() { scrolled.value = scrollY > 10 }
 
 onMounted(() => {
-  if (!catalog.products.length) catalog.fetch()
+  // load the full-quality product (with its gallery) for the detail page
+  catalog.fetchOne(route.params.id).catch(() => { if (!catalog.products.length) catalog.fetch() })
   addEventListener('scroll', onScroll, { passive: true })
 })
 onBeforeUnmount(() => removeEventListener('scroll', onScroll))

@@ -61,6 +61,8 @@ create table if not exists products (
 -- multiple product photos (ordered; images[0] mirrors image_url as the primary).
 -- Added via ALTER so existing databases pick it up on re-migrate.
 alter table products add column if not exists images jsonb not null default '[]'::jsonb;
+-- small compressed preview shown in product lists (full images load on the detail page)
+alter table products add column if not exists thumb_url text;
 -- Backfill: any product with a primary image but no gallery gets a one-item gallery.
 update products set images = jsonb_build_array(image_url)
   where (images is null or images = '[]'::jsonb) and coalesce(image_url, '') <> '';

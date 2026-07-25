@@ -26,6 +26,14 @@ export const useCatalogStore = defineStore('catalog', {
         this.loading = false
       }
     },
+    // full-quality single product (with the gallery) for the detail page
+    async fetchOne(id) {
+      const { product } = await api(`/products/${id}`)
+      const i = this.products.findIndex((p) => p.id === id)
+      if (i !== -1) this.products[i] = product
+      else this.products.push(product)
+      return product
+    },
     async create(payload) {
       const { product } = await api('/products', { method: 'POST', body: payload })
       this.products.push(product)

@@ -19,16 +19,33 @@ def _clean_images(value):
 def list_products(request: Request):
     user = optional_user(request)
     is_manager = user and user.get("role") == "manager"
-    where = "" if is_manager else "where is_active = true"
-    rows = fetch_all(
-        f"""select id, name, description, price, unit, category, tag, image_url, images, stock, is_active
-            from products {where} order by created_at"""
-    )
+    if is_manager:
+        # managers get the full record (needed to edit the gallery)
+        where, cols = "", "id, name, description, price, unit, category, tag, image_url, images, thumb_url, stock, is_active"
+    else:
+        # shoppers get a LIGHT payload: only a small thumbnail, no heavy data-URL gallery.
+        # The full images load on the product detail page (GET /products/{id}).
+        where = "where is_active = true"
+        cols = ("id, name, description, price, unit, category, tag, "
+                "coalesce(thumb_url, image_url) as image_url, stock, is_active")
+    rows = fetch_all(f"select {cols} from products {where} order by created_at")
     # server-side "opened the storefront" signal (shoppers/guests, not managers)
     if not is_manager:
         log_action(user_id=(user or {}).get("id"), action="visit",
                    detail={"ua": request.headers.get("user-agent")}, request=request)
     return {"products": rows}
+
+
+@router.get("/{pid}")
+def get_product(pid: str, request: Request):
+    user = optional_user(request)
+    is_manager = user and user.get("role") == "manager"
+    row = fetch_one(
+        """select id, name, description, price, unit, category, tag, image_url, images, thumb_url, stock, is_active
+           from products where id = %s""", [pid])
+    if not row or (not is_manager and not row["is_active"]):
+        raise HTTPException(404, "Product not found")
+    return {"product": row}
 
 
 @router.post("")
@@ -44,10 +61,11 @@ def create_product(response: Response, _m=Depends(require_manager), payload: dic
     if image_url and not images:
         images = [image_url]
     row = fetch_one(
-        """insert into products (name, description, price, unit, category, tag, image_url, images, stock)
-           values (%s, %s, %s, %s, %s, %s, %s, %s, %s) returning *""",
+        """insert into products (name, description, price, unit, category, tag, image_url, images, thumb_url, stock)
+           values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) returning *""",
         [name, payload.get("description"), price, payload.get("unit"), category,
-         payload.get("tag"), image_url, Json(images), int(payload.get("stock") or 0)],
+         payload.get("tag"), image_url, Json(images), payload.get("thumb_url") or image_url,
+         int(payload.get("stock") or 0)],
     )
     response.status_code = 201
     return {"product": row}
@@ -55,7 +73,7 @@ def create_product(response: Response, _m=Depends(require_manager), payload: dic
 
 @router.patch("/{pid}")
 def update_product(pid: str, _m=Depends(require_manager), payload: dict = Body(default={})):
-    allowed = ["name", "description", "price", "unit", "category", "tag", "image_url", "stock", "is_active", "images"]
+    allowed = ["name", "description", "price", "unit", "category", "tag", "image_url", "stock", "is_active", "images", "thumb_url"]
     data = {k: payload[k] for k in (payload or {}) if k in allowed}
     if "images" in data:
         imgs = _clean_images(data["images"])

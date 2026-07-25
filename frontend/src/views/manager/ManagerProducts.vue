@@ -89,6 +89,7 @@ import { useConfirmStore } from '../../stores/confirm'
 import { useToastStore } from '../../stores/toast'
 import ImagePicker from '../../components/ImagePicker.vue'
 import { useInfiniteScroll } from '../../composables/useInfiniteScroll'
+import { shrink } from '../../utils/image'
 
 const { t } = useI18n()
 const catalog = useCatalogStore()
@@ -112,7 +113,8 @@ async function addProduct() {
   if (!np.name || !np.price) { pErr.value = t('manager.errNamePrice'); return }
   pBusy.value = true
   try {
-    await catalog.create({ ...np, images: [...np.images], price: Number(np.price), stock: Number(np.stock) || 0 })
+    const thumb_url = await shrink(np.images[0] || null)
+    await catalog.create({ ...np, images: [...np.images], thumb_url, price: Number(np.price), stock: Number(np.stock) || 0 })
     Object.assign(np, { name: '', description: '', category: np.category, unit: '', price: '', stock: '', tag: '', images: [] })
     toast.show(t('manager.toastAdded'))
   } catch (e) { pErr.value = e.message } finally { pBusy.value = false }
@@ -148,9 +150,10 @@ async function saveEdit() {
   if (!ep.name || !ep.price) { epErr.value = t('manager.errNamePrice'); return }
   epBusy.value = true
   try {
+    const thumb_url = await shrink(ep.images[0] || null)
     await catalog.update(editing.value.id, {
       name: ep.name, description: ep.description, category: ep.category, unit: ep.unit,
-      price: Number(ep.price), tag: ep.tag || null, images: [...ep.images],
+      price: Number(ep.price), tag: ep.tag || null, images: [...ep.images], thumb_url,
     })
     editing.value = null
     toast.show(t('manager.toastSaved'))

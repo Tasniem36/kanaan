@@ -3,15 +3,8 @@
     <div class="thumb">
       <span class="tag" v-if="product.tag">{{ product.tag }}</span>
       <span class="tag" v-else-if="product.stock === 0" style="background:var(--red)">{{ t('product.outOfStock') }}</span>
-      <img v-if="images.length" :src="images[idx]" :alt="product.name" loading="lazy" class="thumb-link" @click="goDetail">
+      <img v-if="image" :src="image" :alt="product.name" loading="lazy" class="thumb-link" @click="goDetail">
       <span v-else class="thumb-empty thumb-link" @click="goDetail">{{ t('image.noImage') }}</span>
-      <template v-if="images.length > 1">
-        <button class="car-nav prev" @click.stop="prev" :aria-label="t('image.prev')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button>
-        <button class="car-nav next" @click.stop="next" :aria-label="t('image.next')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>
-        <div class="car-dots">
-          <button v-for="(im, i) in images" :key="i" :class="{ on: i === idx }" @click.stop="idx = i" :aria-label="`${i + 1}`"></button>
-        </div>
-      </template>
     </div>
     <div class="body">
       <h3 class="thumb-link" @click="goDetail">{{ product.name }}</h3>
@@ -33,7 +26,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useCartStore } from '../stores/cart'
@@ -50,15 +43,8 @@ const emit = defineEmits(['added'])
 const cart = useCartStore()
 const ar = (n) => String(n)
 
-// gallery: use the images array, falling back to the single image_url
-const images = computed(() => {
-  const imgs = props.product.images
-  if (Array.isArray(imgs) && imgs.length) return imgs
-  return props.product.image_url ? [props.product.image_url] : []
-})
-const idx = ref(0)
-function prev() { idx.value = (idx.value - 1 + images.value.length) % images.value.length }
-function next() { idx.value = (idx.value + 1) % images.value.length }
+// lists carry only a light thumbnail; the full gallery loads on the detail page
+const image = computed(() => props.product.thumb_url || props.product.image_url || (props.product.images?.[0]) || '')
 function goDetail() { router.push({ name: 'product', params: { id: props.product.id } }) }
 
 function add() {
