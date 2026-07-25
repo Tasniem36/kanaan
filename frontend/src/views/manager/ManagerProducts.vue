@@ -27,13 +27,13 @@
 
       <div class="table-wrap">
         <table class="a-table">
-          <thead><tr><th>{{ t('manager.colProduct') }}</th><th>{{ t('manager.colPrice') }}</th><th>{{ t('manager.colStock') }}</th><th>{{ t('manager.colRestock') }}</th><th></th></tr></thead>
+          <thead><tr><th>{{ t('manager.colProduct') }}</th><th>{{ t('manager.colPrice') }}</th><th class="tc">{{ t('manager.colStock') }}</th><th class="tc">{{ t('manager.colRestock') }}</th><th></th></tr></thead>
           <tbody>
             <tr v-for="p in visibleProducts" :key="p.id">
               <td><div class="a-row" style="justify-content:flex-start;gap:.5rem"><img class="a-thumb" :src="p.image_url" :alt="p.name"><span style="font-weight:700;color:var(--green)">{{ p.name }}</span></div></td>
               <td>{{ p.price }}</td>
-              <td><span class="a-pill" :class="p.stock === 0 ? 'pill-low' : (p.stock <= 5 ? 'pill-warn' : 'pill-ok')">{{ p.stock }}</span></td>
-              <td>
+              <td class="tc"><span class="a-pill" :class="p.stock === 0 ? 'pill-low' : (p.stock <= 5 ? 'pill-warn' : 'pill-ok')">{{ p.stock }}</span></td>
+              <td class="tc">
                 <div class="stock-adjust">
                   <button class="sa-btn" :title="t('manager.decrease')" :disabled="p.stock === 0" @click="doAdjust(p.id, -1)">−</button>
                   <input type="number" min="1" class="a-input sa-qty" v-model.number="restockQty[p.id]" placeholder="1">
@@ -168,6 +168,9 @@ h1 { font-family: 'Amiri', serif; color: var(--green); font-size: 1.9rem; margin
 .ed-btn { font-size: .82rem; padding: .35rem .7rem; border-radius: 8px; background: rgba(60,74,39,.1); color: var(--green, #3c4a27); cursor: pointer; }
 .auth-err { color: var(--red, #9c2b2b); font-size: .85rem; margin: .4rem 0; }
 .a-thumb { width: 38px; height: 38px; border-radius: 8px; object-fit: cover; }
+/* center the Stock badge + the restock stepper in their columns */
+.a-table th.tc, .a-table td.tc { text-align: center; }
+.tc .stock-adjust { justify-content: center; }
 /* stock +/- stepper */
 .stock-adjust { display: inline-flex; align-items: center; gap: .3rem; }
 .sa-btn {
