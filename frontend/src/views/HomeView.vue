@@ -224,8 +224,13 @@
   <transition name="v"><div class="toast" v-if="toast"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l4 4 10-10"/></svg>{{ toast }}</div></transition>
 </template>
 
+<script>
+// named so <keep-alive include="HomeView"> in App.vue matches this view
+export default { name: 'HomeView' }
+</script>
+
 <script setup>
-import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onActivated, nextTick } from 'vue'
 import { RouterLink, useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useCartStore } from '../stores/cart'
@@ -472,13 +477,19 @@ watch(openCart, (open) => {
   if (open && !deliveryLoaded) { deliveryLoaded = true; settings.fetchDelivery() }
 })
 
-onMounted(() => {
-  content.fetch()
-  // arriving from the product page's "checkout" button
+// arriving from the product page's "checkout" button — runs on first mount and
+// on every re-activation, since keep-alive means onMounted fires only once
+function maybeOpenCheckout() {
   if (route.query.checkout && cart.list.length) {
     openCheckout()
     router.replace({ query: {} })
   }
+}
+// fires on first render and on every return to the storefront
+onActivated(maybeOpenCheckout)
+
+onMounted(() => {
+  content.fetch()
   const navSections = ['home', 'pantry', 'pottery', 'story', 'contact']
   function updateActiveSection() {
     const line = scrollY + innerHeight * 0.3 // a bit below the sticky header

@@ -39,7 +39,9 @@ const routes = [
 export const router = createRouter({
   history: createWebHistory(),
   routes,
-  scrollBehavior() {
+  scrollBehavior(to, from, savedPosition) {
+    // returning via back/forward → restore where the customer was
+    if (savedPosition) return savedPosition
     return { top: 0 }
   },
 })

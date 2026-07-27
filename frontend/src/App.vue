@@ -1,5 +1,11 @@
 <template>
-  <RouterView />
+  <RouterView v-slot="{ Component }">
+    <!-- keep the storefront alive so its infinite-scroll feed + scroll position
+         survive a trip into a product page and back -->
+    <keep-alive include="HomeView">
+      <component :is="Component" />
+    </keep-alive>
+  </RouterView>
   <ConfirmDialog />
   <ToastHost />
 </template>

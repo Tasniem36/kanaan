@@ -17,10 +17,10 @@
       </div>
 
       <template v-else>
-        <RouterLink to="/" class="pdp-back">
+        <a href="/" class="pdp-back" @click.prevent="backToStore">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M15 6l-6 6 6 6"/></svg>
           {{ t('product.backToStore') }}
-        </RouterLink>
+        </a>
 
         <div class="pdp-grid">
           <!-- gallery -->
@@ -109,6 +109,13 @@ function add() {
   toast.value = t('cart.added', { name: product.value.name })
   clearTimeout(toastTimer)
   toastTimer = setTimeout(() => (toast.value = ''), 2200)
+}
+
+// go back so the storefront's scroll position is restored; if the customer
+// deep-linked straight here (no in-app history), just go to the store.
+function backToStore() {
+  if (window.history.state?.back) router.back()
+  else router.push('/')
 }
 
 // checkout lives on the home page; route there and let it open the modal
