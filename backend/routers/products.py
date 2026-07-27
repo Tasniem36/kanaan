@@ -19,12 +19,14 @@ def _clean_images(value):
 def list_products(request: Request):
     user = optional_user(request)
     is_manager = user and user.get("role") == "manager"
+    # LIGHT payload for everyone: only a small thumbnail, never the heavy data-URL
+    # gallery. The full images load on demand (GET /products/{id}) — detail page
+    # for shoppers, edit modal for managers.
     if is_manager:
-        # managers get the full record (needed to edit the gallery)
-        where, cols = "", "id, name, description, price, unit, category, tag, image_url, images, thumb_url, stock, is_active"
+        where = ""
+        cols = ("id, name, description, price, unit, category, tag, "
+                "coalesce(thumb_url, image_url) as image_url, thumb_url, stock, is_active")
     else:
-        # shoppers get a LIGHT payload: only a small thumbnail, no heavy data-URL gallery.
-        # The full images load on the product detail page (GET /products/{id}).
         where = "where is_active = true"
         cols = ("id, name, description, price, unit, category, tag, "
                 "coalesce(thumb_url, image_url) as image_url, stock, is_active")

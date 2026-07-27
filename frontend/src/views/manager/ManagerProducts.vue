@@ -1,6 +1,9 @@
 <template>
   <section>
-    <h1>{{ t('manager.productsTitle') }}</h1>
+    <div class="p-head">
+      <h1>{{ t('manager.productsTitle') }}</h1>
+      <button class="a-btn" :disabled="compressing" @click="compressOld">{{ compressing ? '…' : t('manager.compressImages') }}</button>
+    </div>
     <div class="two-col">
       <div class="a-card" style="align-self:start">
         <h3 style="color:var(--green);font-family:'Amiri',serif;margin-bottom:.6rem">{{ t('manager.addProduct') }}</h3>
@@ -128,6 +131,26 @@ async function doAdjust(id, sign) {
     toast.show(delta > 0 ? t('manager.toastRestocked') : t('manager.toastReduced', { stock: p.stock }))
   } catch (e) { toast.show(e.message) }
 }
+const compressing = ref(false)
+// generate small thumbnails for products uploaded before thumbnails existed
+async function compressOld() {
+  const targets = catalog.products.filter((p) => !p.thumb_url && (p.image_url || '').startsWith('data:'))
+  if (!targets.length) { toast.show(t('manager.compressNone')); return }
+  compressing.value = true
+  try {
+    for (const p of targets) {
+      const thumb_url = await shrink(p.image_url)
+      await catalog.update(p.id, { thumb_url })
+    }
+    await catalog.fetch()
+    toast.show(t('manager.compressDone', { n: targets.length }))
+  } catch (e) {
+    toast.show(e.message)
+  } finally {
+    compressing.value = false
+  }
+}
+
 async function toggleActive(p) {
   try {
     await catalog.update(p.id, { is_active: !p.is_active })
@@ -145,11 +168,14 @@ async function removeProduct(p) {
   try { await catalog.remove(p.id); toast.show(t('manager.toastRemoved')) }
   catch (e) { toast.show(e.message) }
 }
-function openEdit(p) {
-  editing.value = p
+async function openEdit(p) {
   epErr.value = ''
-  const imgs = Array.isArray(p.images) && p.images.length ? [...p.images] : (p.image_url ? [p.image_url] : [])
-  Object.assign(ep, { name: p.name, description: p.description || '', category: p.category, unit: p.unit || '', price: p.price, tag: p.tag || '', images: imgs })
+  // the list is light (no gallery) — fetch the full product for editing
+  let full = p
+  try { full = await catalog.fetchOne(p.id) } catch { /* fall back to the light row */ }
+  editing.value = full
+  const imgs = Array.isArray(full.images) && full.images.length ? [...full.images] : (full.image_url ? [full.image_url] : [])
+  Object.assign(ep, { name: full.name, description: full.description || '', category: full.category, unit: full.unit || '', price: full.price, tag: full.tag || '', images: imgs })
 }
 async function saveEdit() {
   epErr.value = ''
@@ -171,6 +197,8 @@ onMounted(() => catalog.fetch())
 
 <style scoped>
 h1 { font-family: 'Amiri', serif; color: var(--green); font-size: 1.9rem; margin-bottom: 1rem; }
+.p-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.p-head h1 { margin-bottom: 0; }
 .two-col { display: grid; grid-template-columns: 320px 1fr; gap: 1.2rem; align-items: start; }
 @media (max-width: 760px) { .two-col { grid-template-columns: 1fr; } }
 .rm-btn { font-size: .82rem; padding: .35rem .7rem; border-radius: 8px; background: rgba(156,43,43,.1); color: var(--red, #9c2b2b); cursor: pointer; }
