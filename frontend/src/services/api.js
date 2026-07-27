@@ -14,6 +14,9 @@ export async function api(path, { method = 'GET', body, auth = true } = {}) {
   const res = await fetch(BASE + path, {
     method,
     headers,
+    // never serve API data from the browser HTTP cache — always hit the network
+    // so a reload shows fresh data (no stale "old then new" flash)
+    cache: 'no-store',
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
 
