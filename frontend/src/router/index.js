@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory, START_LOCATION } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import HomeView from '../views/HomeView.vue'
 
@@ -40,6 +40,8 @@ export const router = createRouter({
   history: createWebHistory(),
   routes,
   scrollBehavior(to, from, savedPosition) {
+    // fresh page load / hard refresh → always start at the top
+    if (from === START_LOCATION) return { top: 0 }
     // returning via back/forward → restore where the customer was
     if (savedPosition) return savedPosition
     return { top: 0 }
