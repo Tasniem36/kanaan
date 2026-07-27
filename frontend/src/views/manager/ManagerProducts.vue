@@ -2,7 +2,6 @@
   <section>
     <div class="p-head">
       <h1>{{ t('manager.productsTitle') }}</h1>
-      <button class="a-btn" :disabled="compressing" @click="compressOld">{{ compressing ? '…' : t('manager.compressImages') }}</button>
     </div>
     <div class="two-col">
       <div class="a-card" style="align-self:start">
@@ -17,6 +16,9 @@
           <div class="a-field"><label>{{ t('manager.price') }} *</label><input class="a-input" type="number" step="0.01" v-model="np.price"></div>
           <div class="a-field"><label>{{ t('manager.stock') }}</label><input class="a-input" type="number" v-model="np.stock"></div>
         </div>
+        <div class="a-field" style="margin-bottom:.6rem"><label>{{ t('manager.type') }}</label>
+          <input class="a-input" v-model.trim="np.type" :placeholder="t('manager.typePh')" list="type-presets">
+        </div>
         <div class="a-field" style="margin-bottom:.6rem"><label>{{ t('manager.tag') }}</label>
           <input class="a-input" v-model.trim="np.tag" :placeholder="t('manager.tagPh')" list="tag-presets">
         </div>
@@ -24,6 +26,7 @@
           <ImagePicker v-model="np.images" />
         </div>
         <datalist id="tag-presets"><option value="حصاد جديد"></option><option value="الأكثر مبيعًا"></option><option value="يدويّ"></option></datalist>
+        <datalist id="type-presets"><option value="مضيفات"></option><option value="صحون"></option><option value="ابريق"></option><option value="اكواب"></option><option value="فناجين"></option><option value="زيت"></option><option value="زعتر"></option><option value="أجبان"></option><option value="ألبان"></option></datalist>
         <p v-if="pErr" class="auth-err">{{ pErr }}</p>
         <button class="a-btn" :disabled="pBusy" @click="addProduct">{{ pBusy ? '…' : t('manager.addBtn') }}</button>
       </div>
@@ -75,7 +78,11 @@
           </div>
           <div class="grid2">
             <div><label class="co-l">{{ t('manager.price') }}</label><input class="a-input" type="number" step="0.01" v-model="ep.price"></div>
+            <div><label class="co-l">{{ t('manager.type') }}</label><input class="a-input" v-model.trim="ep.type" :placeholder="t('manager.typePh')" list="type-presets"></div>
+          </div>
+          <div class="grid2">
             <div><label class="co-l">{{ t('manager.tag') }}</label><input class="a-input" v-model.trim="ep.tag" :placeholder="t('manager.tagPh')" list="tag-presets"></div>
+            <div></div>
           </div>
           <p v-if="epErr" class="auth-err">{{ epErr }}</p>
           <button class="btn btn-green" style="width:100%;justify-content:center;margin-top:1rem" :disabled="epBusy" @click="saveEdit">{{ epBusy ? '…' : t('manager.save') }}</button>
@@ -94,7 +101,6 @@ import { useToastStore } from '../../stores/toast'
 import ImagePicker from '../../components/ImagePicker.vue'
 import Loader from '../../components/Loader.vue'
 import { useInfiniteScroll } from '../../composables/useInfiniteScroll'
-import { shrink } from '../../utils/image'
 
 const { t } = useI18n()
 const catalog = useCatalogStore()
@@ -105,12 +111,12 @@ const toast = useToastStore()
 const { visible: visibleProducts, sentinel, hasMore } = useInfiniteScroll(() => catalog.byStock, 10)
 
 const restockQty = reactive({})
-const np = reactive({ name: '', description: '', category: 'pantry', unit: '', price: '', stock: '', tag: '', images: [] })
+const np = reactive({ name: '', description: '', category: 'pantry', unit: '', price: '', stock: '', type: '', tag: '', images: [] })
 const pErr = ref('')
 const pBusy = ref(false)
 
 const editing = ref(null)
-const ep = reactive({ name: '', description: '', category: 'pantry', unit: '', price: '', tag: '', images: [] })
+const ep = reactive({ name: '', description: '', category: 'pantry', unit: '', price: '', type: '', tag: '', images: [] })
 const epErr = ref('')
 const epBusy = ref(false)
 
@@ -119,9 +125,9 @@ async function addProduct() {
   if (!np.name || !np.price) { pErr.value = t('manager.errNamePrice'); return }
   pBusy.value = true
   try {
-    const thumb_url = await shrink(np.images[0] || null)
-    await catalog.create({ ...np, images: [...np.images], thumb_url, price: Number(np.price), stock: Number(np.stock) || 0 })
-    Object.assign(np, { name: '', description: '', category: np.category, unit: '', price: '', stock: '', tag: '', images: [] })
+    // the backend generates the list thumbnail automatically from the first image
+    await catalog.create({ ...np, images: [...np.images], price: Number(np.price), stock: Number(np.stock) || 0 })
+    Object.assign(np, { name: '', description: '', category: np.category, unit: '', price: '', stock: '', type: '', tag: '', images: [] })
     toast.show(t('manager.toastAdded'))
   } catch (e) { pErr.value = e.message } finally { pBusy.value = false }
 }
@@ -134,26 +140,6 @@ async function doAdjust(id, sign) {
     toast.show(delta > 0 ? t('manager.toastRestocked') : t('manager.toastReduced', { stock: p.stock }))
   } catch (e) { toast.show(e.message) }
 }
-const compressing = ref(false)
-// generate small thumbnails for products uploaded before thumbnails existed
-async function compressOld() {
-  const targets = catalog.products.filter((p) => !p.thumb_url && (p.image_url || '').startsWith('data:'))
-  if (!targets.length) { toast.show(t('manager.compressNone')); return }
-  compressing.value = true
-  try {
-    for (const p of targets) {
-      const thumb_url = await shrink(p.image_url)
-      await catalog.update(p.id, { thumb_url })
-    }
-    await catalog.fetch()
-    toast.show(t('manager.compressDone', { n: targets.length }))
-  } catch (e) {
-    toast.show(e.message)
-  } finally {
-    compressing.value = false
-  }
-}
-
 async function toggleActive(p) {
   try {
     await catalog.update(p.id, { is_active: !p.is_active })
@@ -178,17 +164,17 @@ async function openEdit(p) {
   try { full = await catalog.fetchOne(p.id) } catch { /* fall back to the light row */ }
   editing.value = full
   const imgs = Array.isArray(full.images) && full.images.length ? [...full.images] : (full.image_url ? [full.image_url] : [])
-  Object.assign(ep, { name: full.name, description: full.description || '', category: full.category, unit: full.unit || '', price: full.price, tag: full.tag || '', images: imgs })
+  Object.assign(ep, { name: full.name, description: full.description || '', category: full.category, unit: full.unit || '', price: full.price, type: full.type || '', tag: full.tag || '', images: imgs })
 }
 async function saveEdit() {
   epErr.value = ''
   if (!ep.name || !ep.price) { epErr.value = t('manager.errNamePrice'); return }
   epBusy.value = true
   try {
-    const thumb_url = await shrink(ep.images[0] || null)
+    // thumbnail is regenerated server-side when the images change
     await catalog.update(editing.value.id, {
       name: ep.name, description: ep.description, category: ep.category, unit: ep.unit,
-      price: Number(ep.price), tag: ep.tag || null, images: [...ep.images], thumb_url,
+      type: ep.type || null, price: Number(ep.price), tag: ep.tag || null, images: [...ep.images],
     })
     editing.value = null
     toast.show(t('manager.toastSaved'))

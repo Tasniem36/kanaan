@@ -8,6 +8,7 @@ load_dotenv()
 
 from db import pool
 from security import hash_password
+from thumbs import make_thumb
 
 
 def _run_file(conn, path):
@@ -16,10 +17,29 @@ def _run_file(conn, path):
     print(f"✓ applied {path}")
 
 
+def _backfill_thumbnails(conn):
+    """Generate small thumbnails for existing products that never had one (or
+    whose thumb is still the full-size image). Runs server-side, once, so old
+    products load as light in lists as new ones."""
+    rows = conn.execute(
+        "select id, image_url from products "
+        "where image_url like 'data:%' and (thumb_url is null or thumb_url = image_url)"
+    ).fetchall()
+    done = 0
+    for row in rows:
+        thumb = make_thumb(row["image_url"])
+        if thumb and thumb != row["image_url"]:
+            conn.execute("update products set thumb_url = %s where id = %s", [thumb, row["id"]])
+            done += 1
+    if done:
+        print(f"✓ backfilled {done} product thumbnail(s)")
+
+
 def main():
     with pool.connection() as conn:
         _run_file(conn, "db/schema.sql")
         _run_file(conn, "db/seed.sql")
+        _backfill_thumbnails(conn)
         email = os.getenv("SEED_MANAGER_EMAIL")
         password = os.getenv("SEED_MANAGER_PASSWORD")
         if email and password:

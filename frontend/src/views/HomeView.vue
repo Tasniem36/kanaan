@@ -60,7 +60,11 @@
   <section id="pantry">
     <div class="wrap">
       <div class="sec-head reveal"><span class="eyebrow">{{ t('home.pantryEyebrow') }}</span><h2 class="display">{{ t('home.pantryTitle') }}</h2><p>{{ t('home.pantryDesc') }}</p></div>
-      <ProductFeed ref="pantryFeed" category="pantry" @added="onAdded" />
+      <div v-if="pantryTypes.length" class="type-filter">
+        <button class="type-chip" :class="{ on: !pantryType }" @click="pantryType = ''">{{ t('home.allTypes') }}</button>
+        <button v-for="ty in pantryTypes" :key="ty" class="type-chip" :class="{ on: pantryType === ty }" @click="pantryType = ty">{{ ty }}</button>
+      </div>
+      <ProductFeed ref="pantryFeed" category="pantry" :type="pantryType" @added="onAdded" />
     </div>
   </section>
 
@@ -68,7 +72,11 @@
   <section class="pottery" id="pottery">
     <div class="wrap">
       <div class="sec-head reveal"><span class="eyebrow">{{ t('home.potteryEyebrow') }}</span><h2 class="display">{{ t('home.potteryTitle') }}</h2><p>{{ t('home.potteryDesc') }}</p></div>
-      <ProductFeed ref="potteryFeed" category="pottery" @added="onAdded" />
+      <div v-if="potteryTypes.length" class="type-filter">
+        <button class="type-chip" :class="{ on: !potteryType }" @click="potteryType = ''">{{ t('home.allTypes') }}</button>
+        <button v-for="ty in potteryTypes" :key="ty" class="type-chip" :class="{ on: potteryType === ty }" @click="potteryType = ty">{{ ty }}</button>
+      </div>
+      <ProductFeed ref="potteryFeed" category="pottery" :type="potteryType" @added="onAdded" />
     </div>
   </section>
 
@@ -239,6 +247,7 @@ import { useOrdersStore } from '../stores/orders'
 import { useAddressesStore } from '../stores/addresses'
 import { useContentStore } from '../stores/content'
 import { useSettingsStore } from '../stores/settings'
+import { useCatalogStore } from '../stores/catalog'
 import { deliveryFee } from '../utils/delivery'
 import ProductFeed from '../components/ProductFeed.vue'
 import CartDrawer from '../components/CartDrawer.vue'
@@ -255,6 +264,7 @@ const ordersStore = useOrdersStore()
 const addresses = useAddressesStore()
 const content = useContentStore()
 const settings = useSettingsStore()
+const catalog = useCatalogStore()
 const router = useRouter()
 const route = useRoute()
 const ar = (n) => String(n)
@@ -329,6 +339,12 @@ const modal = ref(null)
 const showTop = ref(false)
 const tbi = ref(0)
 const activeSection = ref('home')
+
+// storefront type filters (data-driven from the products in each category)
+const pantryTypes = ref([])
+const potteryTypes = ref([])
+const pantryType = ref('')
+const potteryType = ref('')
 
 const checkoutOpen = ref(false)
 const coErr = ref('')
@@ -509,6 +525,9 @@ watch(() => content.values, observeReveals)
 
 onMounted(() => {
   content.fetch()
+  // load the filter chips for each section
+  catalog.fetchTypes('pantry').then((t) => (pantryTypes.value = t)).catch(() => {})
+  catalog.fetchTypes('pottery').then((t) => (potteryTypes.value = t)).catch(() => {})
   const navSections = ['home', 'pantry', 'pottery', 'story', 'contact']
   function updateActiveSection() {
     const line = scrollY + innerHeight * 0.3 // a bit below the sticky header
@@ -555,6 +574,18 @@ onMounted(() => {
   transition: border-color .15s, background .15s;
 }
 .addr-pick.on { border-color: var(--green); background: rgba(60,74,39,.06); }
+.type-filter {
+  display: flex; flex-wrap: wrap; gap: .5rem;
+  margin: 0 0 1.6rem; justify-content: center;
+}
+.type-chip {
+  padding: .45rem 1.1rem; border-radius: 999px;
+  border: 1.5px solid rgba(60,74,39,.22); background: transparent;
+  color: var(--green); font-family: inherit; font-size: .9rem; font-weight: 600;
+  cursor: pointer; transition: background .15s, color .15s, border-color .15s;
+}
+.type-chip:hover { border-color: var(--green); }
+.type-chip.on { background: var(--green); color: #fff; border-color: var(--green); }
 .value { position: relative; }
 .v-edit {
   position: absolute; top: 6px; inset-inline-end: 6px;

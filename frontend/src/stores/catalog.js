@@ -28,6 +28,11 @@ export const useCatalogStore = defineStore('catalog', {
         this.loading = false
       }
     },
+    // distinct sub-types in use for a category, for the storefront filter chips
+    async fetchTypes(category) {
+      const { types } = await api(`/products/types?category=${encodeURIComponent(category)}`)
+      return types || []
+    },
     // full-quality single product (with the gallery) for the detail page
     async fetchOne(id) {
       const { product } = await api(`/products/${id}`)

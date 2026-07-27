@@ -4,6 +4,7 @@ from psycopg.types.json import Json
 from db import fetch_all, fetch_one
 from security import optional_user, require_manager
 from audit import log_action
+from thumbs import make_thumb
 
 router = APIRouter()
 
@@ -22,6 +23,7 @@ def list_products(request: Request):
     q = request.query_params
     force_active = q.get("active") == "1"   # storefront forces active-only even for managers
     category = q.get("category")
+    ptype = (q.get("type") or "").strip()
 
     conds, params = [], []
     if not is_manager or force_active:
@@ -29,15 +31,18 @@ def list_products(request: Request):
     if category in ("pantry", "pottery"):
         conds.append("category = %s")
         params.append(category)
+    if ptype:
+        conds.append("type = %s")
+        params.append(ptype)
     where = ("where " + " and ".join(conds)) if conds else ""
 
     # LIGHT payload: only a small thumbnail, never the heavy data-URL gallery
     # (the full images load on demand via GET /products/{id}).
     if is_manager and not force_active:
-        cols = ("id, name, description, price, unit, category, tag, "
+        cols = ("id, name, description, price, unit, category, type, tag, "
                 "coalesce(thumb_url, image_url) as image_url, thumb_url, stock, is_active")
     else:
-        cols = ("id, name, description, price, unit, category, tag, "
+        cols = ("id, name, description, price, unit, category, type, tag, "
                 "coalesce(thumb_url, image_url) as image_url, stock, is_active")
 
     total = fetch_one(f"select count(*)::int as n from products {where}", params)["n"]
@@ -66,12 +71,32 @@ def list_products(request: Request):
     return {"products": rows, "total": total}
 
 
+@router.get("/types")
+def list_types(request: Request):
+    """Distinct sub-types in use, for the storefront filter chips. Active products
+    only, ordered by how many products use each type (most common first).
+    Defined before /{pid} so 'types' isn't captured as a product id."""
+    q = request.query_params
+    category = q.get("category")
+    conds = ["is_active = true", "type is not null", "type <> ''"]
+    params = []
+    if category in ("pantry", "pottery"):
+        conds.append("category = %s")
+        params.append(category)
+    where = "where " + " and ".join(conds)
+    rows = fetch_all(
+        f"select type, count(*)::int as n from products {where} group by type order by n desc, type",
+        params,
+    )
+    return {"types": [r["type"] for r in rows]}
+
+
 @router.get("/{pid}")
 def get_product(pid: str, request: Request):
     user = optional_user(request)
     is_manager = user and user.get("role") == "manager"
     row = fetch_one(
-        """select id, name, description, price, unit, category, tag, image_url, images, thumb_url, stock, is_active
+        """select id, name, description, price, unit, category, type, tag, image_url, images, thumb_url, stock, is_active
            from products where id = %s""", [pid])
     if not row or (not is_manager and not row["is_active"]):
         raise HTTPException(404, "Product not found")
@@ -90,11 +115,14 @@ def create_product(response: Response, _m=Depends(require_manager), payload: dic
     image_url = payload.get("image_url") or (images[0] if images else None)
     if image_url and not images:
         images = [image_url]
+    ptype = (payload.get("type") or "").strip() or None
+    # thumbnail is derived server-side from the primary image (managers can't set it)
+    thumb_url = make_thumb(image_url)
     row = fetch_one(
-        """insert into products (name, description, price, unit, category, tag, image_url, images, thumb_url, stock)
-           values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) returning *""",
-        [name, payload.get("description"), price, payload.get("unit"), category,
-         payload.get("tag"), image_url, Json(images), payload.get("thumb_url") or image_url,
+        """insert into products (name, description, price, unit, category, type, tag, image_url, images, thumb_url, stock)
+           values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) returning *""",
+        [name, payload.get("description"), price, payload.get("unit"), category, ptype,
+         payload.get("tag"), image_url, Json(images), thumb_url,
          int(payload.get("stock") or 0)],
     )
     response.status_code = 201
@@ -103,14 +131,24 @@ def create_product(response: Response, _m=Depends(require_manager), payload: dic
 
 @router.patch("/{pid}")
 def update_product(pid: str, _m=Depends(require_manager), payload: dict = Body(default={})):
-    allowed = ["name", "description", "price", "unit", "category", "tag", "image_url", "stock", "is_active", "images", "thumb_url"]
+    # thumb_url is intentionally NOT accepted from the client — it's derived below
+    allowed = ["name", "description", "price", "unit", "category", "type", "tag", "image_url", "stock", "is_active", "images"]
     data = {k: payload[k] for k in (payload or {}) if k in allowed}
+    # normalize empty type to NULL so it drops out of the filter chips
+    if "type" in data:
+        data["type"] = (data["type"] or "").strip() or None
     if "images" in data:
         imgs = _clean_images(data["images"])
         data["images"] = imgs
         # keep the primary image_url in sync with the first gallery image
         if "image_url" not in data:
             data["image_url"] = imgs[0] if imgs else None
+    # regenerate the list thumbnail whenever the image changes
+    if "image_url" in data or "images" in data:
+        primary = data.get("image_url")
+        if primary is None and data.get("images"):
+            primary = data["images"][0]
+        data["thumb_url"] = make_thumb(primary)
     if not data:
         raise HTTPException(400, "No fields to update")
     set_clause = ", ".join(f"{f} = %s" for f in data)

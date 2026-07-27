@@ -16,12 +16,13 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import ProductCard from './ProductCard.vue'
 import { api } from '../services/api'
 
 const props = defineProps({
   category: { type: String, default: '' },
+  type: { type: String, default: '' },
   pageSize: { type: Number, default: 10 },
   emptyText: { type: String, default: '' },
 })
@@ -43,6 +44,7 @@ async function loadMore() {
   try {
     const qs = new URLSearchParams({ limit: props.pageSize, offset: items.value.length, active: '1' })
     if (props.category) qs.set('category', props.category)
+    if (props.type) qs.set('type', props.type)
     const { products, total: t } = await api(`/products?${qs}`)
     items.value.push(...products)
     total.value = t
@@ -78,6 +80,9 @@ function reload() {
   loadMore()
 }
 defineExpose({ reload })
+
+// switching the active filter chip restarts the feed from an empty list
+watch(() => props.type, reload)
 
 onMounted(loadMore)
 onBeforeUnmount(() => io && io.disconnect())

@@ -63,6 +63,9 @@ create table if not exists products (
 alter table products add column if not exists images jsonb not null default '[]'::jsonb;
 -- small compressed preview shown in product lists (full images load on the detail page)
 alter table products add column if not exists thumb_url text;
+-- optional sub-type within a category (e.g. صحون / أكواب for pottery) — used for storefront filtering
+alter table products add column if not exists type text;
+create index if not exists products_category_type_idx on products (category, type);
 -- Backfill: any product with a primary image but no gallery gets a one-item gallery.
 update products set images = jsonb_build_array(image_url)
   where (images is null or images = '[]'::jsonb) and coalesce(image_url, '') <> '';
