@@ -22,6 +22,13 @@ export default {
     shopPantry: 'تسوّق المونة',
     discoverPottery: 'اكتشف الخزف',
   },
+  search: {
+    placeholder: 'ابحث عن منتج…',
+    clear: 'مسح',
+    resultsTitle: 'نتائج البحث',
+    resultsFor: 'نتائج البحث عن «{q}»',
+    noResults: 'لا توجد منتجات مطابقة',
+  },
   cats: {
     oil: 'زيت زيتون',
     zaatar: 'زعتر',
@@ -98,7 +105,8 @@ export default {
     loginWord: 'سجّل الدخول',
     fullName: 'الاسم الكامل',
     phone: 'رقم الهاتف',
-    city: 'المدينة / المنطقة',
+    city: 'الإمارة',
+    cityPick: 'اختر الإمارة',
     street: 'اسم الشارع',
     house: 'رقم المنزل / المبنى',
     landmark: 'علامة مميّزة (اختياري)',

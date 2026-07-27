@@ -31,6 +31,24 @@
     </nav>
   </aside>
 
+  <!-- product search — sticky under the nav; auto-hides on scroll down, returns on scroll up / at top -->
+  <div class="search-bar" :class="{ hidden: searchHidden }">
+    <div class="search-inner">
+      <svg class="search-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-3.5-3.5"/></svg>
+      <input class="search-input" v-model="searchQuery" :placeholder="t('search.placeholder')" type="search" enterkeyhint="search" aria-label="search">
+      <button v-if="searchQuery" class="search-clear" @click="searchQuery = ''" :aria-label="t('search.clear')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+  </div>
+
+  <!-- search results -->
+  <section v-if="searching" class="search-results">
+    <div class="wrap">
+      <div class="sec-head"><h2 class="display">{{ t('search.resultsTitle') }}</h2><p>{{ t('search.resultsFor', { q: activeQuery }) }}</p></div>
+      <ProductFeed :q="activeQuery" :empty-text="t('search.noResults')" @added="onAdded" />
+    </div>
+  </section>
+
+  <template v-else>
   <!-- hero -->
   <section class="hero" id="home">
     <img class="hero-img" src="/images/hero.jpg" alt="دكّان كنعان — مونة وخزف فلسطيني" /><a class="scroll-cue" href="#pantry" aria-label="استكشف المتجر"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></a>
@@ -91,6 +109,7 @@
       <div class="pic reveal"><img src="/images/tatreez.jpg" alt="قبة الصخرة"></div>
     </div>
   </section>
+  </template>
 
   <footer class="site" id="contact">
     <div class="band" aria-hidden="true"></div>
@@ -180,7 +199,12 @@
         <label class="co-l">{{ t('checkout.phone') }} *</label>
         <input class="a-input" v-model.trim="co.phone" type="tel" inputmode="tel" dir="ltr" placeholder="050 123 4567">
         <div class="grid2">
-          <div><label class="co-l">{{ t('checkout.city') }} *</label><input class="a-input" v-model.trim="co.city"></div>
+          <div><label class="co-l">{{ t('checkout.city') }} *</label>
+            <select class="a-input" v-model="co.city">
+              <option value="" disabled>{{ t('checkout.cityPick') }}</option>
+              <option v-for="e in EMIRATES" :key="e.value" :value="e.value">{{ locale === 'ar' ? e.value : e.en }}</option>
+            </select>
+          </div>
           <div><label class="co-l">{{ t('checkout.street') }} *</label><input class="a-input" v-model.trim="co.street"></div>
         </div>
         <div class="grid2">
@@ -248,7 +272,7 @@ import { useAddressesStore } from '../stores/addresses'
 import { useContentStore } from '../stores/content'
 import { useSettingsStore } from '../stores/settings'
 import { useCatalogStore } from '../stores/catalog'
-import { deliveryFee } from '../utils/delivery'
+import { deliveryFee, EMIRATES } from '../utils/delivery'
 import ProductFeed from '../components/ProductFeed.vue'
 import CartDrawer from '../components/CartDrawer.vue'
 import PortalBar from '../components/PortalBar.vue'
@@ -345,6 +369,17 @@ const pantryTypes = ref([])
 const potteryTypes = ref([])
 const pantryType = ref('')
 const potteryType = ref('')
+
+// product search
+const searchQuery = ref('')   // what the customer is typing
+const activeQuery = ref('')   // debounced term actually sent to the API
+const searchHidden = ref(false) // search bar auto-hidden while scrolling down
+const searching = computed(() => activeQuery.value.trim().length > 0)
+let searchTimer
+watch(searchQuery, (v) => {
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => { activeQuery.value = v.trim() }, 300)
+})
 
 const checkoutOpen = ref(false)
 const coErr = ref('')
@@ -528,6 +563,13 @@ onMounted(() => {
   // load the filter chips for each section
   catalog.fetchTypes('pantry').then((t) => (pantryTypes.value = t)).catch(() => {})
   catalog.fetchTypes('pottery').then((t) => (potteryTypes.value = t)).catch(() => {})
+  // keep the sticky search bar sitting right under the nav (height varies by breakpoint)
+  const updateNavH = () => {
+    const nav = document.querySelector('.portal-bar')
+    if (nav) document.documentElement.style.setProperty('--nav-h', nav.offsetHeight + 'px')
+  }
+  nextTick(updateNavH)
+  addEventListener('resize', updateNavH, { passive: true })
   const navSections = ['home', 'pantry', 'pottery', 'story', 'contact']
   function updateActiveSection() {
     const line = scrollY + innerHeight * 0.3 // a bit below the sticky header
@@ -540,9 +582,16 @@ onMounted(() => {
     if (innerHeight + scrollY >= document.body.scrollHeight - 4) current = navSections[navSections.length - 1]
     activeSection.value = current
   }
+  let lastY = scrollY
   addEventListener('scroll', () => {
     scrolled.value = scrollY > 10
     showTop.value = scrollY > 620
+    // search bar: visible near the top, hides when scrolling down, returns on scroll up
+    const y = scrollY
+    if (y < 140) searchHidden.value = false
+    else if (y > lastY + 6) searchHidden.value = true
+    else if (y < lastY - 6) searchHidden.value = false
+    lastY = y
     updateActiveSection()
   }, { passive: true })
   updateActiveSection()
@@ -574,6 +623,36 @@ onMounted(() => {
   transition: border-color .15s, background .15s;
 }
 .addr-pick.on { border-color: var(--green); background: rgba(60,74,39,.06); }
+.search-bar {
+  position: sticky;
+  top: var(--nav-h, 56px);
+  z-index: 55;
+  background: var(--cream, #f5efe3);
+  padding: .55rem 1.4rem;
+  transition: transform .3s ease;
+}
+.search-bar.hidden { transform: translateY(calc(-100% - var(--nav-h, 56px))); }
+.search-inner {
+  max-width: 640px; margin: 0 auto;
+  display: flex; align-items: center; gap: .5rem;
+  background: #fff; border: 1.5px solid rgba(60,74,39,.2);
+  border-radius: 999px; padding: .5rem .95rem;
+  transition: border-color .15s, box-shadow .15s;
+}
+.search-inner:focus-within { border-color: var(--green); box-shadow: 0 6px 20px -12px rgba(60,74,39,.6); }
+.search-ic { width: 20px; height: 20px; color: var(--green); flex: 0 0 auto; }
+.search-input {
+  flex: 1; border: none; outline: none; background: transparent;
+  font-family: inherit; font-size: .95rem; color: var(--ink);
+}
+.search-input::-webkit-search-cancel-button { display: none; }
+.search-clear {
+  width: 26px; height: 26px; flex: 0 0 auto; display: grid; place-items: center;
+  border-radius: 50%; background: var(--cream-2, rgba(60,74,39,.08)); color: var(--green); cursor: pointer;
+}
+.search-clear svg { width: 15px; height: 15px; }
+.search-results { padding-top: 2rem; min-height: 60vh; }
+@media (max-width: 560px) { .search-bar { padding: .5rem 1rem; } }
 .type-filter {
   display: flex; flex-wrap: wrap; gap: .5rem;
   margin: 0 0 1.6rem; justify-content: center;

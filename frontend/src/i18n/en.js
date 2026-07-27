@@ -22,6 +22,13 @@ export default {
     shopPantry: 'Shop the pantry',
     discoverPottery: 'Discover the ceramics',
   },
+  search: {
+    placeholder: 'Search for a product…',
+    clear: 'Clear',
+    resultsTitle: 'Search results',
+    resultsFor: 'Results for “{q}”',
+    noResults: 'No matching products',
+  },
   cats: {
     oil: 'Olive oil',
     zaatar: "Za'atar",
@@ -98,7 +105,8 @@ export default {
     loginWord: 'Sign in',
     fullName: 'Full name',
     phone: 'Phone number',
-    city: 'City / area',
+    city: 'Emirate',
+    cityPick: 'Choose emirate',
     street: 'Street name',
     house: 'House / building no.',
     landmark: 'Landmark (optional)',

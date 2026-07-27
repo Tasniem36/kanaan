@@ -24,6 +24,7 @@ def list_products(request: Request):
     force_active = q.get("active") == "1"   # storefront forces active-only even for managers
     category = q.get("category")
     ptype = (q.get("type") or "").strip()
+    search = (q.get("q") or "").strip()
 
     conds, params = [], []
     if not is_manager or force_active:
@@ -34,6 +35,10 @@ def list_products(request: Request):
     if ptype:
         conds.append("type = %s")
         params.append(ptype)
+    if search:
+        # customer name search (case-insensitive substring)
+        conds.append("name ilike %s")
+        params.append(f"%{search}%")
     where = ("where " + " and ".join(conds)) if conds else ""
 
     # LIGHT payload: only a small thumbnail, never the heavy data-URL gallery

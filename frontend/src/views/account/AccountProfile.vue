@@ -20,7 +20,12 @@
     <form class="addr-form" @submit.prevent="addAddress">
       <div class="a-grid">
         <div class="a-field"><label>{{ t('account.label') }}</label><input class="a-input" v-model.trim="na.label" :placeholder="t('account.labelPh')"></div>
-        <div class="a-field"><label>{{ t('account.city') }} *</label><input class="a-input" v-model.trim="na.city"></div>
+        <div class="a-field"><label>{{ t('account.city') }} *</label>
+          <select class="a-input" v-model="na.city">
+            <option value="" disabled>{{ t('checkout.cityPick') }}</option>
+            <option v-for="e in EMIRATES" :key="e.value" :value="e.value">{{ locale === 'ar' ? e.value : e.en }}</option>
+          </select>
+        </div>
       </div>
       <div class="a-grid">
         <div class="a-field"><label>{{ t('account.street') }} *</label><input class="a-input" v-model.trim="na.street"></div>
@@ -40,8 +45,9 @@ import { useI18n } from 'vue-i18n'
 import { useAddressesStore } from '../../stores/addresses'
 import { useConfirmStore } from '../../stores/confirm'
 import Loader from '../../components/Loader.vue'
+import { EMIRATES } from '../../utils/delivery'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const addr = useAddressesStore()
 const confirm = useConfirmStore()
 

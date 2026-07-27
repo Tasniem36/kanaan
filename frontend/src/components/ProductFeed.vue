@@ -23,6 +23,7 @@ import { api } from '../services/api'
 const props = defineProps({
   category: { type: String, default: '' },
   type: { type: String, default: '' },
+  q: { type: String, default: '' },
   pageSize: { type: Number, default: 10 },
   emptyText: { type: String, default: '' },
 })
@@ -45,6 +46,7 @@ async function loadMore() {
     const qs = new URLSearchParams({ limit: props.pageSize, offset: items.value.length, active: '1' })
     if (props.category) qs.set('category', props.category)
     if (props.type) qs.set('type', props.type)
+    if (props.q) qs.set('q', props.q)
     const { products, total: t } = await api(`/products?${qs}`)
     items.value.push(...products)
     total.value = t
@@ -81,8 +83,8 @@ function reload() {
 }
 defineExpose({ reload })
 
-// switching the active filter chip restarts the feed from an empty list
-watch(() => props.type, reload)
+// switching the active filter chip / search term restarts the feed from empty
+watch(() => [props.type, props.q], reload)
 
 onMounted(loadMore)
 onBeforeUnmount(() => io && io.disconnect())
