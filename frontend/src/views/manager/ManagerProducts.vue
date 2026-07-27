@@ -32,6 +32,7 @@
         <table class="a-table">
           <thead><tr><th>{{ t('manager.colProduct') }}</th><th>{{ t('manager.colPrice') }}</th><th class="tc">{{ t('manager.colStock') }}</th><th class="tc">{{ t('manager.colRestock') }}</th><th></th></tr></thead>
           <tbody>
+            <tr v-if="catalog.loading && !visibleProducts.length"><td colspan="5"><Loader :label="t('common.loading')" /></td></tr>
             <tr v-for="p in visibleProducts" :key="p.id" :class="{ 'row-hidden': !p.is_active }">
               <td><div class="a-row" style="justify-content:flex-start;gap:.5rem"><img class="a-thumb" :src="p.thumb_url || p.image_url" :alt="p.name"><span style="font-weight:700;color:var(--green)">{{ p.name }}</span><span v-if="!p.is_active" class="a-pill pill-low" style="font-size:.66rem">{{ t('manager.hidden') }}</span></div></td>
               <td>{{ p.price }}</td>
@@ -91,6 +92,7 @@ import { useCatalogStore } from '../../stores/catalog'
 import { useConfirmStore } from '../../stores/confirm'
 import { useToastStore } from '../../stores/toast'
 import ImagePicker from '../../components/ImagePicker.vue'
+import Loader from '../../components/Loader.vue'
 import { useInfiniteScroll } from '../../composables/useInfiniteScroll'
 import { shrink } from '../../utils/image'
 

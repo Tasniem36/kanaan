@@ -488,6 +488,25 @@ function maybeOpenCheckout() {
 // fires on first render and on every return to the storefront
 onActivated(maybeOpenCheckout)
 
+// scroll-reveal for sec-heads, value cards and the story block. Kept at setup
+// scope (not inside onMounted) so it can re-run whenever content loads: the
+// value cards re-render with new keys once content.fetch() resolves, replacing
+// their DOM nodes — without re-observing, those fresh nodes stay at opacity:0.
+let revealIO = null
+function observeReveals() {
+  if (!revealIO) {
+    revealIO = new IntersectionObserver((es) => {
+      es.forEach((e) => {
+        if (e.isIntersecting) { e.target.classList.add('in'); revealIO.unobserve(e.target) }
+      })
+    }, { threshold: 0.14 })
+  }
+  // product cards reveal themselves inside ProductFeed
+  nextTick(() => document.querySelectorAll('.reveal:not(.in)').forEach((el) => revealIO.observe(el)))
+}
+// re-observe when the editable "why us" cards arrive from the backend
+watch(() => content.values, observeReveals)
+
 onMounted(() => {
   content.fetch()
   const navSections = ['home', 'pantry', 'pottery', 'story', 'contact']
@@ -508,17 +527,7 @@ onMounted(() => {
     updateActiveSection()
   }, { passive: true })
   updateActiveSection()
-  const io = new IntersectionObserver((es) => {
-    es.forEach((e) => {
-      if (e.isIntersecting) {
-        e.target.classList.add('in')
-        io.unobserve(e.target)
-      }
-    })
-  }, { threshold: 0.14 })
-  // observe the page's reveal elements (sec-heads, value cards, story);
-  // product cards reveal themselves inside ProductFeed
-  nextTick(() => document.querySelectorAll('.reveal:not(.in)').forEach((el) => io.observe(el)))
+  observeReveals()
   setInterval(() => {
     tbi.value = (tbi.value + 1) % topbarMsgs.value.length
   }, 3800)

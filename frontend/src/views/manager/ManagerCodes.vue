@@ -19,7 +19,8 @@
       </div>
 
       <div class="table-wrap">
-        <p v-if="!codes.length" class="a-muted">{{ t('manager.noCodes') }}</p>
+        <Loader v-if="loading && !codes.length" :label="t('common.loading')" />
+        <p v-else-if="!codes.length" class="a-muted">{{ t('manager.noCodes') }}</p>
         <table v-else class="a-table">
           <thead><tr><th>{{ t('manager.codeLabel') }}</th><th>%</th><th>{{ t('manager.colFirstOrder') }}</th><th>{{ t('manager.codeUses') }}</th><th>{{ t('manager.colActive') }}</th><th></th></tr></thead>
           <tbody>
@@ -46,6 +47,7 @@ import { useI18n } from 'vue-i18n'
 import { api } from '../../services/api'
 import { useToastStore } from '../../stores/toast'
 import { useConfirmStore } from '../../stores/confirm'
+import Loader from '../../components/Loader.vue'
 
 const { t } = useI18n()
 const toast = useToastStore()
@@ -55,10 +57,16 @@ const codes = ref([])
 const nc = reactive({ code: '', percent: '', max_uses: '', expires_at: '', first_order_only: true, active: true })
 const err = ref('')
 const busy = ref(false)
+const loading = ref(false)
 
 async function load() {
-  const { codes: c } = await api('/discounts')
-  codes.value = c
+  loading.value = true
+  try {
+    const { codes: c } = await api('/discounts')
+    codes.value = c
+  } finally {
+    loading.value = false
+  }
 }
 async function addCode() {
   err.value = ''

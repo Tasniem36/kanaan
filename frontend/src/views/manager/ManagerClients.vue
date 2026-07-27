@@ -1,7 +1,7 @@
 <template>
   <section>
     <h1>{{ t('manager.clientsTitle') }}</h1>
-    <p v-if="loading" class="a-muted">{{ t('common.loading') }}</p>
+    <Loader v-if="loading" :label="t('common.loading')" />
     <p v-else-if="!clients.length" class="a-muted">{{ t('manager.noClients') }}</p>
     <div v-else class="table-wrap">
       <table class="a-table">
@@ -27,6 +27,7 @@ import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '../../services/api'
 import { useInfiniteScroll } from '../../composables/useInfiniteScroll'
+import Loader from '../../components/Loader.vue'
 
 const { t, locale } = useI18n()
 const clients = ref([])

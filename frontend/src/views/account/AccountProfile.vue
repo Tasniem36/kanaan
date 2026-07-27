@@ -1,7 +1,8 @@
 <template>
   <section class="panel">
     <div class="panel-head"><h2>{{ t('account.addresses') }}</h2></div>
-    <div v-if="addr.addresses.length" class="addr-grid">
+    <Loader v-if="addr.loading && !addr.addresses.length" :label="t('common.loading')" />
+    <div v-else-if="addr.addresses.length" class="addr-grid">
       <div class="addr-card" v-for="a in addr.addresses" :key="a.id">
         <div class="addr-top">
           <b>{{ a.label || '—' }}</b>
@@ -38,6 +39,7 @@ import { reactive, ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAddressesStore } from '../../stores/addresses'
 import { useConfirmStore } from '../../stores/confirm'
+import Loader from '../../components/Loader.vue'
 
 const { t } = useI18n()
 const addr = useAddressesStore()

@@ -1,7 +1,7 @@
 <template>
   <section class="panel">
     <div class="panel-head"><h2>{{ t('account.orders') }}</h2></div>
-    <p v-if="ordersStore.loading" class="a-muted">{{ t('common.loading') }}</p>
+    <Loader v-if="ordersStore.loading" :label="t('common.loading')" />
     <p v-else-if="!ordersStore.orders.length" class="a-muted">{{ t('account.noOrders') }} <RouterLink to="/" style="color:var(--green);text-decoration:underline">{{ t('account.shopNow') }}</RouterLink></p>
     <div v-else>
       <div class="a-card" v-for="o in visibleOrders" :key="o.id">
@@ -32,6 +32,7 @@ import { onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useOrdersStore } from '../../stores/orders'
+import Loader from '../../components/Loader.vue'
 import { useInfiniteScroll } from '../../composables/useInfiniteScroll'
 
 const { t, locale } = useI18n()

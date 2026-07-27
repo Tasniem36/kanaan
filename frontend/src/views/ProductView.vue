@@ -10,7 +10,21 @@
     </PortalBar>
 
     <main class="wrap pdp-body">
-      <p v-if="catalog.loading && !product" class="a-muted" style="text-align:center">{{ t('common.loading') }}</p>
+      <!-- while /api/products/:id is loading, show a skeleton in the real layout -->
+      <div v-if="loading && !product" class="pdp-grid" aria-hidden="true">
+        <div class="pdp-gallery">
+          <div class="pdp-main sk"></div>
+          <div class="pdp-thumbs"><span class="sk sk-thumb"></span><span class="sk sk-thumb"></span><span class="sk sk-thumb"></span></div>
+        </div>
+        <div class="pdp-info sk-info">
+          <span class="sk sk-line" style="width:32%"></span>
+          <span class="sk sk-line lg" style="width:72%"></span>
+          <span class="sk sk-line" style="width:100%"></span>
+          <span class="sk sk-line" style="width:88%"></span>
+          <span class="sk sk-line xl" style="width:38%"></span>
+          <span class="sk sk-btn"></span>
+        </div>
+      </div>
       <div v-else-if="!product" class="pdp-missing">
         <p class="a-muted">{{ t('product.notFound') }}</p>
         <RouterLink to="/" class="btn btn-green">{{ t('product.backToStore') }}</RouterLink>
@@ -91,6 +105,7 @@ const openCart = ref(false)
 const toast = ref('')
 const idx = ref(0)
 const scrolled = ref(false)
+const loading = ref(false)
 
 const product = computed(() => catalog.products.find((p) => p.id === route.params.id))
 const images = computed(() => {
@@ -126,10 +141,20 @@ function goCheckout() {
 
 function onScroll() { scrolled.value = scrollY > 10 }
 
-onMounted(() => {
-  // load the full-quality product (with its gallery) for the detail page
-  catalog.fetchOne(route.params.id).catch(() => { if (!catalog.products.length) catalog.fetch() })
+onMounted(async () => {
   addEventListener('scroll', onScroll, { passive: true })
+  // load the full-quality product (with its gallery) for the detail page.
+  // only block on the loader when we have nothing to show yet — if the product
+  // was already in the catalog (came from the storefront feed) it shows instantly
+  // while the gallery refreshes in the background.
+  loading.value = !product.value
+  try {
+    await catalog.fetchOne(route.params.id)
+  } catch {
+    if (!catalog.products.length) { try { await catalog.fetch() } catch { /* leave as not-found */ } }
+  } finally {
+    loading.value = false
+  }
 })
 onBeforeUnmount(() => removeEventListener('scroll', onScroll))
 </script>
@@ -188,4 +213,25 @@ onBeforeUnmount(() => removeEventListener('scroll', onScroll))
 @media (max-width: 760px) {
   .pdp-grid { grid-template-columns: 1fr; gap: 1.4rem; }
 }
+
+/* loading skeleton — mirrors the real product layout so nothing is empty */
+.sk {
+  position: relative; overflow: hidden;
+  background: var(--cream-2, rgba(60,74,39,.08)); border-radius: 12px;
+}
+.sk::after {
+  content: ""; position: absolute; inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.55), transparent);
+  animation: skshimmer 1.3s infinite;
+}
+[dir="rtl"] .sk::after { animation-name: skshimmer-rtl; }
+@keyframes skshimmer { 100% { transform: translateX(100%); } }
+@keyframes skshimmer-rtl { 100% { transform: translateX(-100%); } }
+.sk-info { display: grid; gap: .8rem; align-content: start; }
+.sk-line { height: 1rem; border-radius: 8px; }
+.sk-line.lg { height: 2.2rem; }
+.sk-line.xl { height: 2.6rem; margin-top: .4rem; }
+.sk-thumb { width: 68px; height: 68px; border-radius: 12px; }
+.sk-btn { height: 46px; width: 180px; border-radius: 999px; margin-top: .6rem; }
 </style>

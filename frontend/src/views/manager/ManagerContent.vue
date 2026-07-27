@@ -1,7 +1,7 @@
 <template>
   <section>
     <h1>{{ t('manager.contentTitle') }}</h1>
-    <p v-if="content.loaded && !forms.length" class="a-muted">{{ t('common.loading') }}</p>
+    <Loader v-if="!content.loaded" :label="t('common.loading')" />
 
     <div class="cards">
       <div class="a-card" v-for="f in forms" :key="f.id">
@@ -41,6 +41,7 @@ import { useContentStore } from '../../stores/content'
 import { useToastStore } from '../../stores/toast'
 import { useConfirmStore } from '../../stores/confirm'
 import ImagePicker from '../../components/ImagePicker.vue'
+import Loader from '../../components/Loader.vue'
 
 const { t } = useI18n()
 const content = useContentStore()

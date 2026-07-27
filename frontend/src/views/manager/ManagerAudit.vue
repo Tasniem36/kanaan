@@ -12,7 +12,7 @@
       <button class="a-btn" @click="load">{{ t('manager.applyFilter') }}</button>
       <button class="a-btn ghost" @click="clearFilter">{{ t('manager.clearFilter') }}</button>
     </div>
-    <p v-if="loading" class="a-muted">{{ t('common.loading') }}</p>
+    <Loader v-if="loading" :label="t('common.loading')" />
     <p v-else-if="!logs.length" class="a-muted">{{ t('manager.noAudit') }}</p>
     <div v-else class="table-wrap">
       <table class="a-table">
@@ -37,6 +37,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '../../services/api'
+import Loader from '../../components/Loader.vue'
 
 const { t, te, locale } = useI18n()
 const logs = ref([])

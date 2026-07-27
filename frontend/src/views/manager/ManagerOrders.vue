@@ -4,7 +4,7 @@
       <h1>{{ t('manager.allOrders') }}</h1>
       <button class="a-btn" :disabled="testing" @click="testNotify">{{ testing ? '…' : t('manager.testNotify') }}</button>
     </div>
-    <p v-if="ordersStore.loading" class="a-muted">{{ t('common.loading') }}</p>
+    <Loader v-if="ordersStore.loading" :label="t('common.loading')" />
     <p v-else-if="!ordersStore.orders.length" class="a-muted">{{ t('manager.noOrders') }}</p>
 
     <!-- orders grouped by customer -->
@@ -45,6 +45,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useOrdersStore } from '../../stores/orders'
 import { useToastStore } from '../../stores/toast'
+import Loader from '../../components/Loader.vue'
 import { api } from '../../services/api'
 import { useInfiniteScroll } from '../../composables/useInfiniteScroll'
 
