@@ -15,9 +15,9 @@
             <td>{{ c.total_spent }} <span class='dh' role='img' aria-label='درهم'></span></td>
             <td class="a-muted">{{ c.last_order_at ? fmtDate(c.last_order_at) : t('manager.none') }}</td>
           </tr>
+          <tr v-if="hasMore"><td colspan="6"><div ref="sentinel" class="load-more"><span class="ld-spin"></span></div></td></tr>
         </tbody>
       </table>
-      <Pager v-model="page" :pages="pageCount" />
     </div>
   </section>
 </template>
@@ -26,13 +26,12 @@
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '../../services/api'
-import Pager from '../../components/Pager.vue'
-import { usePagination } from '../../composables/usePagination'
+import { useInfiniteScroll } from '../../composables/useInfiniteScroll'
 
 const { t, locale } = useI18n()
 const clients = ref([])
 const loading = ref(false)
-const { page, pageCount, visible: visibleClients } = usePagination(() => clients.value, 10)
+const { visible: visibleClients, sentinel, hasMore } = useInfiniteScroll(() => clients.value, 10)
 
 const fmtDate = (d) => new Date(d).toLocaleDateString(locale.value, { year: 'numeric', month: 'long', day: 'numeric' })
 

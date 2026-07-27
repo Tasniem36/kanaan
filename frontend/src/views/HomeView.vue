@@ -60,9 +60,7 @@
   <section id="pantry">
     <div class="wrap">
       <div class="sec-head reveal"><span class="eyebrow">{{ t('home.pantryEyebrow') }}</span><h2 class="display">{{ t('home.pantryTitle') }}</h2><p>{{ t('home.pantryDesc') }}</p></div>
-      <div v-if="catalog.loading" class="load-more"><span class="ld-spin"></span></div>
-      <p v-else-if="catalog.error" class="a-muted" style="text-align:center;color:var(--red)">{{ t('home.loadError') }}: {{ catalog.error }}</p>
-      <ProductGrid v-else :items="catalog.pantry" @added="onAdded" />
+      <ProductFeed ref="pantryFeed" category="pantry" @added="onAdded" />
     </div>
   </section>
 
@@ -70,8 +68,7 @@
   <section class="pottery" id="pottery">
     <div class="wrap">
       <div class="sec-head reveal"><span class="eyebrow">{{ t('home.potteryEyebrow') }}</span><h2 class="display">{{ t('home.potteryTitle') }}</h2><p>{{ t('home.potteryDesc') }}</p></div>
-      <div v-if="catalog.loading" class="load-more"><span class="ld-spin"></span></div>
-      <ProductGrid v-else :items="catalog.pottery" @added="onAdded" />
+      <ProductFeed ref="potteryFeed" category="pottery" @added="onAdded" />
     </div>
   </section>
 
@@ -233,13 +230,12 @@ import { RouterLink, useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useCartStore } from '../stores/cart'
 import { useAuthStore } from '../stores/auth'
-import { useCatalogStore } from '../stores/catalog'
 import { useOrdersStore } from '../stores/orders'
 import { useAddressesStore } from '../stores/addresses'
 import { useContentStore } from '../stores/content'
 import { useSettingsStore } from '../stores/settings'
 import { deliveryFee } from '../utils/delivery'
-import ProductGrid from '../components/ProductGrid.vue'
+import ProductFeed from '../components/ProductFeed.vue'
 import CartDrawer from '../components/CartDrawer.vue'
 import PortalBar from '../components/PortalBar.vue'
 import ImagePicker from '../components/ImagePicker.vue'
@@ -248,7 +244,8 @@ import { normalizeUaePhone } from '../utils/phone'
 const { t, locale } = useI18n()
 const cart = useCartStore()
 const auth = useAuthStore()
-const catalog = useCatalogStore()
+const pantryFeed = ref(null)
+const potteryFeed = ref(null)
 const ordersStore = useOrdersStore()
 const addresses = useAddressesStore()
 const content = useContentStore()
@@ -458,7 +455,7 @@ async function placeOrder() {
     checkoutOpen.value = false
     saveAddress.value = false
     Object.assign(co, { name: '', phone: '', city: '', street: '', house: '', notes: '' })
-    await catalog.fetch() // refresh stock
+    pantryFeed.value?.reload(); potteryFeed.value?.reload() // refresh stock
     showToast(t('checkout.received', { id: result.order.id.slice(0, 8) }))
   } catch (e) {
     coErr.value = e.message
@@ -469,10 +466,14 @@ async function placeOrder() {
 
 watch(() => auth.isAuthenticated, () => {}) // keep header reactive
 
+// delivery config is only needed for the cart note + checkout — fetch it lazily, once
+let deliveryLoaded = false
+watch(openCart, (open) => {
+  if (open && !deliveryLoaded) { deliveryLoaded = true; settings.fetchDelivery() }
+})
+
 onMounted(() => {
-  catalog.fetch()
   content.fetch()
-  settings.fetchDelivery()
   // arriving from the product page's "checkout" button
   if (route.query.checkout && cart.list.length) {
     openCheckout()
@@ -504,8 +505,9 @@ onMounted(() => {
       }
     })
   }, { threshold: 0.14 })
-  // observe reveal elements as products render
-  watch(() => catalog.products.length, () => nextTick(() => document.querySelectorAll('.reveal:not(.in)').forEach((el) => io.observe(el))), { immediate: true })
+  // observe the page's reveal elements (sec-heads, value cards, story);
+  // product cards reveal themselves inside ProductFeed
+  nextTick(() => document.querySelectorAll('.reveal:not(.in)').forEach((el) => io.observe(el)))
   setInterval(() => {
     tbi.value = (tbi.value + 1) % topbarMsgs.value.length
   }, 3800)

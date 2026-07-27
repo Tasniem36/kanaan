@@ -45,9 +45,9 @@
               </td>
               <td style="white-space:nowrap"><button class="ed-btn" @click="toggleActive(p)">{{ p.is_active ? t('manager.hide') : t('manager.show') }}</button> <button class="ed-btn" @click="openEdit(p)">{{ t('manager.edit') }}</button> <button class="rm-btn" @click="removeProduct(p)">{{ t('manager.remove') }}</button></td>
             </tr>
+            <tr v-if="hasMore"><td colspan="5"><div ref="sentinel" class="load-more"><span class="ld-spin"></span></div></td></tr>
           </tbody>
         </table>
-        <Pager v-model="page" :pages="pageCount" />
       </div>
     </div>
 
@@ -91,8 +91,7 @@ import { useCatalogStore } from '../../stores/catalog'
 import { useConfirmStore } from '../../stores/confirm'
 import { useToastStore } from '../../stores/toast'
 import ImagePicker from '../../components/ImagePicker.vue'
-import Pager from '../../components/Pager.vue'
-import { usePagination } from '../../composables/usePagination'
+import { useInfiniteScroll } from '../../composables/useInfiniteScroll'
 import { shrink } from '../../utils/image'
 
 const { t } = useI18n()
@@ -100,8 +99,8 @@ const catalog = useCatalogStore()
 const confirm = useConfirmStore()
 const toast = useToastStore()
 
-// numbered pagination — 10 products per page
-const { page, pageCount, visible: visibleProducts } = usePagination(() => catalog.byStock, 10)
+// infinite scroll — reveal 10 rows, load 10 more on scroll
+const { visible: visibleProducts, sentinel, hasMore } = useInfiniteScroll(() => catalog.byStock, 10)
 
 const restockQty = reactive({})
 const np = reactive({ name: '', description: '', category: 'pantry', unit: '', price: '', stock: '', tag: '', images: [] })

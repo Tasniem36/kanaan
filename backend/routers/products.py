@@ -19,23 +19,51 @@ def _clean_images(value):
 def list_products(request: Request):
     user = optional_user(request)
     is_manager = user and user.get("role") == "manager"
-    # LIGHT payload for everyone: only a small thumbnail, never the heavy data-URL
-    # gallery. The full images load on demand (GET /products/{id}) — detail page
-    # for shoppers, edit modal for managers.
-    if is_manager:
-        where = ""
+    q = request.query_params
+    force_active = q.get("active") == "1"   # storefront forces active-only even for managers
+    category = q.get("category")
+
+    conds, params = [], []
+    if not is_manager or force_active:
+        conds.append("is_active = true")
+    if category in ("pantry", "pottery"):
+        conds.append("category = %s")
+        params.append(category)
+    where = ("where " + " and ".join(conds)) if conds else ""
+
+    # LIGHT payload: only a small thumbnail, never the heavy data-URL gallery
+    # (the full images load on demand via GET /products/{id}).
+    if is_manager and not force_active:
         cols = ("id, name, description, price, unit, category, tag, "
                 "coalesce(thumb_url, image_url) as image_url, thumb_url, stock, is_active")
     else:
-        where = "where is_active = true"
         cols = ("id, name, description, price, unit, category, tag, "
                 "coalesce(thumb_url, image_url) as image_url, stock, is_active")
-    rows = fetch_all(f"select {cols} from products {where} order by created_at")
-    # server-side "opened the storefront" signal (shoppers/guests, not managers)
-    if not is_manager:
+
+    total = fetch_one(f"select count(*)::int as n from products {where}", params)["n"]
+
+    sql = f"select {cols} from products {where} order by created_at"
+    p2 = list(params)
+    try:
+        limit = int(q["limit"]) if q.get("limit") else None
+    except ValueError:
+        limit = None
+    first_page = True
+    if limit is not None:
+        try:
+            offset = max(0, int(q.get("offset", 0)))
+        except ValueError:
+            offset = 0
+        sql += " limit %s offset %s"
+        p2 += [limit, offset]
+        first_page = offset == 0
+
+    rows = fetch_all(sql, p2)
+    # "opened the storefront" signal — shoppers only, once per feed (first page)
+    if not is_manager and first_page:
         log_action(user_id=(user or {}).get("id"), action="visit",
                    detail={"ua": request.headers.get("user-agent")}, request=request)
-    return {"products": rows}
+    return {"products": rows, "total": total}
 
 
 @router.get("/{pid}")
