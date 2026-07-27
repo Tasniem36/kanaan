@@ -136,6 +136,17 @@ create table if not exists settings (
 -- delivery fee charged per order (recomputed server-side at checkout)
 alter table orders add column if not exists delivery_fee numeric(10, 2) not null default 0;
 
+-- admin-managed delivery zones: a city matching a zone's keywords pays its fee;
+-- cities matching no zone pay settings.delivery.default_fee
+create table if not exists delivery_zones (
+  id         uuid primary key default gen_random_uuid(),
+  label      text not null,
+  keywords   text not null default '',   -- comma-separated city keywords to match
+  fee        numeric(10, 2) not null default 0,
+  sort       integer not null default 0,
+  created_at timestamptz not null default now()
+);
+
 -- ---------- content_values (editable "why us" cards, admin-managed) ---------
 create table if not exists content_values (
   id         uuid primary key default gen_random_uuid(),

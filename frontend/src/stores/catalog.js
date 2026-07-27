@@ -8,9 +8,11 @@ export const useCatalogStore = defineStore('catalog', {
     error: '',
   }),
   getters: {
-    pantry: (s) => s.products.filter((p) => p.category === 'pantry'),
-    pottery: (s) => s.products.filter((p) => p.category === 'pottery'),
-    // sorted low→high for the manager inventory view
+    // storefront sections: active products only (managers get all products from
+    // the API, so filter here too or hidden ones would still show on the store)
+    pantry: (s) => s.products.filter((p) => p.category === 'pantry' && p.is_active !== false),
+    pottery: (s) => s.products.filter((p) => p.category === 'pottery' && p.is_active !== false),
+    // sorted low→high for the manager inventory view (includes hidden products)
     byStock: (s) => [...s.products].sort((a, b) => a.stock - b.stock),
   },
   actions: {

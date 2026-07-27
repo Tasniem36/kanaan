@@ -1,6 +1,17 @@
 <template>
   <section>
     <h1>{{ t('manager.auditTitle') }}</h1>
+    <div class="filters">
+      <input class="a-input" v-model.trim="filters.email" :placeholder="t('manager.colEmail')" dir="ltr" @keyup.enter="load">
+      <select class="a-select" v-model="filters.action">
+        <option value="">{{ t('manager.allActions') }}</option>
+        <option v-for="a in actionOptions" :key="a" :value="a">{{ actionLabel(a) }}</option>
+      </select>
+      <input class="a-input" type="date" v-model="filters.from" :title="t('manager.from')">
+      <input class="a-input" type="date" v-model="filters.to" :title="t('manager.to')">
+      <button class="a-btn" @click="load">{{ t('manager.applyFilter') }}</button>
+      <button class="a-btn ghost" @click="clearFilter">{{ t('manager.clearFilter') }}</button>
+    </div>
     <p v-if="loading" class="a-muted">{{ t('common.loading') }}</p>
     <p v-else-if="!logs.length" class="a-muted">{{ t('manager.noAudit') }}</p>
     <div v-else class="table-wrap">
@@ -23,13 +34,15 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '../../services/api'
 
 const { t, te, locale } = useI18n()
 const logs = ref([])
 const loading = ref(false)
+const filters = reactive({ email: '', action: '', from: '', to: '' })
+const actionOptions = ['login', 'register', 'order_placed', 'payment_confirmed', 'address_added', 'address_removed', 'visit']
 
 const fmtDateTime = (d) =>
   new Date(d).toLocaleString(locale.value, { dateStyle: 'medium', timeStyle: 'short' })
@@ -61,18 +74,31 @@ function detailText(a) {
   return ''
 }
 
-onMounted(async () => {
+async function load() {
   loading.value = true
   try {
-    const { logs: rows } = await api('/audit')
+    const qs = new URLSearchParams()
+    if (filters.email) qs.set('email', filters.email)
+    if (filters.action) qs.set('action', filters.action)
+    if (filters.from) qs.set('from', filters.from)
+    if (filters.to) qs.set('to', filters.to)
+    const { logs: rows } = await api('/audit' + (qs.toString() ? `?${qs}` : ''))
     logs.value = rows
   } finally {
     loading.value = false
   }
-})
+}
+function clearFilter() {
+  Object.assign(filters, { email: '', action: '', from: '', to: '' })
+  load()
+}
+onMounted(load)
 </script>
 
 <style scoped>
 h1 { font-family: 'Amiri', serif; color: var(--green); font-size: 1.9rem; margin-bottom: 1rem; }
 .a-pill { font-size: .78rem; }
+.filters { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; margin-bottom: 1rem; }
+.filters .a-input, .filters .a-select { max-width: 180px; }
+.a-btn.ghost { background: var(--cream-2); color: var(--green); }
 </style>
