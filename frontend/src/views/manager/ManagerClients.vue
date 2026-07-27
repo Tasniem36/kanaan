@@ -7,7 +7,7 @@
       <table class="a-table">
         <thead><tr><th>{{ t('manager.colClient') }}</th><th>{{ t('manager.colRole') }}</th><th>{{ t('manager.colPhone') }}</th><th>{{ t('manager.colOrders') }}</th><th>{{ t('manager.colSpent') }}</th><th>{{ t('manager.colLast') }}</th></tr></thead>
         <tbody>
-          <tr v-for="c in clients" :key="c.id">
+          <tr v-for="c in visibleClients" :key="c.id">
             <td><b style="color:var(--green)">{{ c.full_name || '—' }}</b><br><span class="a-muted" dir="ltr">{{ c.email }}</span></td>
             <td><span class="a-pill" :class="c.role === 'manager' ? 'pill-warn' : 'pill-ok'">{{ c.role === 'manager' ? t('manager.roleAdmin') : t('manager.roleCustomer') }}</span></td>
             <td dir="ltr">{{ c.phone || '—' }}</td>
@@ -17,6 +17,7 @@
           </tr>
         </tbody>
       </table>
+      <Pager v-model="page" :pages="pageCount" />
     </div>
   </section>
 </template>
@@ -25,10 +26,13 @@
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '../../services/api'
+import Pager from '../../components/Pager.vue'
+import { usePagination } from '../../composables/usePagination'
 
 const { t, locale } = useI18n()
 const clients = ref([])
 const loading = ref(false)
+const { page, pageCount, visible: visibleClients } = usePagination(() => clients.value, 10)
 
 const fmtDate = (d) => new Date(d).toLocaleDateString(locale.value, { year: 'numeric', month: 'long', day: 'numeric' })
 

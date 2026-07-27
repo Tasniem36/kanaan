@@ -36,7 +36,7 @@
         </div>
       </div>
     </div>
-    <div v-if="hasMore" ref="sentinel" class="load-more"><span class="ld-spin"></span></div>
+    <Pager v-model="page" :pages="pageCount" />
   </section>
 </template>
 
@@ -46,7 +46,8 @@ import { useI18n } from 'vue-i18n'
 import { useOrdersStore } from '../../stores/orders'
 import { useToastStore } from '../../stores/toast'
 import { api } from '../../services/api'
-import { useInfiniteScroll } from '../../composables/useInfiniteScroll'
+import Pager from '../../components/Pager.vue'
+import { usePagination } from '../../composables/usePagination'
 
 const { t, locale } = useI18n()
 const ordersStore = useOrdersStore()
@@ -89,7 +90,7 @@ const groups = computed(() => {
   return [...map.values()]
 })
 
-const { visible: visibleGroups, sentinel, hasMore } = useInfiniteScroll(() => groups.value, 8)
+const { page, pageCount, visible: visibleGroups } = usePagination(() => groups.value, 10)
 
 const fmtDate = (d) => new Date(d).toLocaleDateString(locale.value, { year: 'numeric', month: 'long', day: 'numeric' })
 
