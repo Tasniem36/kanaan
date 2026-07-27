@@ -29,8 +29,8 @@
         <table class="a-table">
           <thead><tr><th>{{ t('manager.colProduct') }}</th><th>{{ t('manager.colPrice') }}</th><th class="tc">{{ t('manager.colStock') }}</th><th class="tc">{{ t('manager.colRestock') }}</th><th></th></tr></thead>
           <tbody>
-            <tr v-for="p in visibleProducts" :key="p.id">
-              <td><div class="a-row" style="justify-content:flex-start;gap:.5rem"><img class="a-thumb" :src="p.image_url" :alt="p.name"><span style="font-weight:700;color:var(--green)">{{ p.name }}</span></div></td>
+            <tr v-for="p in visibleProducts" :key="p.id" :class="{ 'row-hidden': !p.is_active }">
+              <td><div class="a-row" style="justify-content:flex-start;gap:.5rem"><img class="a-thumb" :src="p.thumb_url || p.image_url" :alt="p.name"><span style="font-weight:700;color:var(--green)">{{ p.name }}</span><span v-if="!p.is_active" class="a-pill pill-low" style="font-size:.66rem">{{ t('manager.hidden') }}</span></div></td>
               <td>{{ p.price }}</td>
               <td class="tc"><span class="a-pill" :class="p.stock === 0 ? 'pill-low' : (p.stock <= 5 ? 'pill-warn' : 'pill-ok')">{{ p.stock }}</span></td>
               <td class="tc">
@@ -40,7 +40,7 @@
                   <button class="sa-btn add" :title="t('manager.increase')" @click="doAdjust(p.id, 1)">+</button>
                 </div>
               </td>
-              <td style="white-space:nowrap"><button class="ed-btn" @click="openEdit(p)">{{ t('manager.edit') }}</button> <button class="rm-btn" @click="removeProduct(p)">{{ t('manager.remove') }}</button></td>
+              <td style="white-space:nowrap"><button class="ed-btn" @click="toggleActive(p)">{{ p.is_active ? t('manager.hide') : t('manager.show') }}</button> <button class="ed-btn" @click="openEdit(p)">{{ t('manager.edit') }}</button> <button class="rm-btn" @click="removeProduct(p)">{{ t('manager.remove') }}</button></td>
             </tr>
             <tr v-if="hasMore"><td colspan="5"><div ref="sentinel" class="load-more"><span class="ld-spin"></span></div></td></tr>
           </tbody>
@@ -128,6 +128,12 @@ async function doAdjust(id, sign) {
     toast.show(delta > 0 ? t('manager.toastRestocked') : t('manager.toastReduced', { stock: p.stock }))
   } catch (e) { toast.show(e.message) }
 }
+async function toggleActive(p) {
+  try {
+    await catalog.update(p.id, { is_active: !p.is_active })
+    toast.show(t('manager.toastSaved'))
+  } catch (e) { toast.show(e.message) }
+}
 async function removeProduct(p) {
   const ok = await confirm.ask({
     title: t('manager.delTitle'),
@@ -171,6 +177,7 @@ h1 { font-family: 'Amiri', serif; color: var(--green); font-size: 1.9rem; margin
 .ed-btn { font-size: .82rem; padding: .35rem .7rem; border-radius: 8px; background: rgba(60,74,39,.1); color: var(--green, #3c4a27); cursor: pointer; }
 .auth-err { color: var(--red, #9c2b2b); font-size: .85rem; margin: .4rem 0; }
 .a-thumb { width: 38px; height: 38px; border-radius: 8px; object-fit: cover; }
+.row-hidden td { opacity: .55; }
 /* center the Stock badge + the restock stepper in their columns */
 .a-table th.tc, .a-table td.tc { text-align: center; }
 .tc .stock-adjust { justify-content: center; }
