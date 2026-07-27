@@ -3,15 +3,19 @@ import { api } from '../services/api'
 
 // Editable "why us" value cards, served from the backend (fall back to i18n in the view).
 export const useContentStore = defineStore('content', {
-  state: () => ({ values: [], loaded: false }),
+  state: () => ({ values: [], loaded: false, loading: false }),
   actions: {
     async fetch() {
+      this.loading = true
       try {
         const { values } = await api('/content/values')
         this.values = values
-        this.loaded = true
       } catch {
         /* leave values empty — the view falls back to the bundled i18n defaults */
+      } finally {
+        // mark the attempt done either way so the UI stops showing a loader
+        this.loaded = true
+        this.loading = false
       }
     },
     async updateValue(id, patch) {

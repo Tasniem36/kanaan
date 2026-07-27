@@ -1,7 +1,7 @@
 <template>
   <section>
     <h1>{{ t('manager.contentTitle') }}</h1>
-    <Loader v-if="!content.loaded" :label="t('common.loading')" />
+    <Loader v-if="content.loading && !forms.length" :label="t('common.loading')" />
 
     <div class="cards">
       <div class="a-card" v-for="f in forms" :key="f.id">
