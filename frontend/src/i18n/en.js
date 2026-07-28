@@ -2,6 +2,7 @@ export default {
   common: {
     loading: 'Loading…',
     error: 'An unexpected error occurred',
+    close: 'Close',
   },
   nav: {
     home: 'Home',

@@ -2,37 +2,11 @@
   <section>
     <div class="p-head">
       <h1>{{ t('manager.productsTitle') }}</h1>
+      <button class="a-btn" @click="openAdd"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> {{ t('manager.addProduct') }}</button>
     </div>
-    <div class="two-col">
-      <div class="a-card" style="align-self:start">
-        <h3 style="color:var(--green);font-family:'Amiri',serif;margin-bottom:.6rem">{{ t('manager.addProduct') }}</h3>
-        <div class="a-field" style="margin-bottom:.6rem"><label>{{ t('manager.name') }} *</label><input class="a-input" v-model.trim="np.name"></div>
-        <div class="a-field" style="margin-bottom:.6rem"><label>{{ t('manager.description') }}</label><input class="a-input" v-model.trim="np.description"></div>
-        <div class="a-grid" style="margin-bottom:.6rem">
-          <div class="a-field"><label>{{ t('manager.category') }}</label><select class="a-select" v-model="np.category"><option value="pantry">{{ t('manager.pantry') }}</option><option value="pottery">{{ t('manager.pottery') }}</option></select></div>
-          <div class="a-field"><label>{{ t('manager.unit') }}</label><input class="a-input" v-model.trim="np.unit" placeholder="400غ"></div>
-        </div>
-        <div class="a-grid" style="margin-bottom:.6rem">
-          <div class="a-field"><label>{{ t('manager.price') }} *</label><input class="a-input" type="number" step="0.01" v-model="np.price"></div>
-          <div class="a-field"><label>{{ t('manager.stock') }}</label><input class="a-input" type="number" v-model="np.stock"></div>
-        </div>
-        <div class="a-field" style="margin-bottom:.6rem"><label>{{ t('manager.type') }}</label>
-          <input class="a-input" v-model.trim="np.type" :placeholder="t('manager.typePh')" list="type-presets">
-        </div>
-        <div class="a-field" style="margin-bottom:.6rem"><label>{{ t('manager.tag') }}</label>
-          <input class="a-input" v-model.trim="np.tag" :placeholder="t('manager.tagPh')" list="tag-presets">
-        </div>
-        <div class="a-field" style="margin-bottom:.6rem"><label>{{ t('manager.image') }}</label>
-          <ImagePicker v-model="np.images" />
-        </div>
-        <datalist id="tag-presets"><option value="حصاد جديد"></option><option value="الأكثر مبيعًا"></option><option value="يدويّ"></option></datalist>
-        <datalist id="type-presets"><option value="مضيفات"></option><option value="صحون"></option><option value="ابريق"></option><option value="اكواب"></option><option value="فناجين"></option><option value="زيت"></option><option value="زعتر"></option><option value="أجبان"></option><option value="ألبان"></option></datalist>
-        <p v-if="pErr" class="auth-err">{{ pErr }}</p>
-        <button class="a-btn" :disabled="pBusy" @click="addProduct">{{ pBusy ? '…' : t('manager.addBtn') }}</button>
-      </div>
 
-      <div class="table-wrap">
-        <table class="a-table">
+    <div class="table-wrap">
+      <table class="a-table">
           <thead><tr><th>{{ t('manager.colProduct') }}</th><th>{{ t('manager.colPrice') }}</th><th class="tc">{{ t('manager.colStock') }}</th><th class="tc">{{ t('manager.colRestock') }}</th><th></th></tr></thead>
           <tbody>
             <tr v-if="catalog.loading && !visibleProducts.length"><td colspan="5"><Loader :label="t('common.loading')" /></td></tr>
@@ -52,15 +26,43 @@
             <tr v-if="hasMore"><td colspan="5"><div ref="sentinel" class="load-more"><span class="ld-spin"></span></div></td></tr>
           </tbody>
         </table>
-      </div>
     </div>
 
+    <!-- shared datalists (used by both the add and edit dialogs) -->
+    <datalist id="tag-presets"><option value="حصاد جديد"></option><option value="الأكثر مبيعًا"></option><option value="يدويّ"></option></datalist>
+    <datalist id="type-presets"><option value="مضيفات"></option><option value="صحون"></option><option value="ابريق"></option><option value="اكواب"></option><option value="فناجين"></option><option value="زيت"></option><option value="زعتر"></option><option value="أجبان"></option><option value="ألبان"></option></datalist>
+
+    <!-- add product dialog -->
+    <Dialog :open="showAdd" :title="t('manager.addProduct')" max-width="520px" @close="showAdd = false">
+          <label class="co-l">{{ t('manager.image') }}</label>
+          <ImagePicker v-model="np.images" />
+          <label class="co-l">{{ t('manager.name') }} *</label>
+          <input class="a-input" v-model.trim="np.name">
+          <label class="co-l">{{ t('manager.description') }}</label>
+          <input class="a-input" v-model.trim="np.description">
+          <div class="grid2">
+            <div><label class="co-l">{{ t('manager.category') }}</label>
+              <select class="a-select" style="width:100%" v-model="np.category">
+                <option value="pantry">{{ t('manager.pantry') }}</option>
+                <option value="pottery">{{ t('manager.pottery') }}</option>
+              </select>
+            </div>
+            <div><label class="co-l">{{ t('manager.unit') }}</label><input class="a-input" v-model.trim="np.unit" placeholder="400غ"></div>
+          </div>
+          <div class="grid2">
+            <div><label class="co-l">{{ t('manager.price') }} *</label><input class="a-input" type="number" step="0.01" v-model="np.price"></div>
+            <div><label class="co-l">{{ t('manager.stock') }}</label><input class="a-input" type="number" v-model="np.stock"></div>
+          </div>
+          <div class="grid2">
+            <div><label class="co-l">{{ t('manager.type') }}</label><input class="a-input" v-model.trim="np.type" :placeholder="t('manager.typePh')" list="type-presets"></div>
+            <div><label class="co-l">{{ t('manager.tag') }}</label><input class="a-input" v-model.trim="np.tag" :placeholder="t('manager.tagPh')" list="tag-presets"></div>
+          </div>
+          <p v-if="pErr" class="auth-err">{{ pErr }}</p>
+          <button class="btn btn-green" style="width:100%;justify-content:center;margin-top:1rem" :disabled="pBusy" @click="addProduct">{{ pBusy ? '…' : t('manager.addBtn') }}</button>
+    </Dialog>
+
     <!-- edit product (incl. image) -->
-    <transition name="v">
-      <div class="modal-overlay" v-if="editing" @click.self="editing = null">
-        <div class="co" style="max-width:520px">
-          <button @click="editing = null" aria-label="إغلاق" style="position:absolute;top:.8rem;inset-inline-start:.8rem;width:34px;height:34px;border-radius:10px;background:var(--cream-2);color:var(--green);display:grid;place-items:center"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
-          <h3 style="font-family:'Amiri',serif;font-size:1.5rem;color:var(--green);text-align:center;margin-bottom:.8rem">{{ t('manager.editProduct') }}</h3>
+    <Dialog :open="!!editing" :title="t('manager.editProduct')" max-width="520px" @close="editing = null">
           <label class="co-l">{{ t('manager.image') }}</label>
           <ImagePicker v-model="ep.images" />
           <label class="co-l">{{ t('manager.name') }}</label>
@@ -86,9 +88,7 @@
           </div>
           <p v-if="epErr" class="auth-err">{{ epErr }}</p>
           <button class="btn btn-green" style="width:100%;justify-content:center;margin-top:1rem" :disabled="epBusy" @click="saveEdit">{{ epBusy ? '…' : t('manager.save') }}</button>
-        </div>
-      </div>
-    </transition>
+    </Dialog>
   </section>
 </template>
 
@@ -100,6 +100,7 @@ import { useConfirmStore } from '../../stores/confirm'
 import { useToastStore } from '../../stores/toast'
 import ImagePicker from '../../components/ImagePicker.vue'
 import Loader from '../../components/Loader.vue'
+import Dialog from '../../components/Dialog.vue'
 import { useInfiniteScroll } from '../../composables/useInfiniteScroll'
 
 const { t } = useI18n()
@@ -111,9 +112,16 @@ const toast = useToastStore()
 const { visible: visibleProducts, sentinel, hasMore } = useInfiniteScroll(() => catalog.byStock, 10)
 
 const restockQty = reactive({})
+const showAdd = ref(false)
 const np = reactive({ name: '', description: '', category: 'pantry', unit: '', price: '', stock: '', type: '', tag: '', images: [] })
 const pErr = ref('')
 const pBusy = ref(false)
+
+function openAdd() {
+  pErr.value = ''
+  Object.assign(np, { name: '', description: '', category: 'pantry', unit: '', price: '', stock: '', type: '', tag: '', images: [] })
+  showAdd.value = true
+}
 
 const editing = ref(null)
 const ep = reactive({ name: '', description: '', category: 'pantry', unit: '', price: '', type: '', tag: '', images: [] })
@@ -127,7 +135,7 @@ async function addProduct() {
   try {
     // the backend generates the list thumbnail automatically from the first image
     await catalog.create({ ...np, images: [...np.images], price: Number(np.price), stock: Number(np.stock) || 0 })
-    Object.assign(np, { name: '', description: '', category: np.category, unit: '', price: '', stock: '', type: '', tag: '', images: [] })
+    showAdd.value = false
     toast.show(t('manager.toastAdded'))
   } catch (e) { pErr.value = e.message } finally { pBusy.value = false }
 }
@@ -188,8 +196,6 @@ onMounted(() => catalog.fetch())
 h1 { font-family: 'Amiri', serif; color: var(--green); font-size: 1.9rem; margin-bottom: 1rem; }
 .p-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
 .p-head h1 { margin-bottom: 0; }
-.two-col { display: grid; grid-template-columns: 320px 1fr; gap: 1.2rem; align-items: start; }
-@media (max-width: 760px) { .two-col { grid-template-columns: 1fr; } }
 .rm-btn { font-size: .82rem; padding: .35rem .7rem; border-radius: 8px; background: rgba(156,43,43,.1); color: var(--red, #9c2b2b); cursor: pointer; }
 .ed-btn { font-size: .82rem; padding: .35rem .7rem; border-radius: 8px; background: rgba(60,74,39,.1); color: var(--green, #3c4a27); cursor: pointer; }
 .auth-err { color: var(--red, #9c2b2b); font-size: .85rem; margin: .4rem 0; }

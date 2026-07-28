@@ -2,6 +2,7 @@ export default {
   common: {
     loading: '…جارٍ التحميل',
     error: 'حدث خطأٌ غير متوقّع',
+    close: 'إغلاق',
   },
   nav: {
     home: 'الرئيسية',

@@ -1,43 +1,45 @@
 <template>
   <section>
-    <h1>{{ t('manager.codesTitle') }}</h1>
-    <div class="two-col">
-      <div class="a-card" style="align-self:start">
-        <h3 style="color:var(--green);font-family:'Amiri',serif;margin-bottom:.6rem">{{ t('manager.codeAddTitle') }}</h3>
-        <div class="a-grid" style="margin-bottom:.6rem">
-          <div class="a-field"><label>{{ t('manager.codeLabel') }} *</label><input class="a-input" v-model.trim="nc.code" dir="ltr" style="text-align:start;text-transform:uppercase"></div>
-          <div class="a-field"><label>{{ t('manager.codePercent') }} *</label><input class="a-input" type="number" min="1" max="100" v-model="nc.percent"></div>
-        </div>
-        <div class="a-grid" style="margin-bottom:.6rem">
-          <div class="a-field"><label>{{ t('manager.codeMaxUses') }}</label><input class="a-input" type="number" min="1" v-model="nc.max_uses"></div>
-          <div class="a-field"><label>{{ t('manager.codeExpiry') }}</label><input class="a-input" type="date" v-model="nc.expires_at"></div>
-        </div>
-        <label style="display:flex;gap:.4rem;align-items:center;font-size:.88rem;margin-bottom:.4rem"><input type="checkbox" v-model="nc.first_order_only"> {{ t('manager.codeFirstOrder') }}</label>
-        <label style="display:flex;gap:.4rem;align-items:center;font-size:.88rem;margin-bottom:.7rem"><input type="checkbox" v-model="nc.active"> {{ t('manager.codeActive') }}</label>
-        <p v-if="err" class="auth-err">{{ err }}</p>
-        <button class="a-btn" :disabled="busy" @click="addCode">{{ busy ? '…' : t('manager.codeAdd') }}</button>
-      </div>
-
-      <div class="table-wrap">
-        <Loader v-if="loading && !codes.length" :label="t('common.loading')" />
-        <p v-else-if="!codes.length" class="a-muted">{{ t('manager.noCodes') }}</p>
-        <table v-else class="a-table">
-          <thead><tr><th>{{ t('manager.codeLabel') }}</th><th>%</th><th>{{ t('manager.colFirstOrder') }}</th><th>{{ t('manager.codeUses') }}</th><th>{{ t('manager.colActive') }}</th><th></th></tr></thead>
-          <tbody>
-            <tr v-for="c in codes" :key="c.id">
-              <td style="font-family:monospace;font-weight:700;color:var(--green)">{{ c.code }}</td>
-              <td>{{ c.percent }}%</td>
-              <td>{{ c.first_order_only ? '✓' : '—' }}</td>
-              <td>{{ c.used_count }}<span v-if="c.max_uses">/{{ c.max_uses }}</span></td>
-              <td>
-                <button class="a-pill" :class="c.active ? 'pill-ok' : 'pill-low'" @click="toggle(c)">{{ c.active ? t('manager.codeActive') : '—' }}</button>
-              </td>
-              <td><button class="rm-btn" @click="remove(c)">{{ t('manager.remove') }}</button></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+    <div class="p-head">
+      <h1>{{ t('manager.codesTitle') }}</h1>
+      <button class="a-btn" @click="openAdd"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> {{ t('manager.codeAddTitle') }}</button>
     </div>
+
+    <div class="table-wrap">
+      <Loader v-if="loading && !codes.length" :label="t('common.loading')" />
+      <p v-else-if="!codes.length" class="a-muted">{{ t('manager.noCodes') }}</p>
+      <table v-else class="a-table">
+        <thead><tr><th>{{ t('manager.codeLabel') }}</th><th>%</th><th>{{ t('manager.colFirstOrder') }}</th><th>{{ t('manager.codeUses') }}</th><th>{{ t('manager.colActive') }}</th><th></th></tr></thead>
+        <tbody>
+          <tr v-for="c in codes" :key="c.id">
+            <td style="font-family:monospace;font-weight:700;color:var(--green)">{{ c.code }}</td>
+            <td>{{ c.percent }}%</td>
+            <td>{{ c.first_order_only ? '✓' : '—' }}</td>
+            <td>{{ c.used_count }}<span v-if="c.max_uses">/{{ c.max_uses }}</span></td>
+            <td>
+              <button class="a-pill" :class="c.active ? 'pill-ok' : 'pill-low'" @click="toggle(c)">{{ c.active ? t('manager.codeActive') : '—' }}</button>
+            </td>
+            <td><button class="rm-btn" @click="remove(c)">{{ t('manager.remove') }}</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- add code dialog -->
+    <Dialog :open="showAdd" :title="t('manager.codeAddTitle')" max-width="460px" @close="showAdd = false">
+          <div class="grid2">
+            <div><label class="co-l">{{ t('manager.codeLabel') }} *</label><input class="a-input" v-model.trim="nc.code" dir="ltr" style="text-align:start;text-transform:uppercase"></div>
+            <div><label class="co-l">{{ t('manager.codePercent') }} *</label><input class="a-input" type="number" min="1" max="100" v-model="nc.percent"></div>
+          </div>
+          <div class="grid2">
+            <div><label class="co-l">{{ t('manager.codeMaxUses') }}</label><input class="a-input" type="number" min="1" v-model="nc.max_uses"></div>
+            <div><label class="co-l">{{ t('manager.codeExpiry') }}</label><input class="a-input" type="date" v-model="nc.expires_at"></div>
+          </div>
+          <label style="display:flex;gap:.4rem;align-items:center;font-size:.88rem;margin-top:.6rem"><input type="checkbox" v-model="nc.first_order_only"> {{ t('manager.codeFirstOrder') }}</label>
+          <label style="display:flex;gap:.4rem;align-items:center;font-size:.88rem;margin-top:.4rem"><input type="checkbox" v-model="nc.active"> {{ t('manager.codeActive') }}</label>
+          <p v-if="err" class="auth-err">{{ err }}</p>
+          <button class="btn btn-green" style="width:100%;justify-content:center;margin-top:1rem" :disabled="busy" @click="addCode">{{ busy ? '…' : t('manager.codeAdd') }}</button>
+    </Dialog>
   </section>
 </template>
 
@@ -48,16 +50,24 @@ import { api } from '../../services/api'
 import { useToastStore } from '../../stores/toast'
 import { useConfirmStore } from '../../stores/confirm'
 import Loader from '../../components/Loader.vue'
+import Dialog from '../../components/Dialog.vue'
 
 const { t } = useI18n()
 const toast = useToastStore()
 const confirm = useConfirmStore()
 
 const codes = ref([])
+const showAdd = ref(false)
 const nc = reactive({ code: '', percent: '', max_uses: '', expires_at: '', first_order_only: true, active: true })
 const err = ref('')
 const busy = ref(false)
 const loading = ref(false)
+
+function openAdd() {
+  err.value = ''
+  Object.assign(nc, { code: '', percent: '', max_uses: '', expires_at: '', first_order_only: true, active: true })
+  showAdd.value = true
+}
 
 async function load() {
   loading.value = true
@@ -79,7 +89,7 @@ async function addCode() {
       max_uses: nc.max_uses ? Number(nc.max_uses) : null,
       expires_at: nc.expires_at || null,
     } })
-    Object.assign(nc, { code: '', percent: '', max_uses: '', expires_at: '', first_order_only: true, active: true })
+    showAdd.value = false
     toast.show(t('manager.toastCodeAdded'))
     await load()
   } catch (e) { err.value = e.message } finally { busy.value = false }
@@ -100,8 +110,8 @@ onMounted(load)
 
 <style scoped>
 h1 { font-family: 'Amiri', serif; color: var(--green); font-size: 1.9rem; margin-bottom: 1rem; }
-.two-col { display: grid; grid-template-columns: 320px 1fr; gap: 1.2rem; align-items: start; }
-@media (max-width: 760px) { .two-col { grid-template-columns: 1fr; } }
+.p-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.p-head h1 { margin-bottom: 0; }
 .rm-btn { font-size: .82rem; padding: .35rem .7rem; border-radius: 8px; background: rgba(156,43,43,.1); color: var(--red, #9c2b2b); cursor: pointer; }
 .auth-err { color: var(--red, #9c2b2b); font-size: .85rem; margin: .4rem 0; }
 .a-pill { cursor: pointer; border: none; }
