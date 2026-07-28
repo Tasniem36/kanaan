@@ -5,6 +5,7 @@ from db import fetch_one
 from security import hash_password, verify_password, sign_token, current_user
 from validate import is_email, is_strong_password, normalize_uae_phone
 from audit import log_action
+from ratelimit import rate_limit
 
 router = APIRouter()
 
@@ -15,10 +16,14 @@ def public_user(u):
 
 @router.post("/register")
 def register(request: Request, response: Response, payload: dict = Body(default={})):
+    rate_limit(request, bucket="register", limit=5, window=60)
     email = (payload.get("email") or "").strip()
     password = payload.get("password") or ""
     if not email or not password:
         raise HTTPException(400, "Email and password are required")
+    if len(password) > 200:
+        # bcrypt silently truncates at 72 bytes; also guard against hashing-cost DoS.
+        raise HTTPException(400, "Password is too long")
     if not is_email(email):
         raise HTTPException(400, "Invalid email address")
     phone_norm = normalize_uae_phone(payload.get("phone"))
@@ -41,6 +46,7 @@ def register(request: Request, response: Response, payload: dict = Body(default=
 
 @router.post("/login")
 def login(request: Request, payload: dict = Body(default={})):
+    rate_limit(request, bucket="login", limit=10, window=60)
     email = (payload.get("email") or "").strip().lower()
     password = payload.get("password") or ""
     if not email or not password:

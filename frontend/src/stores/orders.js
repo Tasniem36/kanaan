@@ -16,10 +16,10 @@ export const useOrdersStore = defineStore('orders', {
       return api('/discounts/validate', { method: 'POST', body: { code, subtotal } })
     },
     async confirmPayment(orderId) {
-      return api(`/orders/${orderId}/confirm-payment`, { method: 'POST', auth: false })
+      return api(`/orders/${orderId}/confirm-payment`, { method: 'POST' })
     },
     async cancelPayment(orderId) {
-      return api(`/orders/${orderId}/cancel-payment`, { method: 'POST', auth: false })
+      return api(`/orders/${orderId}/cancel-payment`, { method: 'POST' })
     },
     async fetch() {
       this.loading = true

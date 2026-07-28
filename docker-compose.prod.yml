@@ -26,6 +26,8 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: ${DB_NAME}
       JWT_SECRET: ${JWT_SECRET}
+      ENV: production
+      CORS_ORIGIN: https://${DOMAIN}
       PORT: 8080
       SEED_MANAGER_EMAIL: ${SEED_MANAGER_EMAIL:-}
       SEED_MANAGER_PASSWORD: ${SEED_MANAGER_PASSWORD:-}

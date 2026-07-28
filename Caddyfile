@@ -3,6 +3,21 @@
 # .env, so a {$DOMAIN} placeholder would be empty and fail to parse).
 dukkan-kanaan.com {
 	reverse_proxy web:80
+
+	header {
+		# Force HTTPS for a year (incl. subdomains). Caddy already redirects,
+		# this tells browsers to never even try http://.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		# Block clickjacking and MIME-sniffing.
+		X-Frame-Options "DENY"
+		X-Content-Type-Options "nosniff"
+		# Don't leak the full URL (which can carry an order id) to other sites.
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# Only this site may embed us / be embedded.
+		Cross-Origin-Opener-Policy "same-origin"
+		# Caddy sets its own; hide the upstream server banner.
+		-Server
+	}
 }
 
 # send www.dukkan-kanaan.com → dukkan-kanaan.com

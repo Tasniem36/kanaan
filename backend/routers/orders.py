@@ -136,11 +136,18 @@ def list_orders(user=Depends(current_user)):
     return {"orders": orders}
 
 
-@router.post("/{oid}/confirm-payment")
-def confirm_payment(oid: str, request: Request):
+def _own_order_or_404(oid, user):
+    """Fetch an order the caller is allowed to act on. 404 (not 403) for orders
+    that aren't theirs, so order ids can't be probed for existence."""
     order = fetch_one("select * from orders where id = %s", [oid])
-    if not order:
+    if not order or (user["role"] != "manager" and str(order["user_id"]) != str(user["id"])):
         raise HTTPException(404, "Order not found")
+    return order
+
+
+@router.post("/{oid}/confirm-payment")
+def confirm_payment(oid: str, request: Request, user=Depends(current_user)):
+    order = _own_order_or_404(oid, user)
     if order["payment_status"] == "paid":
         return {"paid": True, "status": order["status"]}
     if order["payment_method"] != "ziina" or not order["ziina_payment_id"]:
@@ -160,10 +167,8 @@ def confirm_payment(oid: str, request: Request):
 
 
 @router.post("/{oid}/cancel-payment")
-def cancel_payment(oid: str):
-    order = fetch_one("select * from orders where id = %s", [oid])
-    if not order:
-        raise HTTPException(404, "Order not found")
+def cancel_payment(oid: str, user=Depends(current_user)):
+    order = _own_order_or_404(oid, user)
     if order["payment_status"] == "paid":
         return {"cancelled": False, "paid": True}
     if order["payment_method"] == "ziina" and order["ziina_payment_id"]:

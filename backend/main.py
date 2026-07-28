@@ -36,16 +36,22 @@ from routers.audit import router as audit_router
 from routers.content import router as content_router
 from routers.settings import router as settings_router
 
+_IS_PROD = os.getenv("ENV", "").lower() in ("prod", "production")
+
 app = FastAPI(
     title="Dukkan Kanaan API",
     version="1.0.0",
     default_response_class=SafeJSONResponse,
-    docs_url="/api/docs",
-    redoc_url="/api/redoc",
-    openapi_url="/api/openapi.json",
+    # Don't expose the interactive API explorer / schema in production.
+    docs_url=None if _IS_PROD else "/api/docs",
+    redoc_url=None if _IS_PROD else "/api/redoc",
+    openapi_url=None if _IS_PROD else "/api/openapi.json",
 )
 
-_origins = os.getenv("CORS_ORIGIN", "").split(",") if os.getenv("CORS_ORIGIN") else ["*"]
+# The SPA is served same-origin (nginx proxies /api), so cross-origin access is
+# not needed. Only allow the origins explicitly listed in CORS_ORIGIN; default
+# to none rather than "*" so a missing env var can't open the API to any site.
+_origins = [o.strip() for o in os.getenv("CORS_ORIGIN", "").split(",") if o.strip()]
 app.add_middleware(CORSMiddleware, allow_origins=_origins, allow_methods=["*"], allow_headers=["*"])
 
 

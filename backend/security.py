@@ -7,8 +7,17 @@ import bcrypt
 import jwt
 from fastapi import HTTPException, Request
 
-SECRET = os.getenv("JWT_SECRET", "dev-secret-change-me")
+SECRET = os.getenv("JWT_SECRET", "")
 EXPIRES_HOURS = 24
+
+# A weak/missing signing key lets anyone forge a manager token. Refuse to start
+# rather than silently fall back to a guessable secret. Local dev sets JWT_SECRET
+# in backend/.env (see .env.example); allow a short one only outside production.
+_IS_PROD = os.getenv("ENV", "").lower() in ("prod", "production")
+if not SECRET or SECRET == "dev-secret-change-me":
+    raise RuntimeError("JWT_SECRET is not set — refusing to start with a guessable signing key")
+if _IS_PROD and len(SECRET) < 32:
+    raise RuntimeError("JWT_SECRET is too short for production (use a 64-char random string)")
 
 
 def hash_password(pw: str) -> str:
