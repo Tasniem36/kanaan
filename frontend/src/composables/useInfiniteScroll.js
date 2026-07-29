@@ -27,5 +27,8 @@ export function useInfiniteScroll(source, pageSize = 12) {
   watch(() => all.value.length, (n) => { if (shown.value > n) shown.value = Math.max(pageSize, n) })
   onBeforeUnmount(() => io && io.disconnect())
 
-  return { visible, sentinel, hasMore }
+  // restart from the first page (e.g. when a filter/tab changes)
+  const reset = () => { shown.value = pageSize }
+
+  return { visible, sentinel, hasMore, reset }
 }
