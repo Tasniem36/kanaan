@@ -6,9 +6,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from psycopg.types.json import Json
+
 from db import pool
 from security import hash_password
-from thumbs import make_thumb
+from media import save_image, make_thumb, is_data_url
 
 
 def _run_file(conn, path):
@@ -17,29 +19,34 @@ def _run_file(conn, path):
     print(f"✓ applied {path}")
 
 
-def _backfill_thumbnails(conn):
-    """Generate small thumbnails for existing products that never had one (or
-    whose thumb is still the full-size image). Runs server-side, once, so old
-    products load as light in lists as new ones."""
-    rows = conn.execute(
-        "select id, image_url from products "
-        "where image_url like 'data:%' and (thumb_url is null or thumb_url = image_url)"
-    ).fetchall()
+def _backfill_media(conn):
+    """One-time: move products whose images are still inline base64 to files, and
+    (re)generate a thumbnail file. Idempotent — products already on /media URLs
+    are skipped. Preserves the image data (writes the file before updating the row)."""
+    rows = conn.execute("select id, image_url, images, thumb_url from products").fetchall()
     done = 0
     for row in rows:
-        thumb = make_thumb(row["image_url"])
-        if thumb and thumb != row["image_url"]:
-            conn.execute("update products set thumb_url = %s where id = %s", [thumb, row["id"]])
+        old_images = row["images"] if isinstance(row["images"], list) else []
+        images = [save_image(i) for i in old_images]
+        image_url = save_image(row["image_url"]) or (images[0] if images else None)
+        thumb = row["thumb_url"]
+        if not thumb or is_data_url(thumb):
+            thumb = make_thumb(image_url)
+        if images != old_images or image_url != row["image_url"] or thumb != row["thumb_url"]:
+            conn.execute(
+                "update products set images = %s, image_url = %s, thumb_url = %s where id = %s",
+                [Json(images), image_url, thumb, row["id"]],
+            )
             done += 1
     if done:
-        print(f"✓ backfilled {done} product thumbnail(s)")
+        print(f"✓ migrated {done} product image(s) to files")
 
 
 def main():
     with pool.connection() as conn:
         _run_file(conn, "db/schema.sql")
         _run_file(conn, "db/seed.sql")
-        _backfill_thumbnails(conn)
+        _backfill_media(conn)
         email = os.getenv("SEED_MANAGER_EMAIL")
         password = os.getenv("SEED_MANAGER_PASSWORD")
         if email and password:

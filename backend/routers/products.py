@@ -4,7 +4,7 @@ from psycopg.types.json import Json
 from db import fetch_all, fetch_one
 from security import optional_user, require_manager
 from audit import log_action
-from thumbs import make_thumb
+from media import save_image, make_thumb
 
 router = APIRouter()
 
@@ -115,9 +115,10 @@ def create_product(response: Response, _m=Depends(require_manager), payload: dic
         raise HTTPException(400, "Name, price and category are required")
     if category not in ("pantry", "pottery"):
         raise HTTPException(400, "Invalid category")
-    images = _clean_images(payload.get("images"))
+    # persist any base64 uploads as files; existing URLs pass through unchanged
+    images = [save_image(i) for i in _clean_images(payload.get("images"))]
     # image_url stays as the primary (first) image, for cart/order snapshots
-    image_url = payload.get("image_url") or (images[0] if images else None)
+    image_url = save_image(payload.get("image_url")) or (images[0] if images else None)
     if image_url and not images:
         images = [image_url]
     ptype = (payload.get("type") or "").strip() or None
@@ -143,11 +144,13 @@ def update_product(pid: str, _m=Depends(require_manager), payload: dict = Body(d
     if "type" in data:
         data["type"] = (data["type"] or "").strip() or None
     if "images" in data:
-        imgs = _clean_images(data["images"])
+        imgs = [save_image(i) for i in _clean_images(data["images"])]
         data["images"] = imgs
         # keep the primary image_url in sync with the first gallery image
         if "image_url" not in data:
             data["image_url"] = imgs[0] if imgs else None
+    if "image_url" in data:
+        data["image_url"] = save_image(data["image_url"])
     # regenerate the list thumbnail whenever the image changes
     if "image_url" in data or "images" in data:
         primary = data.get("image_url")

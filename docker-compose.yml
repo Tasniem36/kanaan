@@ -27,9 +27,12 @@ services:
       DB_NAME: ${DB_NAME:-dukkan}
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
       PORT: 8080
+      MEDIA_DIR: /app/media
       # first manager account, created on migrate (optional)
       SEED_MANAGER_EMAIL: ${SEED_MANAGER_EMAIL:-}
       SEED_MANAGER_PASSWORD: ${SEED_MANAGER_PASSWORD:-}
+    volumes:
+      - media:/app/media   # persisted product images (served at /media)
     depends_on:
       db:
         condition: service_healthy
@@ -48,3 +51,4 @@ services:
 
 volumes:
   dbdata:
+  media:

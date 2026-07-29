@@ -90,3 +90,9 @@ app.include_router(discounts_router, prefix="/api/discounts")
 app.include_router(audit_router, prefix="/api/audit")
 app.include_router(content_router, prefix="/api/content")
 app.include_router(settings_router, prefix="/api/settings")
+
+# Serve stored product images at /media/... (nginx proxies /media/ here in prod).
+from fastapi.staticfiles import StaticFiles  # noqa: E402
+_media_dir = os.getenv("MEDIA_DIR", "/app/media")
+os.makedirs(_media_dir, exist_ok=True)
+app.mount("/media", StaticFiles(directory=_media_dir), name="media")

@@ -37,6 +37,9 @@ services:
       ZIINA_API_KEY: ${ZIINA_API_KEY:-}
       ZIINA_TEST: ${ZIINA_TEST:-false}
       APP_URL: https://${DOMAIN}
+      MEDIA_DIR: /app/media
+    volumes:
+      - media:/app/media   # persisted product images (served at /media)
     depends_on:
       db:
         condition: service_healthy
@@ -65,5 +68,6 @@ services:
 
 volumes:
   dbdata:
+  media:
   caddy_data:
   caddy_config:

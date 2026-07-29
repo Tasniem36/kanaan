@@ -21,6 +21,11 @@ export default defineConfig({
         target: process.env.VITE_API_PROXY || 'http://localhost:8080',
         changeOrigin: true,
       },
+      // product images served by the API from its media volume
+      '/media': {
+        target: process.env.VITE_API_PROXY || 'http://localhost:8080',
+        changeOrigin: true,
+      },
     },
   },
 })
