@@ -33,7 +33,7 @@ const ordersStore = useOrdersStore()
 const toast = useToastStore()
 
 // "new" = orders created after the last time the manager viewed the Orders tab
-const lastSeen = ref(Number(localStorage.getItem('mgr_orders_seen') || 0))
+const lastSeen = ref(import.meta.env.SSR ? 0 : Number(localStorage.getItem('mgr_orders_seen') || 0))
 const newCount = computed(
   () => ordersStore.orders.filter((o) => new Date(o.created_at).getTime() > lastSeen.value).length
 )
