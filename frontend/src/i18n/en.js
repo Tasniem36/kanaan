@@ -14,11 +14,6 @@ export default {
     account: 'My account',
     login: 'Sign in',
   },
-  topbar: {
-    m1: 'Everything from Palestine, at your fingertips',
-    m2: `<b>Free shipping</b> on orders over 250 <span class='dh' role='img' aria-label='dirham'></span>`,
-    m3: "This season's harvest just arrived — order it fresh",
-  },
   hero: {
     shopPantry: 'Shop the pantry',
     discoverPottery: 'Discover the ceramics',

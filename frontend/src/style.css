@@ -28,11 +28,6 @@
   .eyebrow::before,.eyebrow::after{content:"";width:22px;height:1px;background:var(--gold);opacity:.7}
   .eyebrow::after{display:none}
 
-  /* topbar */
-  .topbar{background:var(--green-2);color:var(--cream);font-size:.85rem;text-align:center;padding:.55rem 1rem;letter-spacing:.01em}
-  .topbar b{color:var(--gold-2)}
-  .topbar .dot{color:var(--gold);margin-inline:.55rem}
-
   /* header */
   header.site{position:sticky;top:0;z-index:60;background:rgba(245,239,227,.9);backdrop-filter:blur(10px);border-bottom:1px solid rgba(60,74,39,.12);transition:box-shadow .3s}
   header.site.scrolled{box-shadow:0 10px 30px -20px rgba(44,55,25,.6)}
@@ -252,9 +247,6 @@
   .to-top{position:fixed;left:22px;bottom:22px;z-index:80;width:48px;height:48px;border-radius:50%;background:var(--green);color:var(--cream);display:grid;place-items:center;box-shadow:0 14px 30px -12px rgba(44,55,25,.7);transition:transform .2s,background .2s}
   .to-top:hover{background:var(--gold);transform:translateY(-3px)}
   .to-top svg{width:22px;height:22px}
-  .tb-msg{display:inline-block}
-  .fade-enter-active,.fade-leave-active{transition:opacity .5s}
-  .fade-enter-from,.fade-leave-to{opacity:0}
 
   .co{background:var(--cream);border-radius:22px;max-width:480px;width:100%;padding:1.8rem 1.5rem;border:1px solid rgba(184,144,47,.4);box-shadow:0 40px 80px -40px rgba(0,0,0,.6);position:relative;max-height:92vh;overflow:auto}
   .co .co-l{display:block;font-size:.82rem;color:var(--green);margin:.55rem 0 .25rem;font-weight:500}

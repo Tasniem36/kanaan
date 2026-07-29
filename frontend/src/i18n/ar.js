@@ -14,11 +14,6 @@ export default {
     account: 'حسابي',
     login: 'دخول',
   },
-  topbar: {
-    m1: 'كل ما تحتاجه من فلسطين بين يديك',
-    m2: `<b>شحنٌ مجّاني</b> للطلبات فوق 250 <span class='dh' role='img' aria-label='درهم'></span>`,
-    m3: 'حصاد هذا الموسم وصل حديثًا — اطلب طازجًا',
-  },
   hero: {
     shopPantry: 'تسوّق المونة',
     discoverPottery: 'اكتشف الخزف',

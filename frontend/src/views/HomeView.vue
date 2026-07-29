@@ -1,6 +1,4 @@
 <template>
-  <div class="topbar"><transition name="fade" mode="out-in"><span class="tb-msg" :key="tbi" v-html="topbarMsgs[tbi]"></span></transition></div>
-
   <PortalBar :scrolled="scrolled">
     <nav class="tabs store-nav" aria-label="nav">
       <a href="#home" :class="{ active: activeSection === 'home' }">{{ t('nav.home') }}</a><a href="#pantry" :class="{ active: activeSection === 'pantry' }">{{ t('nav.pantry') }}</a><a href="#pottery" :class="{ active: activeSection === 'pottery' }">{{ t('nav.pottery') }}</a><a href="#story" :class="{ active: activeSection === 'story' }">{{ t('nav.story') }}</a><a href="#contact" :class="{ active: activeSection === 'contact' }">{{ t('nav.contact') }}</a>
@@ -293,8 +291,6 @@ const router = useRouter()
 const route = useRoute()
 const ar = (n) => String(n)
 
-// rotating topbar messages + "why us" cards, from the active locale
-const topbarMsgs = computed(() => [t('topbar.m1'), t('topbar.m2'), t('topbar.m3')])
 // bundled defaults — used until the editable cards load (and for the nav link labels)
 const fallbackValues = computed(() => [
   { icon: `<img src='/images/badge-asli.png' alt=''>`, link: '#pantry', t: t('values.v1.t'), d: t('values.v1.d'), more: t('values.v1.more'), linkLabel: t('values.v1.linkLabel') },
@@ -361,7 +357,6 @@ const toast = ref('')
 const email = ref('')
 const modal = ref(null)
 const showTop = ref(false)
-const tbi = ref(0)
 const activeSection = ref('home')
 
 // storefront type filters (data-driven from the products in each category)
@@ -596,9 +591,6 @@ onMounted(() => {
   }, { passive: true })
   updateActiveSection()
   observeReveals()
-  setInterval(() => {
-    tbi.value = (tbi.value + 1) % topbarMsgs.value.length
-  }, 3800)
 })
 </script>
 
