@@ -529,12 +529,17 @@ function observeReveals() {
   if (!revealIO) {
     revealIO = new IntersectionObserver((es) => {
       es.forEach((e) => {
-        if (e.isIntersecting) { e.target.classList.add('in'); revealIO.unobserve(e.target) }
+        if (e.isIntersecting) { e.target.classList.remove('pre'); e.target.classList.add('in'); revealIO.unobserve(e.target) }
       })
     }, { threshold: 0.14 })
   }
+  // Elements already in view stay visible (no flash on prerendered content); only
+  // below-the-fold ones get hidden (.pre) and animate in as they scroll into view.
   // product cards reveal themselves inside ProductFeed
-  nextTick(() => document.querySelectorAll('.reveal:not(.in)').forEach((el) => revealIO.observe(el)))
+  nextTick(() => document.querySelectorAll('.reveal:not(.in):not(.pre)').forEach((el) => {
+    if (el.getBoundingClientRect().top > innerHeight * 0.9) { el.classList.add('pre'); revealIO.observe(el) }
+    else el.classList.add('in')
+  }))
 }
 // re-observe when the editable "why us" cards arrive from the backend
 watch(() => content.values, observeReveals)

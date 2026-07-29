@@ -16,16 +16,20 @@ export default defineConfig({
   server: {
     // In dev, proxy API calls to the local API server so the frontend can
     // just call '/api/...' (same as in production behind nginx).
-    proxy: {
-      '/api': {
-        target: process.env.VITE_API_PROXY || 'http://localhost:8080',
-        changeOrigin: true,
-      },
-      // product images served by the API from its media volume
-      '/media': {
-        target: process.env.VITE_API_PROXY || 'http://localhost:8080',
-        changeOrigin: true,
-      },
-    },
+    proxy: proxyConfig(),
+  },
+  // `vite preview` (serving the built dist) uses the same proxy, so a local
+  // production build can talk to the local API too.
+  preview: {
+    proxy: proxyConfig(),
   },
 })
+
+function proxyConfig() {
+  const target = process.env.VITE_API_PROXY || 'http://localhost:8080'
+  return {
+    '/api': { target, changeOrigin: true },
+    // product images served by the API from its media volume
+    '/media': { target, changeOrigin: true },
+  }
+}

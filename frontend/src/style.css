@@ -296,7 +296,11 @@
   .admin__open{position:fixed;left:22px;bottom:84px;z-index:80;background:var(--green-2);color:var(--cream);border-radius:999px;padding:.55rem 1.1rem;font-size:.85rem;font-weight:700;box-shadow:0 14px 30px -12px rgba(44,55,25,.7)}
   .admin__open:hover{background:var(--gold);color:var(--green-2)}
 
-  .reveal{opacity:0;transform:translateY(26px);transition:opacity .7s,transform .7s}
+  /* Visible by default so prerendered/above-the-fold content shows instantly (no
+     flash while the JS bundle boots). JS adds .pre only to below-the-fold elements
+     to hide them, then swaps to .in to animate them in as they scroll into view. */
+  .reveal{transition:opacity .7s,transform .7s}
+  .reveal.pre{opacity:0;transform:translateY(26px)}
   .reveal.in{opacity:1;transform:none}
   .v-enter-active,.v-leave-active{transition:opacity .25s}
   .v-enter-from,.v-leave-to{opacity:0}
@@ -324,6 +328,6 @@
   }
   @media (prefers-reduced-motion:reduce){
     *{animation:none!important;transition:none!important;scroll-behavior:auto!important}
-    .reveal{opacity:1;transform:none}.hero-img,.hero .cta{opacity:1;transform:none}.scroll-cue{display:none}
+    .reveal,.reveal.pre{opacity:1;transform:none}.hero-img,.hero .cta{opacity:1;transform:none}.scroll-cue{display:none}
   }
   .dh{display:inline-block;width:.82em;height:.82em;vertical-align:-.1em;margin-inline-start:.16em;background-color:currentColor;-webkit-mask:var(--dh) center/contain no-repeat;mask:var(--dh) center/contain no-repeat}
