@@ -57,6 +57,10 @@
             <div><label class="co-l">{{ t('manager.type') }}</label><input class="a-input" v-model.trim="np.type" :placeholder="t('manager.typePh')" list="type-presets"></div>
             <div><label class="co-l">{{ t('manager.tag') }}</label><input class="a-input" v-model.trim="np.tag" :placeholder="t('manager.tagPh')" list="tag-presets"></div>
           </div>
+          <div class="grid2">
+            <div><label class="co-l">{{ t('manager.order') }}</label><input class="a-input" type="number" v-model="np.sort" :placeholder="t('manager.orderPh')"></div>
+            <div></div>
+          </div>
           <p v-if="pErr" class="auth-err">{{ pErr }}</p>
           <button class="btn btn-green" style="width:100%;justify-content:center;margin-top:1rem" :disabled="pBusy" @click="addProduct">{{ pBusy ? '…' : t('manager.addBtn') }}</button>
     </Dialog>
@@ -84,7 +88,7 @@
           </div>
           <div class="grid2">
             <div><label class="co-l">{{ t('manager.tag') }}</label><input class="a-input" v-model.trim="ep.tag" :placeholder="t('manager.tagPh')" list="tag-presets"></div>
-            <div></div>
+            <div><label class="co-l">{{ t('manager.order') }}</label><input class="a-input" type="number" v-model="ep.sort" :placeholder="t('manager.orderPh')"></div>
           </div>
           <p v-if="epErr" class="auth-err">{{ epErr }}</p>
           <button class="btn btn-green" style="width:100%;justify-content:center;margin-top:1rem" :disabled="epBusy" @click="saveEdit">{{ epBusy ? '…' : t('manager.save') }}</button>
@@ -113,18 +117,18 @@ const { visible: visibleProducts, sentinel, hasMore } = useInfiniteScroll(() => 
 
 const restockQty = reactive({})
 const showAdd = ref(false)
-const np = reactive({ name: '', description: '', category: 'pantry', unit: '', price: '', stock: '', type: '', tag: '', images: [] })
+const np = reactive({ name: '', description: '', category: 'pantry', unit: '', price: '', stock: '', type: '', tag: '', sort: '', images: [] })
 const pErr = ref('')
 const pBusy = ref(false)
 
 function openAdd() {
   pErr.value = ''
-  Object.assign(np, { name: '', description: '', category: 'pantry', unit: '', price: '', stock: '', type: '', tag: '', images: [] })
+  Object.assign(np, { name: '', description: '', category: 'pantry', unit: '', price: '', stock: '', type: '', tag: '', sort: '', images: [] })
   showAdd.value = true
 }
 
 const editing = ref(null)
-const ep = reactive({ name: '', description: '', category: 'pantry', unit: '', price: '', type: '', tag: '', images: [] })
+const ep = reactive({ name: '', description: '', category: 'pantry', unit: '', price: '', type: '', tag: '', sort: '', images: [] })
 const epErr = ref('')
 const epBusy = ref(false)
 
@@ -134,7 +138,7 @@ async function addProduct() {
   pBusy.value = true
   try {
     // the backend generates the list thumbnail automatically from the first image
-    await catalog.create({ ...np, images: [...np.images], price: Number(np.price), stock: Number(np.stock) || 0 })
+    await catalog.create({ ...np, images: [...np.images], price: Number(np.price), stock: Number(np.stock) || 0, sort: Number(np.sort) || 0 })
     showAdd.value = false
     toast.show(t('manager.toastAdded'))
   } catch (e) { pErr.value = e.message } finally { pBusy.value = false }
@@ -172,7 +176,7 @@ async function openEdit(p) {
   try { full = await catalog.fetchOne(p.id) } catch { /* fall back to the light row */ }
   editing.value = full
   const imgs = Array.isArray(full.images) && full.images.length ? [...full.images] : (full.image_url ? [full.image_url] : [])
-  Object.assign(ep, { name: full.name, description: full.description || '', category: full.category, unit: full.unit || '', price: full.price, type: full.type || '', tag: full.tag || '', images: imgs })
+  Object.assign(ep, { name: full.name, description: full.description || '', category: full.category, unit: full.unit || '', price: full.price, type: full.type || '', tag: full.tag || '', sort: full.sort ?? 0, images: imgs })
 }
 async function saveEdit() {
   epErr.value = ''
@@ -182,7 +186,7 @@ async function saveEdit() {
     // thumbnail is regenerated server-side when the images change
     await catalog.update(editing.value.id, {
       name: ep.name, description: ep.description, category: ep.category, unit: ep.unit,
-      type: ep.type || null, price: Number(ep.price), tag: ep.tag || null, images: [...ep.images],
+      type: ep.type || null, price: Number(ep.price), tag: ep.tag || null, sort: Number(ep.sort) || 0, images: [...ep.images],
     })
     editing.value = null
     toast.show(t('manager.toastSaved'))

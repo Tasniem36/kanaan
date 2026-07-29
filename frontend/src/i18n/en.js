@@ -290,6 +290,8 @@ export default {
     typePh: 'e.g. plates, cups — type or pick',
     tag: 'Badge (tag)',
     tagPh: 'No badge — type or pick',
+    order: 'Display order',
+    orderPh: '0 — lower shows first',
     addBtn: 'Add product',
     colProduct: 'Product',
     colPrice: 'Price',

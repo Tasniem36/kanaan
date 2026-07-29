@@ -45,14 +45,15 @@ def list_products(request: Request):
     # (the full images load on demand via GET /products/{id}).
     if is_manager and not force_active:
         cols = ("id, name, description, price, unit, category, type, tag, "
-                "coalesce(thumb_url, image_url) as image_url, thumb_url, stock, is_active")
+                "coalesce(thumb_url, image_url) as image_url, thumb_url, stock, is_active, sort")
     else:
         cols = ("id, name, description, price, unit, category, type, tag, "
-                "coalesce(thumb_url, image_url) as image_url, stock, is_active")
+                "coalesce(thumb_url, image_url) as image_url, stock, is_active, sort")
 
     total = fetch_one(f"select count(*)::int as n from products {where}", params)["n"]
 
-    sql = f"select {cols} from products {where} order by created_at"
+    # manager-set display order first; same order value keeps the prior (oldest-first) order
+    sql = f"select {cols} from products {where} order by sort, created_at"
     p2 = list(params)
     try:
         limit = int(q["limit"]) if q.get("limit") else None
@@ -101,7 +102,7 @@ def get_product(pid: str, request: Request):
     user = optional_user(request)
     is_manager = user and user.get("role") == "manager"
     row = fetch_one(
-        """select id, name, description, price, unit, category, type, tag, image_url, images, thumb_url, stock, is_active
+        """select id, name, description, price, unit, category, type, tag, image_url, images, thumb_url, stock, is_active, sort
            from products where id = %s""", [pid])
     if not row or (not is_manager and not row["is_active"]):
         raise HTTPException(404, "Product not found")
@@ -125,11 +126,11 @@ def create_product(response: Response, _m=Depends(require_manager), payload: dic
     # thumbnail is derived server-side from the primary image (managers can't set it)
     thumb_url = make_thumb(image_url)
     row = fetch_one(
-        """insert into products (name, description, price, unit, category, type, tag, image_url, images, thumb_url, stock)
-           values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) returning *""",
+        """insert into products (name, description, price, unit, category, type, tag, image_url, images, thumb_url, stock, sort)
+           values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) returning *""",
         [name, payload.get("description"), price, payload.get("unit"), category, ptype,
          payload.get("tag"), image_url, Json(images), thumb_url,
-         int(payload.get("stock") or 0)],
+         int(payload.get("stock") or 0), int(payload.get("sort") or 0)],
     )
     response.status_code = 201
     return {"product": row}
@@ -138,11 +139,16 @@ def create_product(response: Response, _m=Depends(require_manager), payload: dic
 @router.patch("/{pid}")
 def update_product(pid: str, _m=Depends(require_manager), payload: dict = Body(default={})):
     # thumb_url is intentionally NOT accepted from the client — it's derived below
-    allowed = ["name", "description", "price", "unit", "category", "type", "tag", "image_url", "stock", "is_active", "images"]
+    allowed = ["name", "description", "price", "unit", "category", "type", "tag", "image_url", "stock", "is_active", "images", "sort"]
     data = {k: payload[k] for k in (payload or {}) if k in allowed}
     # normalize empty type to NULL so it drops out of the filter chips
     if "type" in data:
         data["type"] = (data["type"] or "").strip() or None
+    if "sort" in data:
+        try:
+            data["sort"] = int(data["sort"] or 0)
+        except (TypeError, ValueError):
+            data["sort"] = 0
     if "images" in data:
         imgs = [save_image(i) for i in _clean_images(data["images"])]
         data["images"] = imgs
