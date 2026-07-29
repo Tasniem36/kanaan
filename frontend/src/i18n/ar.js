@@ -79,6 +79,8 @@ export default {
     viewCart: 'عرض السلّة',
     notFound: 'المنتج غير موجود',
     backToStore: 'العودة للمتجر',
+    share: 'مشاركة',
+    shareText: 'شوف هذا المنتج من دكّان كنعان 🌿',
   },
   cart: {
     title: 'سلّة المشتريات',

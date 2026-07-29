@@ -79,6 +79,8 @@ export default {
     viewCart: 'View cart',
     notFound: 'Product not found',
     backToStore: 'Back to store',
+    share: 'Share',
+    shareText: 'Check out this product from Dukkan Kanaan 🌿',
   },
   cart: {
     title: 'Shopping cart',

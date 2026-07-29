@@ -26,12 +26,18 @@
         <button v-for="ty in types" :key="ty" class="type-chip" :class="{ on: type === ty }" @click="type = ty">{{ ty }}</button>
       </div>
 
-      <ProductFeed :category="cat" :type="type" :empty-text="t('search.noResults')" @added="onAdded" />
+      <ProductFeed :key="cat" :category="cat" :type="type" :empty-text="t('search.noResults')" @added="onAdded" />
     </main>
 
     <CartDrawer :open="openCart" @close="openCart = false" @checkout="goCheckout" />
   </div>
 </template>
+
+<script>
+// named so <keep-alive include="CategoryView"> in App.vue matches this view,
+// preserving the infinite-scroll feed + scroll position across a product visit
+export default { name: 'CategoryView' }
+</script>
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'

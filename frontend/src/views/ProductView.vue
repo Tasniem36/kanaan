@@ -64,6 +64,10 @@
             <p v-if="product.stock === 0" class="pdp-stock out">{{ t('product.outOfStock') }}</p>
             <p v-else class="pdp-stock in">{{ t('product.inStock') }}</p>
 
+            <button class="pdp-share" @click="shareWhatsApp" :aria-label="t('product.share')" :title="t('product.share')">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.5 14.4c-.3-.15-1.7-.84-1.96-.94-.26-.1-.45-.15-.64.15-.19.29-.74.94-.9 1.13-.17.19-.33.22-.62.07-.29-.15-1.23-.45-2.34-1.44-.86-.77-1.45-1.72-1.62-2.01-.17-.29-.02-.45.13-.6.13-.13.29-.34.44-.51.15-.17.19-.29.29-.48.1-.19.05-.36-.02-.51-.08-.15-.64-1.55-.88-2.12-.23-.55-.47-.48-.64-.49l-.55-.01c-.19 0-.5.07-.76.36-.26.29-1 .98-1 2.38s1.02 2.76 1.17 2.95c.15.19 2.02 3.08 4.9 4.32.68.3 1.22.47 1.64.6.69.22 1.31.19 1.81.12.55-.08 1.7-.69 1.94-1.36.24-.67.24-1.24.17-1.36-.07-.12-.26-.19-.55-.34ZM12 2a10 10 0 0 0-8.53 15.24L2 22l4.87-1.44A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.18-1.14l-.3-.18-2.89.85.77-2.82-.19-.29A8.2 8.2 0 1 1 12 20.2Z"/></svg>
+            </button>
+
             <div class="pdp-actions">
               <span v-if="product.stock === 0" class="btn btn-green" style="opacity:.5;pointer-events:none">{{ t('product.outOfStock') }}</span>
               <button v-else-if="!cart.qty(product.id)" class="btn btn-green" @click="add">
@@ -131,6 +135,13 @@ useHead({
 
 function prev() { idx.value = (idx.value - 1 + images.value.length) % images.value.length }
 function next() { idx.value = (idx.value + 1) % images.value.length }
+
+// share the product on WhatsApp (opens the app on mobile, WhatsApp Web on desktop)
+function shareWhatsApp() {
+  const url = window.location.href
+  const text = `${t('product.shareText')}\n${product.value.name}\n${url}`
+  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener')
+}
 
 let toastTimer
 function add() {
@@ -221,6 +232,15 @@ onBeforeUnmount(() => removeEventListener('scroll', onScroll))
 .pdp-stock.in { color: var(--green-soft); }
 .pdp-stock.low { color: var(--gold); }
 .pdp-stock.out { color: var(--red); }
+.pdp-share {
+  display: inline-grid; place-items: center;
+  width: 38px; height: 38px; margin-bottom: 1.2rem;
+  border-radius: 50%;
+  border: 1.5px solid #25d366; background: transparent;
+  color: #1da851; cursor: pointer; transition: background .15s, color .15s;
+}
+.pdp-share:hover { background: #25d366; color: #fff; }
+.pdp-share svg { width: 19px; height: 19px; }
 .pdp-actions { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; }
 .stepper.big { font-size: 1.1rem; }
 .stepper.big button { width: 42px; height: 42px; }
