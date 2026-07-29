@@ -1,8 +1,30 @@
-"""New-order WhatsApp notifications via CallMeBot (free). Configure with
-WHATSAPP_PHONE + WHATSAPP_APIKEY. Never raises."""
+"""New-order notifications. Sends to every configured channel:
+  - Telegram: TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID (reliable, free)
+  - WhatsApp via CallMeBot: WHATSAPP_PHONE + WHATSAPP_APIKEY (free, best-effort)
+Never raises."""
 import os
 
 import requests
+
+
+def _send_telegram(text: str) -> dict:
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    chat_id = os.getenv("TELEGRAM_CHAT_ID")
+    if not token or not chat_id:
+        return {"configured": False, "ok": False, "error": "TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not set"}
+    try:
+        res = requests.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={"chat_id": chat_id, "text": text},
+            timeout=20,
+        )
+        if not res.ok:
+            print("[notify] telegram failed:", res.status_code, res.text[:200])
+            return {"configured": True, "ok": False, "error": f"HTTP {res.status_code}", "detail": res.text[:300]}
+        return {"configured": True, "ok": True}
+    except Exception as e:
+        print("[notify] telegram error:", e)
+        return {"configured": True, "ok": False, "error": str(e)}
 
 
 def _send_whatsapp(text: str) -> dict:
@@ -25,6 +47,17 @@ def _send_whatsapp(text: str) -> dict:
         return {"configured": True, "ok": False, "error": str(e)}
 
 
+def _send(text: str) -> dict:
+    """Send to every configured channel. ok=True if any configured channel succeeded."""
+    results = {"telegram": _send_telegram(text), "whatsapp": _send_whatsapp(text)}
+    configured = {k: v for k, v in results.items() if v.get("configured")}
+    return {
+        "configured": bool(configured),
+        "ok": any(v.get("ok") for v in configured.values()),
+        "channels": results,
+    }
+
+
 def notify_new_order(order: dict) -> dict:
     items = "، ".join(f"{i['name']} ×{i['qty']}" for i in order.get("items", []))
     text = (
@@ -34,8 +67,8 @@ def notify_new_order(order: dict) -> dict:
         f"{items}\n"
         f"المجموع: {order['total']}"
     )
-    return _send_whatsapp(text)
+    return _send(text)
 
 
 def send_test_notification() -> dict:
-    return _send_whatsapp("🔔 دكّان كنعان — هذه رسالة اختبار. الإشعارات تعمل ✅")
+    return _send("🔔 دكّان كنعان — هذه رسالة اختبار. الإشعارات تعمل ✅")
