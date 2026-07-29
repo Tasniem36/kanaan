@@ -65,33 +65,9 @@
           <button class="btn btn-green" style="width:100%;justify-content:center;margin-top:1rem" :disabled="pBusy" @click="addProduct">{{ pBusy ? '…' : t('manager.addBtn') }}</button>
     </Dialog>
 
-    <!-- edit product (incl. image) -->
+    <!-- edit product (incl. image) — shared editor, also used on the product page -->
     <Dialog :open="!!editing" :title="t('manager.editProduct')" max-width="520px" @close="editing = null">
-          <label class="co-l">{{ t('manager.image') }}</label>
-          <ImagePicker v-model="ep.images" />
-          <label class="co-l">{{ t('manager.name') }}</label>
-          <input class="a-input" v-model.trim="ep.name">
-          <label class="co-l">{{ t('manager.description') }}</label>
-          <input class="a-input" v-model.trim="ep.description">
-          <div class="grid2">
-            <div><label class="co-l">{{ t('manager.category') }}</label>
-              <select class="a-select" style="width:100%" v-model="ep.category">
-                <option value="pantry">{{ t('manager.pantry') }}</option>
-                <option value="pottery">{{ t('manager.pottery') }}</option>
-              </select>
-            </div>
-            <div><label class="co-l">{{ t('manager.unit') }}</label><input class="a-input" v-model.trim="ep.unit"></div>
-          </div>
-          <div class="grid2">
-            <div><label class="co-l">{{ t('manager.price') }}</label><input class="a-input" type="number" step="0.01" v-model="ep.price"></div>
-            <div><label class="co-l">{{ t('manager.type') }}</label><input class="a-input" v-model.trim="ep.type" :placeholder="t('manager.typePh')" list="type-presets"></div>
-          </div>
-          <div class="grid2">
-            <div><label class="co-l">{{ t('manager.tag') }}</label><input class="a-input" v-model.trim="ep.tag" :placeholder="t('manager.tagPh')" list="tag-presets"></div>
-            <div><label class="co-l">{{ t('manager.order') }}</label><input class="a-input" type="number" v-model="ep.sort" :placeholder="t('manager.orderPh')"></div>
-          </div>
-          <p v-if="epErr" class="auth-err">{{ epErr }}</p>
-          <button class="btn btn-green" style="width:100%;justify-content:center;margin-top:1rem" :disabled="epBusy" @click="saveEdit">{{ epBusy ? '…' : t('manager.save') }}</button>
+      <ProductEditor v-if="editing" :product="editing" @saved="onEdited" />
     </Dialog>
   </section>
 </template>
@@ -105,6 +81,7 @@ import { useToastStore } from '../../stores/toast'
 import ImagePicker from '../../components/ImagePicker.vue'
 import Loader from '../../components/Loader.vue'
 import Dialog from '../../components/Dialog.vue'
+import ProductEditor from '../../components/ProductEditor.vue'
 import { useInfiniteScroll } from '../../composables/useInfiniteScroll'
 
 const { t } = useI18n()
@@ -128,9 +105,6 @@ function openAdd() {
 }
 
 const editing = ref(null)
-const ep = reactive({ name: '', description: '', category: 'pantry', unit: '', price: '', type: '', tag: '', sort: '', images: [] })
-const epErr = ref('')
-const epBusy = ref(false)
 
 async function addProduct() {
   pErr.value = ''
@@ -170,27 +144,14 @@ async function removeProduct(p) {
   catch (e) { toast.show(e.message) }
 }
 async function openEdit(p) {
-  epErr.value = ''
-  // the list is light (no gallery) — fetch the full product for editing
+  // the list is light (no gallery) — fetch the full product for the editor
   let full = p
   try { full = await catalog.fetchOne(p.id) } catch { /* fall back to the light row */ }
   editing.value = full
-  const imgs = Array.isArray(full.images) && full.images.length ? [...full.images] : (full.image_url ? [full.image_url] : [])
-  Object.assign(ep, { name: full.name, description: full.description || '', category: full.category, unit: full.unit || '', price: full.price, type: full.type || '', tag: full.tag || '', sort: full.sort ?? 0, images: imgs })
 }
-async function saveEdit() {
-  epErr.value = ''
-  if (!ep.name || !ep.price) { epErr.value = t('manager.errNamePrice'); return }
-  epBusy.value = true
-  try {
-    // thumbnail is regenerated server-side when the images change
-    await catalog.update(editing.value.id, {
-      name: ep.name, description: ep.description, category: ep.category, unit: ep.unit,
-      type: ep.type || null, price: Number(ep.price), tag: ep.tag || null, sort: Number(ep.sort) || 0, images: [...ep.images],
-    })
-    editing.value = null
-    toast.show(t('manager.toastSaved'))
-  } catch (e) { epErr.value = e.message } finally { epBusy.value = false }
+function onEdited() {
+  editing.value = null
+  toast.show(t('manager.toastSaved'))
 }
 
 onMounted(() => catalog.fetch())

@@ -64,6 +64,11 @@
             <p v-if="product.stock === 0" class="pdp-stock out">{{ t('product.outOfStock') }}</p>
             <p v-else class="pdp-stock in">{{ t('product.inStock') }}</p>
 
+            <button v-if="auth.isManager" class="pdp-edit" @click="editOpen = true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+              {{ t('manager.editProduct') }}
+            </button>
+
             <div class="pdp-buy">
             <div class="pdp-share-wrap">
               <button class="pdp-share" :class="{ on: shareOpen }" @click="toggleShare" :aria-label="t('product.share')" :aria-expanded="shareOpen">
@@ -117,6 +122,9 @@
     </main>
 
     <CartDrawer :open="openCart" @close="openCart = false" @checkout="goCheckout" />
+    <Dialog :open="editOpen" :title="t('manager.editProduct')" max-width="520px" @close="editOpen = false">
+      <ProductEditor v-if="editOpen && product" :product="product" @saved="onEdited" />
+    </Dialog>
     <transition name="v"><div class="toast" v-if="toast"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l4 4 10-10"/></svg>{{ toast }}</div></transition>
   </div>
 </template>
@@ -128,16 +136,21 @@ import { useI18n } from 'vue-i18n'
 import { useHead } from '@unhead/vue'
 import { useCatalogStore } from '../stores/catalog'
 import { useCartStore } from '../stores/cart'
+import { useAuthStore } from '../stores/auth'
 import PortalBar from '../components/PortalBar.vue'
 import CartDrawer from '../components/CartDrawer.vue'
+import Dialog from '../components/Dialog.vue'
+import ProductEditor from '../components/ProductEditor.vue'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const catalog = useCatalogStore()
 const cart = useCartStore()
+const auth = useAuthStore()
 
 const openCart = ref(false)
+const editOpen = ref(false)
 const toast = ref('')
 const idx = ref(0)
 const scrolled = ref(false)
@@ -205,6 +218,15 @@ async function nativeShare() {
 }
 
 let toastTimer
+function showToast(msg) {
+  toast.value = msg
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => (toast.value = ''), 2200)
+}
+function onEdited() {
+  editOpen.value = false
+  showToast(t('manager.toastSaved'))
+}
 function add() {
   if (cart.qty(product.value.id) >= product.value.stock) return
   cart.add(product.value)
@@ -334,6 +356,16 @@ onBeforeUnmount(() => removeEventListener('scroll', onScroll))
 .sh-em { background: var(--green); }
 .sh-cp { background: var(--gold); }
 .sh-more { background: var(--terra-deep, #7a3b2e); }
+/* manager-only quick edit on the product page */
+.pdp-edit {
+  display: inline-flex; align-items: center; gap: .45rem;
+  margin-bottom: 1rem; padding: .5rem 1rem; border-radius: 999px;
+  border: 1.5px dashed var(--gold); background: transparent;
+  color: var(--terra-deep); font-family: inherit; font-size: .88rem; font-weight: 700;
+  cursor: pointer; transition: background .2s, color .2s;
+}
+.pdp-edit:hover { background: var(--gold); color: var(--cream); }
+.pdp-edit svg { width: 16px; height: 16px; }
 .pdp-actions { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; }
 .stepper.big { font-size: 1.1rem; }
 .stepper.big button { width: 42px; height: 42px; }
