@@ -16,7 +16,7 @@
     <p v-else-if="!logs.length" class="a-muted">{{ t('manager.noAudit') }}</p>
     <div v-else class="table-wrap">
       <table class="a-table">
-        <thead><tr><th>{{ t('manager.colWhen') }}</th><th>{{ t('manager.colWho') }}</th><th>{{ t('manager.colEmail') }}</th><th>{{ t('manager.colRole') }}</th><th>{{ t('manager.colAction') }}</th><th>{{ t('manager.colDetail') }}</th><th>IP</th></tr></thead>
+        <thead><tr><th>{{ t('manager.colWhen') }}</th><th>{{ t('manager.colWho') }}</th><th>{{ t('manager.colEmail') }}</th><th>{{ t('manager.colRole') }}</th><th>{{ t('manager.colAction') }}</th><th>{{ t('manager.colDetail') }}</th><th>{{ t('manager.colPage') }}</th><th>{{ t('manager.colLocation') }}</th><th>IP</th></tr></thead>
         <tbody>
           <tr v-for="a in logs" :key="a.id">
             <td class="a-muted" style="white-space:nowrap">{{ fmtDateTime(a.created_at) }}</td>
@@ -25,6 +25,8 @@
             <td><span class="a-pill" :class="roleClass(a)">{{ roleLabel(a) }}</span></td>
             <td><span class="a-pill" :class="pillClass(a.action)">{{ actionLabel(a.action) }}</span></td>
             <td class="a-muted" style="font-size:.85rem">{{ detailText(a) }}</td>
+            <td class="a-muted" dir="ltr" style="font-size:.8rem">{{ a.page || '—' }}</td>
+            <td class="a-muted" style="font-size:.82rem">{{ geo[a.ip] || '—' }}</td>
             <td class="a-muted" dir="ltr" style="font-size:.8rem">{{ a.ip || '—' }}</td>
           </tr>
         </tbody>
@@ -41,6 +43,7 @@ import Loader from '../../components/Loader.vue'
 
 const { t, te, locale } = useI18n()
 const logs = ref([])
+const geo = ref({})   // ip → "City, Country" (filled in after the rows load)
 const loading = ref(false)
 const filters = reactive({ email: '', action: '', from: '', to: '' })
 const actionOptions = ['login', 'register', 'order_placed', 'payment_confirmed', 'address_added', 'address_removed', 'visit']
@@ -85,9 +88,20 @@ async function load() {
     if (filters.to) qs.set('to', filters.to)
     const { logs: rows } = await api('/audit' + (qs.toString() ? `?${qs}` : ''))
     logs.value = rows
+    loadGeo(rows)
   } finally {
     loading.value = false
   }
+}
+
+// resolve the distinct IPs on this page to locations (best-effort, non-blocking)
+async function loadGeo(rows) {
+  const ips = [...new Set(rows.map((r) => r.ip).filter((ip) => ip && !(ip in geo.value)))]
+  if (!ips.length) return
+  try {
+    const { geo: found } = await api(`/audit/geo?ips=${encodeURIComponent(ips.join(','))}`)
+    geo.value = { ...geo.value, ...found }
+  } catch { /* leave IPs unresolved */ }
 }
 function clearFilter() {
   Object.assign(filters, { email: '', action: '', from: '', to: '' })

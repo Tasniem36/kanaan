@@ -235,6 +235,8 @@ export default {
     colWho: 'Customer',
     colAction: 'Action',
     colDetail: 'Details',
+    colPage: 'Page',
+    colLocation: 'Location',
     guestVisitor: 'Guest',
     colEmail: 'Email',
     colRole: 'Type',

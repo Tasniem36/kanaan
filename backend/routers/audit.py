@@ -1,9 +1,25 @@
+import ipaddress
+import threading
+
+import requests
 from fastapi import APIRouter, Depends, Request
 
 from db import fetch_all
 from security import require_manager
 
 router = APIRouter()
+
+# ip → "City, Country" (or None), resolved lazily when the audit page asks. Cached
+# for the process lifetime so the same IP isn't looked up twice.
+_geo_cache = {}
+_geo_lock = threading.Lock()
+
+
+def _is_public(ip):
+    try:
+        return ipaddress.ip_address(ip).is_global
+    except ValueError:
+        return False
 
 
 # GET /api/audit — admin only: recent activity, filterable by action / email / date range
@@ -29,9 +45,43 @@ def list_audit(request: Request, _m=Depends(require_manager)):
         params.append(q["to"])
     where = ("where " + " and ".join(conds)) if conds else ""
     rows = fetch_all(
-        f"""select a.id, a.action, a.detail, a.ip, a.created_at, u.email, u.full_name, u.role
+        f"""select a.id, a.action, a.detail, a.ip, a.page, a.created_at, u.email, u.full_name, u.role
             from audit_logs a left join users u on u.id = a.user_id
             {where} order by a.created_at desc limit %s""",
         params + [limit],
     )
     return {"logs": rows}
+
+
+# GET /api/audit/geo?ips=a,b,c — admin only: resolve IPs to "City, Country".
+# Best-effort via ip-api.com (free, HTTP-only, server-side); private/unknown → null.
+@router.get("/geo")
+def audit_geo(request: Request, _m=Depends(require_manager)):
+    raw = request.query_params.get("ips", "")
+    ips = [ip.strip() for ip in raw.split(",") if ip.strip()]
+    result, todo = {}, []
+    for ip in ips:
+        with _geo_lock:
+            if ip in _geo_cache:
+                result[ip] = _geo_cache[ip]
+            else:
+                todo.append(ip)
+    resolvable = [ip for ip in todo if _is_public(ip)][:100]  # ip-api batch cap
+    if resolvable:
+        try:
+            resp = requests.post(
+                "http://ip-api.com/batch?fields=query,status,city,country",
+                json=resolvable, timeout=4,
+            )
+            for item in resp.json():
+                ip = item.get("query")
+                loc = ", ".join(x for x in (item.get("city"), item.get("country")) if x) \
+                    if item.get("status") == "success" else None
+                with _geo_lock:
+                    _geo_cache[ip] = loc
+                result[ip] = loc
+        except Exception as e:  # offline / rate-limited → leave those unresolved
+            print("[audit.geo]", e)
+    for ip in todo:
+        result.setdefault(ip, None)  # private or failed lookups
+    return {"geo": result}

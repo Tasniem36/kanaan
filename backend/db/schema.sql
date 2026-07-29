@@ -107,6 +107,8 @@ create table if not exists audit_logs (
 );
 create index if not exists audit_logs_created_idx on audit_logs (created_at desc);
 create index if not exists audit_logs_user_idx on audit_logs (user_id);
+-- the storefront page the action came from (derived from the request Referer)
+alter table audit_logs add column if not exists page text;
 
 -- ---------- discount_codes -------------------------------------------------
 create table if not exists discount_codes (

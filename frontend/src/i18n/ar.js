@@ -235,6 +235,8 @@ export default {
     colWho: 'العميل',
     colAction: 'الإجراء',
     colDetail: 'التفاصيل',
+    colPage: 'الصفحة',
+    colLocation: 'الموقع',
     guestVisitor: 'زائر',
     colEmail: 'البريد',
     colRole: 'النوع',
