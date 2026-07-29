@@ -64,9 +64,39 @@
             <p v-if="product.stock === 0" class="pdp-stock out">{{ t('product.outOfStock') }}</p>
             <p v-else class="pdp-stock in">{{ t('product.inStock') }}</p>
 
-            <button class="pdp-share" @click="shareWhatsApp" :aria-label="t('product.share')" :title="t('product.share')">
-              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.5 14.4c-.3-.15-1.7-.84-1.96-.94-.26-.1-.45-.15-.64.15-.19.29-.74.94-.9 1.13-.17.19-.33.22-.62.07-.29-.15-1.23-.45-2.34-1.44-.86-.77-1.45-1.72-1.62-2.01-.17-.29-.02-.45.13-.6.13-.13.29-.34.44-.51.15-.17.19-.29.29-.48.1-.19.05-.36-.02-.51-.08-.15-.64-1.55-.88-2.12-.23-.55-.47-.48-.64-.49l-.55-.01c-.19 0-.5.07-.76.36-.26.29-1 .98-1 2.38s1.02 2.76 1.17 2.95c.15.19 2.02 3.08 4.9 4.32.68.3 1.22.47 1.64.6.69.22 1.31.19 1.81.12.55-.08 1.7-.69 1.94-1.36.24-.67.24-1.24.17-1.36-.07-.12-.26-.19-.55-.34ZM12 2a10 10 0 0 0-8.53 15.24L2 22l4.87-1.44A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.18-1.14l-.3-.18-2.89.85.77-2.82-.19-.29A8.2 8.2 0 1 1 12 20.2Z"/></svg>
-            </button>
+            <div class="pdp-buy">
+            <div class="pdp-share-wrap">
+              <button class="pdp-share" :class="{ on: shareOpen }" @click="toggleShare" :aria-label="t('product.share')" :aria-expanded="shareOpen">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>
+                <span>{{ t('product.share') }}</span>
+              </button>
+              <transition name="v">
+                <div v-if="shareOpen" class="share-row" role="menu">
+                  <a class="sh sh-wa" :href="shareLinks.whatsapp" target="_blank" rel="noopener" :title="t('product.via.whatsapp')" :aria-label="t('product.via.whatsapp')" @click="shareOpen = false">
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.5 14.4c-.3-.15-1.7-.84-1.96-.94-.26-.1-.45-.15-.64.15-.19.29-.74.94-.9 1.13-.17.19-.33.22-.62.07-.29-.15-1.23-.45-2.34-1.44-.86-.77-1.45-1.72-1.62-2.01-.17-.29-.02-.45.13-.6.13-.13.29-.34.44-.51.15-.17.19-.29.29-.48.1-.19.05-.36-.02-.51-.08-.15-.64-1.55-.88-2.12-.23-.55-.47-.48-.64-.49l-.55-.01c-.19 0-.5.07-.76.36-.26.29-1 .98-1 2.38s1.02 2.76 1.17 2.95c.15.19 2.02 3.08 4.9 4.32.68.3 1.22.47 1.64.6.69.22 1.31.19 1.81.12.55-.08 1.7-.69 1.94-1.36.24-.67.24-1.24.17-1.36-.07-.12-.26-.19-.55-.34ZM12 2a10 10 0 0 0-8.53 15.24L2 22l4.87-1.44A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.18-1.14l-.3-.18-2.89.85.77-2.82-.19-.29A8.2 8.2 0 1 1 12 20.2Z"/></svg>
+                  </a>
+                  <a class="sh sh-fb" :href="shareLinks.facebook" target="_blank" rel="noopener" :title="t('product.via.facebook')" :aria-label="t('product.via.facebook')" @click="shareOpen = false">
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M22 12a10 10 0 1 0-11.56 9.88v-6.99H7.9V12h2.54V9.8c0-2.5 1.49-3.89 3.77-3.89 1.09 0 2.24.2 2.24.2v2.46h-1.26c-1.24 0-1.63.77-1.63 1.56V12h2.78l-.44 2.89h-2.34v6.99A10 10 0 0 0 22 12Z"/></svg>
+                  </a>
+                  <a class="sh sh-tg" :href="shareLinks.telegram" target="_blank" rel="noopener" :title="t('product.via.telegram')" :aria-label="t('product.via.telegram')" @click="shareOpen = false">
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm4.64 6.8-1.56 7.36c-.12.53-.43.66-.86.41l-2.38-1.75-1.15 1.1c-.13.13-.24.24-.48.24l.17-2.43 4.42-3.99c.19-.17-.04-.27-.3-.1L9.4 13.2l-2.35-.73c-.51-.16-.52-.51.11-.76l9.18-3.54c.42-.16.79.1.65.63Z"/></svg>
+                  </a>
+                  <a class="sh sh-x" :href="shareLinks.x" target="_blank" rel="noopener" :title="t('product.via.x')" :aria-label="t('product.via.x')" @click="shareOpen = false">
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.5 3h3l-6.56 7.5L21.75 21h-6.03l-4.72-6.17L5.6 21H2.6l7.02-8.02L2.25 3h6.18l4.27 5.64L17.5 3Zm-1.06 16.2h1.66L7.64 4.71H5.86l10.58 14.49Z"/></svg>
+                  </a>
+                  <a class="sh sh-em" :href="shareLinks.email" :title="t('product.via.email')" :aria-label="t('product.via.email')" @click="shareOpen = false">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
+                  </a>
+                  <button class="sh sh-cp" @click="copyLink" :title="t('product.copyLink')" :aria-label="t('product.copyLink')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+                  </button>
+                  <button v-if="canNativeShare" class="sh sh-more" @click="nativeShare" :title="t('product.moreApps')" :aria-label="t('product.moreApps')">
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg>
+                  </button>
+                </div>
+              </transition>
+              <div v-if="shareOpen" class="share-backdrop" @click="shareOpen = false"></div>
+            </div>
 
             <div class="pdp-actions">
               <span v-if="product.stock === 0" class="btn btn-green" style="opacity:.5;pointer-events:none">{{ t('product.outOfStock') }}</span>
@@ -79,6 +109,7 @@
                 <button @click="add" aria-label="زيادة" :disabled="cart.qty(product.id) >= product.stock">+</button>
               </span>
               <button v-if="cart.count" class="btn btn-gold" @click="openCart = true">{{ t('product.viewCart') }}</button>
+            </div>
             </div>
           </div>
         </div>
@@ -136,11 +167,41 @@ useHead({
 function prev() { idx.value = (idx.value - 1 + images.value.length) % images.value.length }
 function next() { idx.value = (idx.value + 1) % images.value.length }
 
-// share the product on WhatsApp (opens the app on mobile, WhatsApp Web on desktop)
-function shareWhatsApp() {
-  const url = window.location.href
-  const text = `${t('product.shareText')}\n${product.value.name}\n${url}`
-  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener')
+// --- share menu -----------------------------------------------------------
+// A custom menu (not just the native sheet) so the options show on every
+// browser, desktop included: WhatsApp / Facebook / Telegram / X / Email / Copy,
+// plus a "More apps…" entry backed by the native share sheet where available.
+const shareOpen = ref(false)
+const canNativeShare = ref(false)
+
+const shareUrl = computed(() => (typeof window !== 'undefined' ? window.location.href : ''))
+const shareMsg = computed(() => `${t('product.shareText')} — ${product.value?.name || ''}`)
+const shareLinks = computed(() => {
+  const u = encodeURIComponent(shareUrl.value)
+  const txt = encodeURIComponent(shareMsg.value)
+  const full = encodeURIComponent(`${shareMsg.value}\n${shareUrl.value}`)
+  return {
+    whatsapp: `https://wa.me/?text=${full}`,
+    facebook: `https://www.facebook.com/sharer/sharer.php?u=${u}`,
+    telegram: `https://t.me/share/url?url=${u}&text=${txt}`,
+    x: `https://twitter.com/intent/tweet?text=${txt}&url=${u}`,
+    email: `mailto:?subject=${encodeURIComponent(product.value?.name || '')}&body=${full}`,
+  }
+})
+
+function toggleShare() { shareOpen.value = !shareOpen.value }
+async function copyLink() {
+  try {
+    await navigator.clipboard.writeText(shareUrl.value)
+    toast.value = t('product.linkCopied')
+    clearTimeout(toastTimer)
+    toastTimer = setTimeout(() => (toast.value = ''), 2000)
+  } catch { /* clipboard blocked */ }
+  shareOpen.value = false
+}
+async function nativeShare() {
+  shareOpen.value = false
+  try { await navigator.share({ title: product.value?.name, text: shareMsg.value, url: shareUrl.value }) } catch { /* dismissed */ }
 }
 
 let toastTimer
@@ -169,6 +230,7 @@ function onScroll() { scrolled.value = scrollY > 10 }
 
 onMounted(async () => {
   addEventListener('scroll', onScroll, { passive: true })
+  canNativeShare.value = typeof navigator !== 'undefined' && !!navigator.share
   // load the full-quality product (with its gallery) for the detail page.
   // only block on the loader when we have nothing to show yet — if the product
   // was already in the catalog (came from the storefront feed) it shows instantly
@@ -232,15 +294,46 @@ onBeforeUnmount(() => removeEventListener('scroll', onScroll))
 .pdp-stock.in { color: var(--green-soft); }
 .pdp-stock.low { color: var(--gold); }
 .pdp-stock.out { color: var(--red); }
+/* Add + Share share one line; Add first (order:1), Share after (order:2) */
+.pdp-buy { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; margin: .4rem 0 1.2rem; }
+.pdp-buy .pdp-actions { order: 1; }
+.pdp-buy .pdp-share-wrap { order: 2; }
+.pdp-share-wrap { position: relative; z-index: 41; display: inline-flex; }
 .pdp-share {
-  display: inline-grid; place-items: center;
-  width: 38px; height: 38px; margin-bottom: 1.2rem;
-  border-radius: 50%;
-  border: 1.5px solid #25d366; background: transparent;
-  color: #1da851; cursor: pointer; transition: background .15s, color .15s;
+  display: inline-flex; align-items: center; gap: .5rem;
+  padding: .6rem 1.1rem; border-radius: 999px;
+  border: 2px solid var(--gold); background: transparent;
+  color: var(--terra-deep); font-family: inherit; font-size: .9rem; font-weight: 700;
+  cursor: pointer; transition: transform .2s, background .2s, color .2s;
 }
-.pdp-share:hover { background: #25d366; color: #fff; }
-.pdp-share svg { width: 19px; height: 19px; }
+.pdp-share:hover, .pdp-share.on { background: var(--gold); color: var(--cream); transform: translateY(-2px); }
+.pdp-share svg { width: 18px; height: 18px; }
+
+.share-backdrop { position: fixed; inset: 0; z-index: 40; }
+/* row of round brand buttons — drops below the Share button as a popover so it
+   never pushes the Add button around */
+.share-row {
+  position: absolute; z-index: 41; top: calc(100% + .5rem); inset-inline-start: 0;
+  display: inline-flex; align-items: center; gap: .45rem;
+  padding: .5rem; background: #fff;
+  border: 1px solid rgba(60,74,39,.14); border-radius: 999px;
+  box-shadow: 0 16px 34px -14px rgba(0,0,0,.4);
+}
+.sh {
+  width: 42px; height: 42px; border-radius: 999px; flex: 0 0 auto;
+  display: grid; place-items: center; border: none; cursor: pointer;
+  color: #fff; box-shadow: 0 12px 24px -14px rgba(0,0,0,.7);
+  transition: transform .2s, filter .2s;
+}
+.sh:hover { transform: translateY(-2px); filter: brightness(1.06); }
+.sh svg { width: 21px; height: 21px; }
+.sh-wa { background: #25d366; }
+.sh-fb { background: #1877f2; }
+.sh-tg { background: #229ed9; }
+.sh-x  { background: #111; }
+.sh-em { background: var(--green); }
+.sh-cp { background: var(--gold); }
+.sh-more { background: var(--terra-deep, #7a3b2e); }
 .pdp-actions { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; }
 .stepper.big { font-size: 1.1rem; }
 .stepper.big button { width: 42px; height: 42px; }

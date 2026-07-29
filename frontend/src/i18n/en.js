@@ -81,6 +81,16 @@ export default {
     backToStore: 'Back to store',
     share: 'Share',
     shareText: 'Check out this product from Dukkan Kanaan 🌿',
+    linkCopied: 'Link copied ✓',
+    copyLink: 'Copy link',
+    moreApps: 'More apps…',
+    via: {
+      whatsapp: 'WhatsApp',
+      facebook: 'Facebook',
+      telegram: 'Telegram',
+      x: 'X',
+      email: 'Email',
+    },
   },
   cart: {
     title: 'Shopping cart',

@@ -81,6 +81,16 @@ export default {
     backToStore: 'العودة للمتجر',
     share: 'مشاركة',
     shareText: 'شوف هذا المنتج من دكّان كنعان 🌿',
+    linkCopied: 'تم نسخ الرابط ✓',
+    copyLink: 'نسخ الرابط',
+    moreApps: 'تطبيقات أخرى…',
+    via: {
+      whatsapp: 'واتساب',
+      facebook: 'فيسبوك',
+      telegram: 'تيليجرام',
+      x: 'إكس',
+      email: 'بريد إلكتروني',
+    },
   },
   cart: {
     title: 'سلّة المشتريات',
