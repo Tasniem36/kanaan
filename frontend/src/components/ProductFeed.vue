@@ -9,9 +9,9 @@
         @added="$emit('added', $event)"
       />
     </div>
-    <!-- sentinel: loads the next 10 when it scrolls into view -->
-    <div v-if="hasMore" ref="sentinel" class="load-more"><span class="ld-spin"></span></div>
-    <p v-else-if="!items.length && !loading" class="a-muted" style="text-align:center">{{ emptyText }}</p>
+    <!-- sentinel: loads the next page when it scrolls into view (not in preview mode) -->
+    <div v-if="hasMore && !preview" ref="sentinel" class="load-more"><span class="ld-spin"></span></div>
+    <p v-if="!items.length && !loading" class="a-muted" style="text-align:center">{{ emptyText }}</p>
   </div>
 </template>
 
@@ -26,6 +26,9 @@ const props = defineProps({
   q: { type: String, default: '' },
   pageSize: { type: Number, default: 10 },
   emptyText: { type: String, default: '' },
+  // preview: load a single page and stop (no infinite scroll) — used for the
+  // short home-page teasers that link out to the full category page
+  preview: { type: Boolean, default: false },
 })
 defineEmits(['added'])
 
@@ -66,7 +69,7 @@ function revealCards() {
 // re-observe after each load so a short batch keeps filling the viewport
 function arm() {
   if (io) io.disconnect()
-  if (!sentinel.value) return
+  if (props.preview || !sentinel.value) return
   io = new IntersectionObserver(
     (entries) => { if (entries.some((e) => e.isIntersecting)) loadMore() },
     { rootMargin: '400px 0px' }

@@ -76,11 +76,8 @@
   <section id="pantry">
     <div class="wrap">
       <div class="sec-head reveal"><span class="eyebrow">{{ t('home.pantryEyebrow') }}</span><h2 class="display">{{ t('home.pantryTitle') }}</h2><p>{{ t('home.pantryDesc') }}</p></div>
-      <div v-if="pantryTypes.length" class="type-filter">
-        <button class="type-chip" :class="{ on: !pantryType }" @click="pantryType = ''">{{ t('home.allTypes') }}</button>
-        <button v-for="ty in pantryTypes" :key="ty" class="type-chip" :class="{ on: pantryType === ty }" @click="pantryType = ty">{{ ty }}</button>
-      </div>
-      <ProductFeed ref="pantryFeed" category="pantry" :type="pantryType" @added="onAdded" />
+      <ProductFeed ref="pantryFeed" category="pantry" :page-size="8" preview @added="onAdded" />
+      <div class="sec-more"><RouterLink class="btn btn-green" :to="{ name: 'category', params: { cat: 'pantry' } }">{{ t('home.showAll') }}</RouterLink></div>
     </div>
   </section>
 
@@ -88,11 +85,8 @@
   <section class="pottery" id="pottery">
     <div class="wrap">
       <div class="sec-head reveal"><span class="eyebrow">{{ t('home.potteryEyebrow') }}</span><h2 class="display">{{ t('home.potteryTitle') }}</h2><p>{{ t('home.potteryDesc') }}</p></div>
-      <div v-if="potteryTypes.length" class="type-filter">
-        <button class="type-chip" :class="{ on: !potteryType }" @click="potteryType = ''">{{ t('home.allTypes') }}</button>
-        <button v-for="ty in potteryTypes" :key="ty" class="type-chip" :class="{ on: potteryType === ty }" @click="potteryType = ty">{{ ty }}</button>
-      </div>
-      <ProductFeed ref="potteryFeed" category="pottery" :type="potteryType" @added="onAdded" />
+      <ProductFeed ref="potteryFeed" category="pottery" :page-size="8" preview @added="onAdded" />
+      <div class="sec-more"><RouterLink class="btn btn-green" :to="{ name: 'category', params: { cat: 'pottery' } }">{{ t('home.showAll') }}</RouterLink></div>
     </div>
   </section>
 
@@ -269,7 +263,6 @@ import { useOrdersStore } from '../stores/orders'
 import { useAddressesStore } from '../stores/addresses'
 import { useContentStore } from '../stores/content'
 import { useSettingsStore } from '../stores/settings'
-import { useCatalogStore } from '../stores/catalog'
 import { deliveryFee, EMIRATES } from '../utils/delivery'
 import ProductFeed from '../components/ProductFeed.vue'
 import CartDrawer from '../components/CartDrawer.vue'
@@ -286,7 +279,6 @@ const ordersStore = useOrdersStore()
 const addresses = useAddressesStore()
 const content = useContentStore()
 const settings = useSettingsStore()
-const catalog = useCatalogStore()
 const router = useRouter()
 const route = useRoute()
 const ar = (n) => String(n)
@@ -358,12 +350,6 @@ const email = ref('')
 const modal = ref(null)
 const showTop = ref(false)
 const activeSection = ref('home')
-
-// storefront type filters (data-driven from the products in each category)
-const pantryTypes = ref([])
-const potteryTypes = ref([])
-const pantryType = ref('')
-const potteryType = ref('')
 
 // product search
 const searchQuery = ref('')   // what the customer is typing
@@ -555,9 +541,6 @@ watch(() => content.values, observeReveals)
 
 onMounted(() => {
   content.fetch()
-  // load the filter chips for each section
-  catalog.fetchTypes('pantry').then((t) => (pantryTypes.value = t)).catch(() => {})
-  catalog.fetchTypes('pottery').then((t) => (potteryTypes.value = t)).catch(() => {})
   // keep the sticky search bar sitting right under the nav (height varies by breakpoint)
   const updateNavH = () => {
     const nav = document.querySelector('.portal-bar')
@@ -645,18 +628,7 @@ onMounted(() => {
 .search-clear svg { width: 15px; height: 15px; }
 .search-results { padding-top: 2rem; min-height: 60vh; }
 @media (max-width: 560px) { .search-bar { padding: .5rem 1rem; } }
-.type-filter {
-  display: flex; flex-wrap: wrap; gap: .5rem;
-  margin: 0 0 1.6rem; justify-content: center;
-}
-.type-chip {
-  padding: .45rem 1.1rem; border-radius: 999px;
-  border: 1.5px solid rgba(60,74,39,.22); background: transparent;
-  color: var(--green); font-family: inherit; font-size: .9rem; font-weight: 600;
-  cursor: pointer; transition: background .15s, color .15s, border-color .15s;
-}
-.type-chip:hover { border-color: var(--green); }
-.type-chip.on { background: var(--green); color: #fff; border-color: var(--green); }
+.sec-more { text-align: center; margin-top: 1.6rem; }
 .value { position: relative; }
 .v-edit {
   position: absolute; top: 6px; inset-inline-end: 6px;
