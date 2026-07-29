@@ -175,7 +175,7 @@
     <div class="co">
       <button @click="checkoutOpen = false" aria-label="إغلاق" style="position:absolute;top:.8rem;inset-inline-start:.8rem;width:34px;height:34px;border-radius:10px;background:var(--cream-2);color:var(--green);display:grid;place-items:center"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
       <h3 style="font-family:'Amiri',serif;font-size:1.7rem;color:var(--green);text-align:center;margin-bottom:.2rem">{{ t('checkout.title') }}</h3>
-      <p class="a-muted" style="text-align:center;margin-bottom:.6rem">{{ t('checkout.subtitle', { count: ar(cart.count), total: ar(cart.total) }) }}</p>
+      <p class="a-muted" style="text-align:center;margin-bottom:.6rem">{{ t('checkout.subtitle', { count: ar(cart.count), total: ar(finalTotal) }) }}</p>
 
       <!-- saved addresses for logged-in customers -->
       <div v-if="auth.isAuthenticated && addresses.addresses.length && !newAddress" style="margin-bottom:.8rem">
@@ -225,7 +225,7 @@
 
       <div style="margin-top:.7rem;font-size:.9rem;border-top:1px solid rgba(60,74,39,.12);padding-top:.6rem">
         <div class="a-row"><span class="a-muted">{{ t('checkout.subtotal') }}</span><span>{{ ar(cart.total) }} <span class='dh' role='img' aria-label='درهم'></span></span></div>
-        <div v-if="discount > 0" class="a-row"><span class="a-muted">{{ t('checkout.discountLine') }}</span><span style="color:var(--green)">− {{ ar(discount) }} <span class='dh' role='img' aria-label='درهم'></span></span></div>
+        <div v-if="discount > 0" class="a-row"><span class="a-muted">{{ t('checkout.discountLine') }}</span><span style="color:var(--red)">− {{ ar(discount) }} <span class='dh' role='img' aria-label='درهم'></span></span></div>
         <div class="a-row"><span class="a-muted">{{ t('checkout.deliveryFee') }}</span>
           <span v-if="deliveryFeeAmount > 0">{{ ar(deliveryFeeAmount) }} <span class='dh' role='img' aria-label='درهم'></span></span>
           <span v-else style="color:var(--green)">{{ t('checkout.freeDelivery') }}</span>
