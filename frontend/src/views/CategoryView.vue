@@ -26,7 +26,7 @@
         <button v-for="ty in types" :key="ty" class="type-chip" :class="{ on: type === ty }" @click="type = ty">{{ ty }}</button>
       </div>
 
-      <ProductFeed :key="cat" :category="cat" :type="type" :empty-text="t('search.noResults')" @added="onAdded" />
+      <ProductFeed :key="activeCat" :category="activeCat" :type="type" :empty-text="t('search.noResults')" @added="onAdded" />
     </main>
 
     <CartDrawer :open="openCart" @close="openCart = false" @checkout="goCheckout" />
@@ -63,7 +63,10 @@ const catalog = useCatalogStore()
 const toast = useToastStore()
 
 const cat = computed(() => route.params.cat)
-const meta = computed(() => CATS[cat.value] || CATS.pantry)
+// last *valid* category we showed. Drives the feed + header so they stay stable
+// while the view is kept alive on a product page (where route.params.cat is gone).
+const activeCat = ref(CATS[route.params.cat] ? route.params.cat : 'pantry')
+const meta = computed(() => CATS[activeCat.value] || CATS.pantry)
 const openCart = ref(false)
 const scrolled = ref(false)
 const type = ref('')
@@ -81,10 +84,14 @@ function backToStore() {
 
 function loadTypes() {
   type.value = ''
-  catalog.fetchTypes(cat.value).then((t) => (types.value = t)).catch(() => {})
+  catalog.fetchTypes(activeCat.value).then((t) => (types.value = t)).catch(() => {})
 }
-// unknown category → back to the storefront
-watch(cat, (c) => { if (!CATS[c]) router.replace('/'); else loadTypes() })
+watch(cat, (c) => {
+  if (!c) return                    // navigated away (e.g. to a product) — keep state for back
+  if (!CATS[c]) { router.replace('/'); return } // unknown category → storefront
+  activeCat.value = c               // switched to another real category
+  loadTypes()
+})
 
 function onScroll() { scrolled.value = scrollY > 10 }
 onMounted(() => {

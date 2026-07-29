@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite-ssg build",
+    "build": "vite-ssg build && node scripts/spa-shell.js",
     "build:spa": "vite build",
     "preview": "vite preview"
   },
