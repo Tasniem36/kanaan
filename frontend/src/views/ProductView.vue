@@ -90,6 +90,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { useHead } from '@unhead/vue'
 import { useCatalogStore } from '../stores/catalog'
 import { useCartStore } from '../stores/cart'
 import PortalBar from '../components/PortalBar.vue'
@@ -112,6 +113,20 @@ const images = computed(() => {
   const imgs = product.value?.images
   if (Array.isArray(imgs) && imgs.length) return imgs
   return product.value?.image_url ? [product.value.image_url] : []
+})
+
+// Per-product <head> for SEO. Reactive to the loaded product, so it updates once
+// the detail loads. Runs client-side (product pages aren't prerendered); this gives
+// JS-capable crawlers a unique title/description per product. og:image is skipped on
+// purpose — product images are base64 data-URLs, useless (and huge) in a meta tag.
+const brand = 'دكّان كنعان'
+useHead({
+  title: () => (product.value?.name ? `${product.value.name} — ${brand}` : brand),
+  meta: [
+    { name: 'description', content: () => product.value?.description || '' },
+    { property: 'og:title', content: () => product.value?.name || brand },
+    { property: 'og:description', content: () => product.value?.description || '' },
+  ],
 })
 
 function prev() { idx.value = (idx.value - 1 + images.value.length) % images.value.length }

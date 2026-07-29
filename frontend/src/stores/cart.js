@@ -4,6 +4,7 @@ const KEY = 'cart'
 
 // restore the basket from a previous session; tolerate corrupt/old data
 function loadItems() {
+  if (import.meta.env.SSR) return {} // no localStorage during prerender
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) || 'null')
     return saved && typeof saved === 'object' ? saved : {}

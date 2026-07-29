@@ -3,8 +3,10 @@ import { api } from '../services/api'
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
-    token: localStorage.getItem('token') || null,
-    user: JSON.parse(localStorage.getItem('user') || 'null'), // cached so reloads/API hiccups keep you signed in
+    // No localStorage during prerender — start unauthenticated; the browser hydrates
+    // the real session from localStorage on first client render.
+    token: import.meta.env.SSR ? null : localStorage.getItem('token') || null,
+    user: import.meta.env.SSR ? null : JSON.parse(localStorage.getItem('user') || 'null'), // cached so reloads/API hiccups keep you signed in
     ready: false, // true once the initial fetchMe has resolved
   }),
   getters: {

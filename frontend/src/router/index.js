@@ -1,8 +1,10 @@
-import { createRouter, createWebHistory, START_LOCATION } from 'vue-router'
+import { START_LOCATION } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import HomeView from '../views/HomeView.vue'
 
-const routes = [
+// Plain route table. vite-ssg builds the router from this (createWebHistory in the
+// browser, createMemoryHistory during prerender), so we don't create it ourselves.
+export const routes = [
   { path: '/', name: 'home', component: HomeView },
   { path: '/product/:id', name: 'product', component: () => import('../views/ProductView.vue') },
   { path: '/category/:cat', name: 'category', component: () => import('../views/CategoryView.vue') },
@@ -37,29 +39,30 @@ const routes = [
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
 
-export const router = createRouter({
-  history: createWebHistory(),
-  routes,
-  scrollBehavior(to, from, savedPosition) {
-    // fresh page load / hard refresh → always start at the top
-    if (from === START_LOCATION) return { top: 0 }
-    // returning via back/forward → restore where the customer was
-    if (savedPosition) return savedPosition
-    return { top: 0 }
-  },
-})
+export function scrollBehavior(to, from, savedPosition) {
+  // fresh page load / hard refresh → always start at the top
+  if (from === START_LOCATION) return { top: 0 }
+  // returning via back/forward → restore where the customer was
+  if (savedPosition) return savedPosition
+  return { top: 0 }
+}
 
-router.beforeEach(async (to) => {
-  const auth = useAuthStore()
-  if (!auth.ready) await auth.fetchMe() // resolve session once on first navigation
+// Auth guard. Registered on the CLIENT only — it resolves the session from a JWT in
+// localStorage, which doesn't exist during prerender (and authed pages never render
+// on the server anyway).
+export function registerGuards(router) {
+  router.beforeEach(async (to) => {
+    const auth = useAuthStore()
+    if (!auth.ready) await auth.fetchMe() // resolve session once on first navigation
 
-  if (to.meta.requiresAuth && !auth.isAuthenticated) {
-    return { name: 'login', query: { redirect: to.fullPath } }
-  }
-  if (to.meta.requiresManager && !auth.isManager) {
-    return auth.isAuthenticated ? { name: 'home' } : { name: 'login', query: { redirect: to.fullPath } }
-  }
-  if (to.meta.guestOnly && auth.isAuthenticated) {
-    return { name: 'home' }
-  }
-})
+    if (to.meta.requiresAuth && !auth.isAuthenticated) {
+      return { name: 'login', query: { redirect: to.fullPath } }
+    }
+    if (to.meta.requiresManager && !auth.isManager) {
+      return auth.isAuthenticated ? { name: 'home' } : { name: 'login', query: { redirect: to.fullPath } }
+    }
+    if (to.meta.guestOnly && auth.isAuthenticated) {
+      return { name: 'home' }
+    }
+  })
+}
