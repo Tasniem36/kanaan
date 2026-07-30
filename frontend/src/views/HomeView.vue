@@ -69,7 +69,12 @@
 
   <!-- values -->
   <div class="values"><div class="wrap row">
-    <button class="value reveal" v-for="v in values" :key="v.id || v.t" @click="onValueClick(v)"><span class="ic" v-html="v.icon"></span><div><b>{{ v.t }}</b><span>{{ v.d }}</span></div><span v-if="auth.isManager && v.id" class="v-edit" :title="t('manager.vcEditHint')" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span></button>
+    <template v-if="content.loaded">
+      <button class="value reveal" v-for="v in values" :key="v.id || v.t" @click="onValueClick(v)"><span class="ic" v-html="v.icon"></span><div><b>{{ v.t }}</b><span>{{ v.d }}</span></div><span v-if="auth.isManager && v.id" class="v-edit" :title="t('manager.vcEditHint')" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span></button>
+    </template>
+    <!-- one loader for the whole section while /api/content/values loads; the real
+         cards render once it responds -->
+    <Loader v-if="!content.loaded" class="values-loading" />
   </div></div>
 
   <!-- pantry -->
@@ -268,6 +273,7 @@ import ProductFeed from '../components/ProductFeed.vue'
 import CartDrawer from '../components/CartDrawer.vue'
 import PortalBar from '../components/PortalBar.vue'
 import ImagePicker from '../components/ImagePicker.vue'
+import Loader from '../components/Loader.vue'
 import { normalizeUaePhone } from '../utils/phone'
 
 const { t, locale } = useI18n()
@@ -292,6 +298,9 @@ const fallbackValues = computed(() => [
 ])
 // admin-editable cards from the backend, mapped to the active language (falls back to Arabic, then to the bundled defaults)
 const values = computed(() => {
+  // wait for the API before showing anything — avoids flashing the bundled defaults
+  // and then swapping to the admin-edited cards (a skeleton shows meanwhile)
+  if (!content.loaded) return []
   if (!content.values.length) return fallbackValues.value
   return content.values.map((row, i) => {
     const fb = fallbackValues.value[i] || {}
@@ -635,6 +644,8 @@ onMounted(() => {
 @media (max-width: 560px) { .search-bar { padding: .5rem 1rem; } }
 .sec-more { text-align: center; margin-top: 1.6rem; }
 .value { position: relative; }
+/* the values loader spans the whole row (grid is repeat(4,1fr)) and centers */
+.values-loading { grid-column: 1 / -1; }
 .v-edit {
   position: absolute; top: 6px; inset-inline-end: 6px;
   width: 22px; height: 22px; display: grid; place-items: center;

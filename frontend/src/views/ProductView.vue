@@ -39,7 +39,7 @@
         <div class="pdp-grid">
           <!-- gallery -->
           <div class="pdp-gallery">
-            <div class="pdp-main">
+            <div class="pdp-main" @touchstart.passive="onTouchStart" @touchend.passive="onTouchEnd">
               <img v-if="images.length" :src="images[idx]" :alt="product.name">
               <span v-else class="thumb-empty">{{ t('image.noImage') }}</span>
               <template v-if="images.length > 1">
@@ -179,6 +179,17 @@ useHead({
 
 function prev() { idx.value = (idx.value - 1 + images.value.length) % images.value.length }
 function next() { idx.value = (idx.value + 1) % images.value.length }
+
+// swipe the gallery on touch devices (only when there's more than one image)
+let touchX = null
+function onTouchStart(e) { touchX = e.changedTouches[0].clientX }
+function onTouchEnd(e) {
+  if (touchX === null || images.value.length < 2) return
+  const dx = e.changedTouches[0].clientX - touchX
+  touchX = null
+  if (Math.abs(dx) < 40) return   // ignore taps / tiny drags
+  dx < 0 ? next() : prev()        // swipe left → next, right → previous
+}
 
 // --- share menu -----------------------------------------------------------
 // A custom menu (not just the native sheet) so the options show on every
