@@ -10,7 +10,7 @@ from security import hash_password, verify_password, sign_token, current_user
 from validate import is_email, is_strong_password, normalize_uae_phone
 from audit import log_action
 from ratelimit import rate_limit
-from messaging import send_email, send_phone_code, email_configured, phone_configured
+from messaging import send_email, send_sms, email_configured, sms_configured
 
 router = APIRouter()
 
@@ -28,7 +28,7 @@ def _required_channels():
     is configured — so a missing/broken provider degrades gracefully instead of
     locking everyone out. Locally (non-prod) with nothing configured we still
     require both, so the flow stays testable via the dev-echoed codes."""
-    e, s = email_configured(), phone_configured()
+    e, s = email_configured(), sms_configured()
     if not _IS_PROD and not e and not s:
         return True, True
     return e, s
@@ -51,12 +51,12 @@ def _send_codes(email, phone, email_code, phone_code):
     body = (f"مرحباً،\n\nرمز التحقق الخاص بك في دكّان كنعان هو: {email_code}\n"
             f"الرمز صالحٌ لمدة {VERIFY_TTL_MIN} دقائق.\n\nإن لم تطلب هذا الرمز فتجاهل هذه الرسالة.")
     email_sent = send_email(email, subject, body)
-    phone_sent = send_phone_code(phone, phone_code)
+    sms_sent = send_sms(phone, f"دكّان كنعان: رمز التحقق {phone_code} (صالح {VERIFY_TTL_MIN} دقائق)")
     if not email_sent:
         print(f"[verify] EMAIL code for {email}: {email_code}")
-    if not phone_sent:
-        print(f"[verify] PHONE code for {phone}: {phone_code}")
-    return email_sent, phone_sent
+    if not sms_sent:
+        print(f"[verify] SMS code for {phone}: {phone_code}")
+    return email_sent, sms_sent
 
 
 def public_user(u):
@@ -113,9 +113,9 @@ def register_start(request: Request, payload: dict = Body(default={})):
             print(f"[verify] EMAIL code for {email}: {ec}")
         dev["email"] = ec
     if phone_req:
-        resp["phone_sent"] = send_phone_code(phone_norm, pc)
+        resp["phone_sent"] = send_sms(phone_norm, f"دكّان كنعان: رمز التحقق {pc} (صالح {VERIFY_TTL_MIN} دقائق)")
         if not resp["phone_sent"]:
-            print(f"[verify] PHONE code for {phone_norm}: {pc}")
+            print(f"[verify] SMS code for {phone_norm}: {pc}")
         dev["phone"] = pc
     if not _IS_PROD:  # let local testing proceed without real providers
         resp["dev_codes"] = dev

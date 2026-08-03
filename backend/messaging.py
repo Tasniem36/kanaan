@@ -23,62 +23,6 @@ def sms_configured() -> bool:
     return bool(os.getenv("TWILIO_ACCOUNT_SID") and os.getenv("TWILIO_AUTH_TOKEN") and os.getenv("TWILIO_FROM"))
 
 
-def whatsapp_configured() -> bool:
-    return bool(os.getenv("WHATSAPP_CLOUD_TOKEN") and os.getenv("WHATSAPP_PHONE_ID") and os.getenv("WHATSAPP_OTP_TEMPLATE"))
-
-
-def phone_configured() -> bool:
-    """A phone code can be delivered if either WhatsApp or SMS is set up."""
-    return whatsapp_configured() or sms_configured()
-
-
-def send_whatsapp_code(to: str, code: str) -> bool:
-    """Send the verification code via the official WhatsApp Cloud API using an
-    approved authentication template (better for UAE than SMS). The template must
-    take the code as its body parameter (and, for Meta auth templates, the same
-    code as the copy-code button parameter)."""
-    token = os.getenv("WHATSAPP_CLOUD_TOKEN")
-    phone_id = os.getenv("WHATSAPP_PHONE_ID")
-    template = os.getenv("WHATSAPP_OTP_TEMPLATE")
-    lang = os.getenv("WHATSAPP_OTP_LANG", "en_US")
-    if not (token and phone_id and template):
-        return False
-    try:
-        res = requests.post(
-            f"https://graph.facebook.com/v21.0/{phone_id}/messages",
-            headers={"Authorization": f"Bearer {token}"},
-            json={
-                "messaging_product": "whatsapp",
-                "to": to.lstrip("+"),   # Cloud API wants the number without '+'
-                "type": "template",
-                "template": {
-                    "name": template,
-                    "language": {"code": lang},
-                    "components": [
-                        {"type": "body", "parameters": [{"type": "text", "text": code}]},
-                        {"type": "button", "sub_type": "url", "index": "0",
-                         "parameters": [{"type": "text", "text": code}]},
-                    ],
-                },
-            },
-            timeout=15,
-        )
-        if not res.ok:
-            print("[whatsapp] send failed:", res.status_code, res.text[:300])
-            return False
-        return True
-    except Exception as e:  # noqa: BLE001
-        print("[whatsapp] error:", e)
-        return False
-
-
-def send_phone_code(to: str, code: str) -> bool:
-    """Deliver the phone verification code — WhatsApp first (if configured), else SMS."""
-    if whatsapp_configured() and send_whatsapp_code(to, code):
-        return True
-    return send_sms(to, f"دكّان كنعان: رمز التحقق {code}")
-
-
 def send_email(to: str, subject: str, body: str) -> bool:
     host = os.getenv("SMTP_HOST", "smtp.gmail.com")
     user = os.getenv("SMTP_USER")
