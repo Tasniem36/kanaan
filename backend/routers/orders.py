@@ -8,10 +8,29 @@ from validate import normalize_uae_phone
 from audit import log_action
 from ziina import create_payment_intent, get_payment_intent
 from notify import notify_new_order, send_test_notification
+from notifications import notify_managers, notify_users
 from delivery import compute_fee as compute_delivery_fee
 from routers.discounts import evaluate_code
 
 router = APIRouter()
+
+# customer-facing Arabic labels for order status changes
+STATUS_LABELS = {
+    "pending": "قيد المعالجة",
+    "paid": "تمّ الدفع",
+    "fulfilled": "تمّ الشحن 🚚",
+    "cancelled": "أُلغي الطلب",
+}
+
+
+def _notify_new_order_admins(order):
+    oid = str(order["id"])
+    notify_managers(
+        type="new_order",
+        title="طلبٌ جديد 🛒",
+        body=f"#{oid[:8]} · {order.get('customer_name', '')} · {order.get('total', '')}",
+        order_id=oid,
+    )
 
 
 def cancel_and_restore(order_id):
@@ -110,6 +129,7 @@ def create_order(request: Request, user=Depends(current_user), payload: dict = B
             raise
 
     notify_new_order(order)  # COD: alert the manager now (Ziina alerts once paid)
+    _notify_new_order_admins(order)  # in-app bell for managers
     return {"order": order}
 
 
@@ -157,6 +177,7 @@ def confirm_payment(oid: str, request: Request, user=Depends(current_user)):
         upd = fetch_one("update orders set payment_status = 'paid', status = 'paid' where id = %s returning *", [oid])
         its = fetch_all("select name, price, qty from order_items where order_id = %s", [oid])
         notify_new_order({**upd, "items": its})
+        _notify_new_order_admins(upd)  # in-app bell for managers (Ziina paid = real order)
         log_action(user_id=order["user_id"], action="payment_confirmed",
                    detail={"order_id": oid, "total": order["total"]}, request=request)
         return {"paid": True, "status": "paid"}
@@ -193,4 +214,9 @@ def set_status(oid: str, _m=Depends(require_manager), payload: dict = Body(defau
     row = fetch_one("update orders set status = %s where id = %s returning *", [status, oid])
     if not row:
         raise HTTPException(404, "Order not found")
+    # notify the customer their order status changed
+    if row.get("user_id"):
+        notify_users([row["user_id"]], type="order_status",
+                     title="تحديث حالة طلبك",
+                     body=f"طلب #{oid[:8]}: {STATUS_LABELS.get(status, status)}", order_id=oid)
     return {"order": row}

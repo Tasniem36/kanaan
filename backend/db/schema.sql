@@ -110,6 +110,33 @@ create index if not exists audit_logs_user_idx on audit_logs (user_id);
 -- the storefront page the action came from (derived from the request Referer)
 alter table audit_logs add column if not exists page text;
 
+-- ---------- notifications (per-user in-app feed / bell) ---------------------
+create table if not exists notifications (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references users (id) on delete cascade,
+  type       text not null,                 -- 'new_order' | 'order_status' | 'message' | 'reply'
+  title      text not null,
+  body       text,
+  order_id   uuid references orders (id) on delete set null,
+  read       boolean not null default false,
+  created_at timestamptz not null default now()
+);
+create index if not exists notifications_user_idx on notifications (user_id, created_at desc);
+
+-- ---------- messages (two-way customer <-> shop support threads) ------------
+-- A thread is all messages sharing user_id (the customer). sender says who wrote it.
+create table if not exists messages (
+  id               uuid primary key default gen_random_uuid(),
+  user_id          uuid not null references users (id) on delete cascade,
+  order_id         uuid references orders (id) on delete set null,   -- optional order context
+  sender           text not null,           -- 'customer' | 'manager'
+  body             text not null,
+  read_by_customer boolean not null default false,
+  read_by_manager  boolean not null default false,
+  created_at       timestamptz not null default now()
+);
+create index if not exists messages_user_idx on messages (user_id, created_at);
+
 -- ---------- discount_codes -------------------------------------------------
 create table if not exists discount_codes (
   id               uuid primary key default gen_random_uuid(),
