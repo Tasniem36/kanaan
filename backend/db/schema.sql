@@ -110,6 +110,23 @@ create index if not exists audit_logs_user_idx on audit_logs (user_id);
 -- the storefront page the action came from (derived from the request Referer)
 alter table audit_logs add column if not exists page text;
 
+-- ---------- signup_verifications (pending signups awaiting email+phone codes)
+create table if not exists signup_verifications (
+  id            uuid primary key default gen_random_uuid(),
+  email         text not null,
+  phone         text not null,
+  full_name     text,
+  password_hash text not null,
+  email_code    text not null,
+  phone_code    text not null,
+  email_ok      boolean not null default false,
+  phone_ok      boolean not null default false,
+  attempts      integer not null default 0,
+  expires_at    timestamptz not null,
+  created_at    timestamptz not null default now()
+);
+create index if not exists signup_verifications_email_idx on signup_verifications (lower(email));
+
 -- ---------- notifications (per-user in-app feed / bell) ---------------------
 create table if not exists notifications (
   id         uuid primary key default gen_random_uuid(),

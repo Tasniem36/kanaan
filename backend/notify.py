@@ -6,6 +6,12 @@ import os
 
 import requests
 
+try:
+    from zoneinfo import ZoneInfo
+    _DUBAI_TZ = ZoneInfo("Asia/Dubai")   # order times shown in the shop's local time
+except Exception:
+    _DUBAI_TZ = None
+
 
 def _send_telegram(text: str) -> dict:
     token = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -58,14 +64,36 @@ def _send(text: str) -> dict:
     }
 
 
+def _payment_line(order: dict) -> str:
+    method = "بطاقة (Ziina)" if order.get("payment_method") == "ziina" else "عند الاستلام (COD)"
+    paid = order.get("payment_status") == "paid"
+    return f"💳 الدفع: {method} — {'مدفوع ✅' if paid else 'غير مدفوع ⏳'}"
+
+
+def _order_time(order: dict) -> str:
+    t = order.get("created_at")
+    if not t:
+        return ""
+    try:
+        if isinstance(t, str):
+            return t
+        dt = t.astimezone(_DUBAI_TZ) if _DUBAI_TZ else t
+        return dt.strftime("%Y-%m-%d %H:%M")
+    except Exception:
+        return str(t)
+
+
 def notify_new_order(order: dict) -> dict:
     items = "، ".join(f"{i['name']} ×{i['qty']}" for i in order.get("items", []))
+    when = _order_time(order)
     text = (
         f"🛒 طلبٌ جديد #{str(order['id'])[:8]}\n"
         f"{order['customer_name']} · {order['phone']}\n"
         f"{order['city']}، {order['street']}، {order['house']}\n"
         f"{items}\n"
-        f"المجموع: {order['total']}"
+        f"المجموع: {order['total']}\n"
+        f"{_payment_line(order)}"
+        + (f"\n🕒 {when}" if when else "")
     )
     return _send(text)
 

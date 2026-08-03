@@ -20,9 +20,24 @@ export const useAuthStore = defineStore('auth', {
       localStorage.setItem('token', token)
       localStorage.setItem('user', JSON.stringify(user))
     },
-    async register(payload) {
-      const { token, user } = await api('/auth/register', { method: 'POST', body: payload, auth: false })
-      this.setSession(token, user)
+    // step 1 — validate details + send codes for whichever channels are configured.
+    // If no channel needs verifying, the account is created straight away.
+    async registerStart(payload) {
+      const res = await api('/auth/register', { method: 'POST', body: payload, auth: false })
+      if (res.verified) this.setSession(res.token, res.user)
+      return res
+    },
+    // step 2 — verify both codes; logs in only when { verified: true }
+    async registerVerify(verificationId, emailCode, phoneCode) {
+      const res = await api('/auth/register/verify', {
+        method: 'POST', auth: false,
+        body: { verification_id: verificationId, email_code: emailCode, phone_code: phoneCode },
+      })
+      if (res.verified) this.setSession(res.token, res.user)
+      return res
+    },
+    async registerResend(verificationId) {
+      return api('/auth/register/resend', { method: 'POST', body: { verification_id: verificationId }, auth: false })
     },
     async login(email, password) {
       const { token, user } = await api('/auth/login', { method: 'POST', body: { email, password }, auth: false })

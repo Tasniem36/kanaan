@@ -35,6 +35,16 @@ services:
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
       WHATSAPP_PHONE: ${WHATSAPP_PHONE:-}
       WHATSAPP_APIKEY: ${WHATSAPP_APIKEY:-}
+      # Signup verification — email code (SMTP / Gmail app password)
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      # Signup verification — phone code (Twilio SMS)
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_FROM: ${TWILIO_FROM:-}
       # Ziina online payments (optional)
       ZIINA_API_KEY: ${ZIINA_API_KEY:-}
       ZIINA_TEST: ${ZIINA_TEST:-false}
