@@ -114,8 +114,8 @@ export default {
     remove: 'Remove',
     total: 'Total',
     checkout: 'Checkout',
-    freeNoteAdd: 'Add {amount} more to get free shipping',
-    freeNoteQualified: 'Great! Your order qualifies for free shipping 🎉',
+    freeNoteAdd: 'Add {amount} AED more for free delivery 🚚',
+    freeNoteQualified: '🎉 You’ve unlocked free delivery!',
     added: '“{name}” added to cart',
   },
   checkout: {

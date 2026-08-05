@@ -114,8 +114,8 @@ export default {
     remove: 'إزالة',
     total: 'المجموع',
     checkout: 'إتمام الطلب',
-    freeNoteAdd: 'أضِف ما قيمته {amount} للحصول على شحنٍ مجّاني',
-    freeNoteQualified: 'رائع! طلبك مؤهَّلٌ للشحن المجّاني 🎉',
+    freeNoteAdd: 'أضِف {amount} درهم للحصول على توصيلٍ مجّاني 🚚',
+    freeNoteQualified: '🎉 رائع! حصلت على توصيلٍ مجّاني',
     added: 'أُضيفت «{name}» إلى السلّة',
   },
   checkout: {
