@@ -18,7 +18,9 @@ router = APIRouter()
 STATUS_LABELS = {
     "pending": "قيد المعالجة",
     "paid": "تمّ الدفع",
+    "preparing": "قيد التجهيز 🧑‍🍳",
     "fulfilled": "تمّ الشحن 🚚",
+    "delivered": "تمّ التوصيل ✅",
     "cancelled": "أُلغي الطلب",
 }
 
@@ -142,9 +144,9 @@ def notify_test(_m=Depends(require_manager)):
 def list_orders(user=Depends(current_user)):
     is_manager = user["role"] == "manager"
     if is_manager:
-        orders = fetch_all("select * from orders order by created_at desc")
+        orders = fetch_all("select * from orders where not hidden order by created_at desc")
     else:
-        orders = fetch_all("select * from orders where user_id = %s order by created_at desc", [user["id"]])
+        orders = fetch_all("select * from orders where user_id = %s and not hidden order by created_at desc", [user["id"]])
     if orders:
         ids = [o["id"] for o in orders]
         items = fetch_all("select order_id, name, price, qty from order_items where order_id = any(%s::uuid[])", [ids])
@@ -209,7 +211,7 @@ def cancel_payment(oid: str, user=Depends(current_user)):
 @router.patch("/{oid}/status")
 def set_status(oid: str, _m=Depends(require_manager), payload: dict = Body(default={})):
     status = payload.get("status")
-    if status not in ("pending", "paid", "fulfilled", "cancelled"):
+    if status not in ("pending", "paid", "preparing", "fulfilled", "delivered", "cancelled"):
         raise HTTPException(400, "Invalid status")
     row = fetch_one("update orders set status = %s where id = %s returning *", [status, oid])
     if not row:
@@ -220,3 +222,13 @@ def set_status(oid: str, _m=Depends(require_manager), payload: dict = Body(defau
                      title="تحديث حالة طلبك",
                      body=f"طلب #{oid[:8]}: {STATUS_LABELS.get(status, status)}", order_id=oid)
     return {"order": row}
+
+
+@router.delete("/{oid}")
+def hide_order(oid: str, _m=Depends(require_manager)):
+    """Soft-delete: hide the order from every list without erasing it (kept for
+    records/accounting). It simply stops showing."""
+    row = fetch_one("update orders set hidden = true where id = %s returning id", [oid])
+    if not row:
+        raise HTTPException(404, "Order not found")
+    return {"hidden": True}

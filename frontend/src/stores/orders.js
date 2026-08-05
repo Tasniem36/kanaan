@@ -36,5 +36,10 @@ export const useOrdersStore = defineStore('orders', {
       if (i !== -1) this.orders[i] = { ...this.orders[i], status: order.status }
       return order
     },
+    // soft-delete on the server (kept in the DB, just hidden); drop it from the list
+    async hide(id) {
+      await api(`/orders/${id}`, { method: 'DELETE' })
+      this.orders = this.orders.filter((o) => o.id !== id)
+    },
   },
 })

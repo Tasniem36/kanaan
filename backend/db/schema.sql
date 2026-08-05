@@ -18,6 +18,10 @@ do $$ begin
   create type product_category as enum ('pantry', 'pottery');
 exception when duplicate_object then null; end $$;
 
+-- extra order statuses added after launch (being prepared / delivered)
+alter type order_status add value if not exists 'preparing';
+alter type order_status add value if not exists 'delivered';
+
 -- ---------- users -----------------------------------------------------------
 create table if not exists users (
   id            uuid primary key default gen_random_uuid(),
@@ -93,6 +97,8 @@ create index if not exists orders_created_at_idx on orders (created_at desc);
 alter table orders add column if not exists payment_method text not null default 'cod';
 alter table orders add column if not exists payment_status text not null default 'unpaid';
 alter table orders add column if not exists ziina_payment_id text;
+-- soft delete: manager can hide an order without erasing it from the database
+alter table orders add column if not exists hidden boolean not null default false;
 alter table orders add column if not exists discount_code text;
 alter table orders add column if not exists discount_amount numeric(10, 2) not null default 0;
 

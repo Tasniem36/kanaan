@@ -41,7 +41,7 @@ const ordersStore = useOrdersStore()
 const { visible: visibleOrders, sentinel, hasMore } = useInfiniteScroll(() => ordersStore.orders, 10)
 
 const statusLabel = (s) => t(`status.${s}`)
-const statusClass = (s) => ({ pending: 'pill-warn', paid: 'pill-ok', fulfilled: 'pill-ok', cancelled: 'pill-low' }[s] || '')
+const statusClass = (s) => ({ pending: 'pill-warn', paid: 'pill-ok', preparing: 'pill-warn', fulfilled: 'pill-ok', delivered: 'pill-ok', cancelled: 'pill-low' }[s] || '')
 const fmtDate = (d) => new Date(d).toLocaleDateString(locale.value, { year: 'numeric', month: 'long', day: 'numeric' })
 
 onMounted(() => ordersStore.fetch())

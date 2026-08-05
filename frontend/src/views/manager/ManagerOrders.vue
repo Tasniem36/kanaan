@@ -40,9 +40,12 @@
           </div>
           <div class="a-row order-ctrls" style="gap:.6rem">
             <span class="a-total">{{ o.total }} <span class='dh' role='img' aria-label='درهم'></span></span>
-            <select class="a-status" :value="o.status" @change="changeStatus(o, $event.target.value)">
-              <option value="pending">{{ t('status.pending') }}</option><option value="paid">{{ t('status.paid') }}</option><option value="fulfilled">{{ t('status.fulfilled') }}</option><option value="cancelled">{{ t('status.cancelled') }}</option>
+            <select class="a-status" :value="o.status" @change="changeStatus(o, $event)">
+              <option value="pending">{{ t('status.pending') }}</option><option value="paid">{{ t('status.paid') }}</option><option value="preparing">{{ t('status.preparing') }}</option><option value="fulfilled">{{ t('status.fulfilled') }}</option><option value="delivered">{{ t('status.delivered') }}</option><option value="cancelled">{{ t('status.cancelled') }}</option>
             </select>
+            <button class="o-del" @click="deleteOrder(o)" :title="t('manager.delOrderTitle')" :aria-label="t('manager.delOrderTitle')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+            </button>
           </div>
         </div>
         <div style="margin-top:.5rem;border-top:1px solid rgba(60,74,39,.1);padding-top:.4rem">
@@ -62,6 +65,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useOrdersStore } from '../../stores/orders'
 import { useToastStore } from '../../stores/toast'
+import { useConfirmStore } from '../../stores/confirm'
 import Loader from '../../components/Loader.vue'
 import { api } from '../../services/api'
 import { useInfiniteScroll } from '../../composables/useInfiniteScroll'
@@ -69,6 +73,7 @@ import { useInfiniteScroll } from '../../composables/useInfiniteScroll'
 const { t, locale } = useI18n()
 const ordersStore = useOrdersStore()
 const toast = useToastStore()
+const confirm = useConfirmStore()
 const testing = ref(false)
 
 function payLabel(o) {
@@ -94,10 +99,12 @@ async function testNotify() {
   }
 }
 
-// status tabs: new (needs shipping), shipped, cancelled
+// status tabs following the order lifecycle: new → preparing → shipped → delivered → cancelled
 const STATUS_TABS = [
   { key: 'new', label: 'manager.tabNew', statuses: ['pending', 'paid'] },
+  { key: 'preparing', label: 'manager.tabPreparing', statuses: ['preparing'] },
   { key: 'shipped', label: 'manager.tabShipped', statuses: ['fulfilled'] },
+  { key: 'delivered', label: 'manager.tabDelivered', statuses: ['delivered'] },
   { key: 'cancelled', label: 'manager.tabCancelled', statuses: ['cancelled'] },
 ]
 const activeTab = ref('new')
@@ -108,7 +115,7 @@ const tabStatuses = computed(() => STATUS_TABS.find((tb) => tb.key === activeTab
 
 // per-tab counts, respecting the active payment filter
 const counts = computed(() => {
-  const c = { new: 0, shipped: 0, cancelled: 0 }
+  const c = { new: 0, preparing: 0, shipped: 0, delivered: 0, cancelled: 0 }
   for (const o of ordersStore.orders) {
     if (!matchesPay(o)) continue
     const tab = STATUS_TABS.find((tb) => tb.statuses.includes(o.status))
@@ -135,10 +142,31 @@ const { visible: visibleGroups, sentinel, hasMore, reset } = useInfiniteScroll((
 // restart paging from the top whenever the tab or payment filter changes
 watch([activeTab, payFilter], reset)
 
-const fmtDate = (d) => new Date(d).toLocaleDateString(locale.value, { year: 'numeric', month: 'long', day: 'numeric' })
+// date + time of the order, in the manager's local timezone
+const fmtDate = (d) => new Date(d).toLocaleString(locale.value, { dateStyle: 'medium', timeStyle: 'short' })
 
-async function changeStatus(o, status) {
+async function changeStatus(o, e) {
+  const status = e.target.value
+  if (status === o.status) return
+  const ok = await confirm.ask({
+    title: t('manager.statusConfirmTitle'),
+    message: t('manager.statusConfirmMsg', { id: o.id.slice(0, 8), status: t(`status.${status}`) }),
+    confirmText: t('manager.statusConfirmYes'),
+  })
+  if (!ok) { e.target.value = o.status; return }   // reverted → put the dropdown back
   try { await ordersStore.setStatus(o.id, status); toast.show(t('manager.toastStatus')) }
+  catch (err) { toast.show(err.message); e.target.value = o.status }
+}
+
+async function deleteOrder(o) {
+  const ok = await confirm.ask({
+    title: t('manager.delOrderTitle'),
+    message: t('manager.delOrderMsg', { id: o.id.slice(0, 8) }),
+    confirmText: t('manager.delOrderYes'),
+    danger: true,
+  })
+  if (!ok) return
+  try { await ordersStore.hide(o.id); toast.show(t('manager.orderDeleted')) }
   catch (e) { toast.show(e.message) }
 }
 
@@ -175,6 +203,14 @@ h1 { font-family: 'Amiri', serif; color: var(--green); font-size: 1.9rem; }
 .cust-head { display: flex; justify-content: space-between; align-items: center; gap: .6rem; flex-wrap: wrap; padding: .5rem .2rem; margin-bottom: .5rem; border-bottom: 2px solid rgba(60,74,39,.15); }
 .cust-head b { color: var(--green); font-size: 1.05rem; }
 .a-status { max-width: 100%; }
+.o-del {
+  flex: 0 0 auto; width: 34px; height: 34px; border-radius: 9px;
+  display: grid; place-items: center; cursor: pointer;
+  background: transparent; border: 1.5px solid rgba(178,59,59,.35); color: var(--red, #b23b3b);
+  transition: background .15s, color .15s;
+}
+.o-del:hover { background: var(--red, #b23b3b); color: #fff; }
+.o-del svg { width: 17px; height: 17px; }
 /* on phones, stack the card: info on top, then total + status on their own row */
 @media (max-width: 560px) {
   .order-top { flex-direction: column; align-items: stretch; gap: .6rem; }
