@@ -50,10 +50,15 @@ export const useInboxStore = defineStore('inbox', {
     startPolling() {
       this.stopPolling()
       this.fetchNotifications()
-      this._timer = setInterval(() => this.fetchNotifications(), 45000)
+      // poll fairly often so new notifications appear without a page refresh;
+      // also refetch the moment the tab regains focus
+      this._timer = setInterval(() => this.fetchNotifications(), 20000)
+      this._onFocus = () => { if (!document.hidden) this.fetchNotifications() }
+      document.addEventListener('visibilitychange', this._onFocus)
     },
     stopPolling() {
       if (this._timer) { clearInterval(this._timer); this._timer = null }
+      if (this._onFocus) { document.removeEventListener('visibilitychange', this._onFocus); this._onFocus = null }
     },
   },
 })

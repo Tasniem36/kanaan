@@ -15,11 +15,11 @@
         <!-- NOTIFICATIONS -->
         <div v-if="tab === 'notif'" class="bell-body">
           <p v-if="!inbox.notifications.length" class="bell-empty">{{ t('inbox.noNotifs') }}</p>
-          <div v-for="n in inbox.notifications" :key="n.id" class="notif" :class="{ unread: !n.read }">
+          <button v-for="n in inbox.notifications" :key="n.id" type="button" class="notif" :class="{ unread: !n.read }" @click="onNotifClick(n)">
             <b>{{ n.title }}</b>
             <span v-if="n.body" class="notif-body">{{ n.body }}</span>
             <time>{{ fmt(n.created_at) }}</time>
-          </div>
+          </button>
         </div>
 
         <!-- MESSAGES: customer thread -->
@@ -69,14 +69,23 @@
 
 <script setup>
 import { ref, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useInboxStore } from '../stores/inbox'
 import { useAuthStore } from '../stores/auth'
 
 const { t, locale } = useI18n()
+const router = useRouter()
 const inbox = useInboxStore()
 const auth = useAuthStore()
 const isManager = auth.isManager
+
+// order notifications open the orders page; message/reply ones open the chat tab
+function onNotifClick(n) {
+  if (n.type === 'reply' || n.type === 'message') { goMessages(); return }
+  open.value = false
+  router.push(isManager ? '/manager/orders' : '/account/orders')
+}
 
 const open = ref(false)
 const tab = ref('notif')
@@ -179,7 +188,12 @@ onBeforeUnmount(() => inbox.stopPolling())
 .bell-body { overflow-y: auto; padding: .5rem; }
 .bell-empty { color: var(--muted); text-align: center; padding: 1.6rem 1rem; font-size: .9rem; line-height: 1.6; }
 
-.notif { display: grid; gap: .15rem; padding: .6rem .7rem; border-radius: 10px; }
+.notif {
+  display: grid; gap: .15rem; padding: .6rem .7rem; border-radius: 10px;
+  width: 100%; text-align: start; background: transparent; border: none;
+  font: inherit; color: inherit; cursor: pointer;
+}
+.notif:hover { background: var(--cream-2, rgba(60,74,39,.1)); }
 .notif + .notif { border-top: 1px solid rgba(60,74,39,.08); border-radius: 0; }
 .notif.unread { background: var(--cream-2, rgba(60,74,39,.07)); border-radius: 10px; }
 .notif b { font-size: .9rem; color: var(--green); }
