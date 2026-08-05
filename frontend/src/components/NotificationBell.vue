@@ -68,7 +68,7 @@
 </template>
 
 <script setup>
-import { ref, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useInboxStore } from '../stores/inbox'
@@ -144,6 +144,9 @@ async function sendReply() {
   } catch { /* ignore */ }
   finally { sending.value = false }
 }
+
+// "Contact us" (or anywhere) can open the bell straight to the chat tab
+watch(() => inbox.openChatSignal, () => { open.value = true; goMessages() })
 
 onMounted(() => inbox.startPolling())
 onBeforeUnmount(() => inbox.stopPolling())

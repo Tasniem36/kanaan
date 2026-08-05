@@ -10,9 +10,12 @@ export const useInboxStore = defineStore('inbox', {
     unread: 0,
     messages: [],   // the signed-in customer's own thread
     threads: [],    // manager: list of customer threads
+    openChatSignal: 0,  // bumped to ask the bell to open straight to the chat tab
     _timer: null,
   }),
   actions: {
+    // ask the NotificationBell to open on the messages/chat tab (e.g. from "Contact us")
+    requestChat() { this.openChatSignal++ },
     async fetchNotifications() {
       try {
         const { notifications, unread } = await api('/notifications')

@@ -113,7 +113,7 @@
     <div class="wrap fcols">
       <div class="about"><div class="name display"><span class="g">دكّان</span> كنعان</div><p>{{ t('footer.about') }}</p></div>
       <div><h5>{{ t('footer.shop') }}</h5><a href="#pantry">{{ t('nav.pantry') }}</a><a href="#pottery">{{ t('nav.pottery') }}</a></div>
-      <div><h5>{{ t('footer.links') }}</h5><a href="#story">{{ t('nav.story') }}</a><a href="#contact">{{ t('footer.contactUs') }}</a><RouterLink to="/account">{{ t('nav.account') }}</RouterLink><a href="#">{{ t('footer.faq') }}</a></div>
+      <div><h5>{{ t('footer.links') }}</h5><a href="#story">{{ t('nav.story') }}</a><a href="#" @click.prevent="contactUs">{{ t('footer.contactUs') }}</a><RouterLink to="/account">{{ t('nav.account') }}</RouterLink></div>
       <div><h5>{{ t('footer.contact') }}</h5>
         <a href="https://wa.me/971522981187" target="_blank" rel="noopener">{{ t('footer.whatsapp') }}: <span dir="ltr">+971 52 298 1187</span></a>
         <a href="mailto:mmn00@hotmail.com">mmn00@hotmail.com</a>
@@ -268,6 +268,7 @@ import { useOrdersStore } from '../stores/orders'
 import { useAddressesStore } from '../stores/addresses'
 import { useContentStore } from '../stores/content'
 import { useSettingsStore } from '../stores/settings'
+import { useInboxStore } from '../stores/inbox'
 import { deliveryFee, EMIRATES } from '../utils/delivery'
 import ProductFeed from '../components/ProductFeed.vue'
 import CartDrawer from '../components/CartDrawer.vue'
@@ -285,6 +286,13 @@ const ordersStore = useOrdersStore()
 const addresses = useAddressesStore()
 const content = useContentStore()
 const settings = useSettingsStore()
+const inbox = useInboxStore()
+
+// "Contact us" opens the in-app chat with the shop (login first if a guest)
+function contactUs() {
+  if (auth.isAuthenticated) inbox.requestChat()
+  else router.push({ name: 'login', query: { redirect: '/' } })
+}
 const router = useRouter()
 const route = useRoute()
 const ar = (n) => String(n)
