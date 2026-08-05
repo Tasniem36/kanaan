@@ -14,6 +14,10 @@
 
         <!-- NOTIFICATIONS -->
         <div v-if="tab === 'notif'" class="bell-body">
+          <button v-if="pushSupp" class="push-toggle" :class="{ on: pushOn }" :disabled="pushBusy" @click="togglePush">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+            {{ pushOn ? t('inbox.pushOn') : t('inbox.pushEnable') }}
+          </button>
           <p v-if="!inbox.notifications.length" class="bell-empty">{{ t('inbox.noNotifs') }}</p>
           <button v-for="n in inbox.notifications" :key="n.id" type="button" class="notif" :class="{ unread: !n.read }" @click="onNotifClick(n)">
             <b>{{ n.title }}</b>
@@ -73,6 +77,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useInboxStore } from '../stores/inbox'
 import { useAuthStore } from '../stores/auth'
+import { pushSupported, isPushOn, enablePush, disablePush } from '../services/push'
 
 const { t, locale } = useI18n()
 const router = useRouter()
@@ -94,6 +99,19 @@ const sending = ref(false)
 const active = ref(null)       // manager: the open customer thread
 const threadMsgs = ref([])
 const chatBox = ref(null)
+
+// device push notifications
+const pushSupp = pushSupported()
+const pushOn = ref(false)
+const pushBusy = ref(false)
+async function togglePush() {
+  pushBusy.value = true
+  try {
+    if (pushOn.value) { await disablePush(); pushOn.value = false }
+    else { await enablePush(); pushOn.value = true }
+  } catch { /* denied / unsupported — leave the toggle as-is */ }
+  finally { pushBusy.value = false }
+}
 
 const fmt = (d) => new Date(d).toLocaleString(locale.value, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 
@@ -148,7 +166,10 @@ async function sendReply() {
 // "Contact us" (or anywhere) can open the bell straight to the chat tab
 watch(() => inbox.openChatSignal, () => { open.value = true; goMessages() })
 
-onMounted(() => inbox.startPolling())
+onMounted(async () => {
+  inbox.startPolling()
+  if (pushSupp) pushOn.value = await isPushOn()
+})
 onBeforeUnmount(() => inbox.stopPolling())
 </script>
 
@@ -191,6 +212,17 @@ onBeforeUnmount(() => inbox.stopPolling())
 .bell-body { overflow-y: auto; padding: .5rem; }
 .bell-empty { color: var(--muted); text-align: center; padding: 1.6rem 1rem; font-size: .9rem; line-height: 1.6; }
 
+.push-toggle {
+  display: flex; align-items: center; gap: .5rem; width: 100%;
+  margin: 0 0 .5rem; padding: .55rem .7rem; border-radius: 10px;
+  border: 1.5px dashed var(--gold, #b8902f); background: transparent;
+  color: var(--terra-deep, #7a3b2e); font: inherit; font-weight: 700; font-size: .85rem;
+  cursor: pointer; transition: background .15s, color .15s, border-color .15s;
+}
+.push-toggle:hover { background: rgba(184,144,47,.1); }
+.push-toggle.on { border-style: solid; border-color: var(--green); color: var(--green); background: rgba(60,74,39,.06); }
+.push-toggle svg { width: 17px; height: 17px; flex: 0 0 auto; }
+.push-toggle:disabled { opacity: .6; cursor: default; }
 .notif {
   display: grid; gap: .15rem; padding: .6rem .7rem; border-radius: 10px;
   width: 100%; text-align: start; background: transparent; border: none;

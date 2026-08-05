@@ -17,6 +17,8 @@ export default {
     send: 'Send',
     back: 'Back',
     loginToChat: 'Log in to message us',
+    pushEnable: 'Enable device notifications',
+    pushOn: 'Device notifications are on ✓',
   },
   nav: {
     home: 'Home',

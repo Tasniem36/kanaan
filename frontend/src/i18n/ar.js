@@ -17,6 +17,8 @@ export default {
     send: 'إرسال',
     back: 'رجوع',
     loginToChat: 'سجّل الدخول لمراسلتنا',
+    pushEnable: 'تفعيل إشعارات الجهاز',
+    pushOn: 'إشعارات الجهاز مفعّلة ✓',
   },
   nav: {
     home: 'الرئيسية',

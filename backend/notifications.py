@@ -14,6 +14,13 @@ def notify_users(user_ids, *, type, title, body=None, order_id=None):
             )
         except Exception as e:  # noqa: BLE001 — auditing/notifying is best-effort
             print("[notify]", e)
+    # also fire a device push (best-effort). Deep-link orders; messages open the app.
+    try:
+        import push
+        url = "/manager/orders" if type == "new_order" else "/account/orders" if type == "order_status" else "/"
+        push.push_to_users(user_ids, title=title, body=body, url=url, tag=type)
+    except Exception as e:  # noqa: BLE001
+        print("[notify.push]", e)
 
 
 def notify_managers(*, type, title, body=None, order_id=None):

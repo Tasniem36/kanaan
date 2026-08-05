@@ -133,6 +133,17 @@ create table if not exists signup_verifications (
 );
 create index if not exists signup_verifications_email_idx on signup_verifications (lower(email));
 
+-- ---------- push_subscriptions (Web Push endpoints per user/device) ---------
+create table if not exists push_subscriptions (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references users (id) on delete cascade,
+  endpoint   text not null unique,
+  p256dh     text not null,
+  auth       text not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists push_subscriptions_user_idx on push_subscriptions (user_id);
+
 -- ---------- notifications (per-user in-app feed / bell) ---------------------
 create table if not exists notifications (
   id         uuid primary key default gen_random_uuid(),
