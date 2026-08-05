@@ -161,6 +161,14 @@ onBeforeUnmount(() => inbox.stopPolling())
   background: #fff; border: 1px solid rgba(60,74,39,.14); border-radius: 16px;
   box-shadow: 0 20px 44px -16px rgba(0,0,0,.4); overflow: hidden;
 }
+/* On phones, pin the panel to the viewport (not the tiny bell) so it never gets
+   cropped at the screen edge — span the width with small margins, below the header. */
+@media (max-width: 560px) {
+  .bell-panel {
+    position: fixed; top: 62px; inset-inline: .6rem; width: auto;
+    max-height: calc(100vh - 74px);
+  }
+}
 .bell-tabs { display: flex; border-bottom: 1px solid rgba(60,74,39,.12); flex: 0 0 auto; }
 .bell-tabs button {
   flex: 1; padding: .8rem; background: transparent; border: none; cursor: pointer;
