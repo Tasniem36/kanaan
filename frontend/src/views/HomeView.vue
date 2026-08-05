@@ -112,7 +112,7 @@
     <div class="band" aria-hidden="true"></div>
     <div class="wrap fcols">
       <div class="about"><div class="name display"><span class="g">دكّان</span> كنعان</div><p>{{ t('footer.about') }}</p></div>
-      <div><h5>{{ t('footer.shop') }}</h5><a href="#pantry">{{ t('nav.pantry') }}</a><a href="#pottery">{{ t('nav.pottery') }}</a><a href="#pantry">{{ t('footer.harvest') }}</a><a href="#pantry">{{ t('footer.gifts') }}</a></div>
+      <div><h5>{{ t('footer.shop') }}</h5><a href="#pantry">{{ t('nav.pantry') }}</a><a href="#pottery">{{ t('nav.pottery') }}</a></div>
       <div><h5>{{ t('footer.links') }}</h5><a href="#story">{{ t('nav.story') }}</a><a href="#contact">{{ t('footer.contactUs') }}</a><RouterLink to="/account">{{ t('nav.account') }}</RouterLink><a href="#">{{ t('footer.faq') }}</a></div>
       <div><h5>{{ t('footer.contact') }}</h5>
         <a href="https://wa.me/971522981187" target="_blank" rel="noopener">{{ t('footer.whatsapp') }}: <span dir="ltr">+971 52 298 1187</span></a>
