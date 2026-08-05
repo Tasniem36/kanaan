@@ -52,10 +52,11 @@ def _send_codes(email, phone, email_code, phone_code):
             f"الرمز صالحٌ لمدة {VERIFY_TTL_MIN} دقائق.\n\nإن لم تطلب هذا الرمز فتجاهل هذه الرسالة.")
     email_sent = send_email(email, subject, body)
     sms_sent = send_sms(phone, f"دكّان كنعان: رمز التحقق {phone_code} (صالح {VERIFY_TTL_MIN} دقائق)")
-    if not email_sent:
-        print(f"[verify] EMAIL code for {email}: {email_code}")
-    if not sms_sent:
-        print(f"[verify] SMS code for {phone}: {phone_code}")
+    if not _IS_PROD:  # never echo real codes into production logs
+        if not email_sent:
+            print(f"[verify] EMAIL code for {email}: {email_code}")
+        if not sms_sent:
+            print(f"[verify] SMS code for {phone}: {phone_code}")
     return email_sent, sms_sent
 
 
@@ -109,12 +110,12 @@ def register_start(request: Request, payload: dict = Body(default={})):
     if email_req:
         resp["email_sent"] = send_email(email, "رمز التحقق — دكّان كنعان",
                                         f"رمز التحقق الخاص بك في دكّان كنعان هو: {ec}\nصالحٌ لمدة {VERIFY_TTL_MIN} دقائق.")
-        if not resp["email_sent"]:
+        if not resp["email_sent"] and not _IS_PROD:
             print(f"[verify] EMAIL code for {email}: {ec}")
         dev["email"] = ec
     if phone_req:
         resp["phone_sent"] = send_sms(phone_norm, f"دكّان كنعان: رمز التحقق {pc} (صالح {VERIFY_TTL_MIN} دقائق)")
-        if not resp["phone_sent"]:
+        if not resp["phone_sent"] and not _IS_PROD:
             print(f"[verify] SMS code for {phone_norm}: {pc}")
         dev["phone"] = pc
     if not _IS_PROD:  # let local testing proceed without real providers
