@@ -85,8 +85,9 @@ const inbox = useInboxStore()
 const auth = useAuthStore()
 const isManager = auth.isManager
 
-// order notifications open the orders page; message/reply ones open the chat tab
+// tapping a notification marks just that one read (removes the grey), then navigates
 function onNotifClick(n) {
+  if (!n.read) inbox.markRead(n.id)
   if (n.type === 'reply' || n.type === 'message') { goMessages(); return }
   open.value = false
   router.push(isManager ? '/manager/orders' : '/account/orders')
@@ -122,8 +123,7 @@ function scrollDown() {
 async function toggle() {
   open.value = !open.value
   if (!open.value) return
-  await inbox.fetchNotifications()
-  inbox.markRead()                    // opening the bell clears the badge
+  await inbox.fetchNotifications()    // show them; unread stay grey until tapped
   if (tab.value === 'msg') goMessages()
 }
 

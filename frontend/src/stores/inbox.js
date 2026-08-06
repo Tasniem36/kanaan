@@ -23,7 +23,16 @@ export const useInboxStore = defineStore('inbox', {
         this.unread = unread
       } catch { /* offline / not logged in */ }
     },
-    async markRead() {
+    // markRead(id) marks a single notification (when tapped); markRead() marks all
+    async markRead(id = null) {
+      if (id) {
+        const n = this.notifications.find((x) => x.id === id)
+        if (!n || n.read) return
+        n.read = true
+        this.unread = Math.max(0, this.unread - 1)
+        try { await api('/notifications/read', { method: 'POST', body: { id } }) } catch { /* ignore */ }
+        return
+      }
       if (!this.unread) return
       this.unread = 0
       this.notifications = this.notifications.map((n) => ({ ...n, read: true }))

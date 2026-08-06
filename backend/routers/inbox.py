@@ -30,8 +30,12 @@ def list_notifications(user=Depends(current_user)):
 
 
 @notif_router.post("/read")
-def mark_notifications_read(user=Depends(current_user)):
-    execute("update notifications set read = true where user_id = %s and not read", [user["id"]])
+def mark_notifications_read(user=Depends(current_user), payload: dict = Body(default={})):
+    nid = payload.get("id")
+    if nid:  # mark a single notification read (when the user taps it)
+        execute("update notifications set read = true where id = %s and user_id = %s", [nid, user["id"]])
+    else:    # mark all read
+        execute("update notifications set read = true where user_id = %s and not read", [user["id"]])
     return {"ok": True}
 
 
