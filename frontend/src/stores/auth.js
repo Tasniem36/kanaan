@@ -1,14 +1,40 @@
 import { defineStore } from 'pinia'
 import { api } from '../services/api'
 
+// the `sub` (user id) baked into a JWT, so we can verify the cached user matches it
+function tokenSub(token) {
+  try {
+    const b = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    return JSON.parse(atob(b + '='.repeat((4 - (b.length % 4)) % 4))).sub || null
+  } catch { return null }
+}
+
+// Read the cached user ONLY if it belongs to the current token. This prevents a
+// stale cached user (a previous/other account on this browser) from ever being
+// shown while /auth/me is still resolving — the root cause of "wrong identity".
+function cachedUser(token) {
+  if (import.meta.env.SSR || !token) return null
+  let u = null
+  try { u = JSON.parse(localStorage.getItem('user') || 'null') } catch { u = null }
+  const sub = tokenSub(token)
+  if (u && u.id && sub && u.id !== sub) {
+    localStorage.removeItem('user')
+    return null
+  }
+  return u
+}
+
 export const useAuthStore = defineStore('auth', {
-  state: () => ({
+  state: () => {
     // No localStorage during prerender — start unauthenticated; the browser hydrates
     // the real session from localStorage on first client render.
-    token: import.meta.env.SSR ? null : localStorage.getItem('token') || null,
-    user: import.meta.env.SSR ? null : JSON.parse(localStorage.getItem('user') || 'null'), // cached so reloads/API hiccups keep you signed in
-    ready: false, // true once the initial fetchMe has resolved
-  }),
+    const token = import.meta.env.SSR ? null : localStorage.getItem('token') || null
+    return {
+      token,
+      user: cachedUser(token), // cached so reloads/API hiccups keep you signed in — but only if it matches the token
+      ready: false, // true once the initial fetchMe has resolved
+    }
+  },
   getters: {
     isAuthenticated: (s) => !!s.token,
     isManager: (s) => s.user?.role === 'manager',
