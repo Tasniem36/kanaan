@@ -39,8 +39,11 @@ def mark_notifications_read(user=Depends(current_user)):
 @msg_router.get("")
 def my_thread(user=Depends(current_user)):
     """The signed-in customer's own thread with the shop."""
+    # `unread` reflects the state BEFORE this read marks them, so the UI can grey
+    # out the ones that just arrived (a shop reply the customer hasn't seen yet)
     rows = fetch_all(
-        """select id, sender, body, order_id, created_at
+        """select id, sender, body, order_id, created_at,
+                  (sender = 'manager' and not read_by_customer) as unread
            from messages where user_id = %s order by created_at""",
         [user["id"]],
     )
@@ -96,7 +99,10 @@ def get_thread(uid: str, _m=Depends(require_manager)):
     if not customer:
         raise HTTPException(404, "Customer not found")
     rows = fetch_all(
-        "select id, sender, body, order_id, created_at from messages where user_id = %s order by created_at", [uid]
+        """select id, sender, body, order_id, created_at,
+                  (sender = 'customer' and not read_by_manager) as unread
+           from messages where user_id = %s order by created_at""",
+        [uid],
     )
     execute(
         "update messages set read_by_manager = true where user_id = %s and sender = 'customer' and not read_by_manager",

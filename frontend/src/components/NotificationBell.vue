@@ -30,7 +30,7 @@
         <div v-else-if="!isManager" class="bell-body chat-pane">
           <div ref="chatBox" class="chat">
             <p v-if="!inbox.messages.length" class="bell-empty">{{ t('inbox.startChat') }}</p>
-            <div v-for="m in inbox.messages" :key="m.id" class="msg" :class="m.sender">{{ m.body }}</div>
+            <div v-for="m in inbox.messages" :key="m.id" class="msg" :class="[m.sender, { unread: m.unread }]">{{ m.body }}</div>
           </div>
           <form class="chat-input" @submit.prevent="send">
             <input v-model="draft" :placeholder="t('inbox.placeholder')" maxlength="2000">
@@ -55,7 +55,7 @@
               <b>{{ active.full_name || active.email }}</b>
             </div>
             <div ref="chatBox" class="chat">
-              <div v-for="m in threadMsgs" :key="m.id" class="msg" :class="m.sender">{{ m.body }}</div>
+              <div v-for="m in threadMsgs" :key="m.id" class="msg" :class="[m.sender, { unread: m.unread }]">{{ m.body }}</div>
             </div>
             <form class="chat-input" @submit.prevent="sendReply">
               <input v-model="draft" :placeholder="t('inbox.replyPlaceholder')" maxlength="2000">
@@ -241,6 +241,8 @@ onBeforeUnmount(() => inbox.stopPolling())
 .msg { max-width: 80%; padding: .5rem .75rem; border-radius: 14px; font-size: .9rem; line-height: 1.45; word-break: break-word; }
 .msg.customer { align-self: flex-start; background: var(--cream-2, rgba(60,74,39,.1)); color: var(--ink); border-bottom-inline-start-radius: 4px; }
 .msg.manager { align-self: flex-end; background: var(--green); color: var(--cream); border-bottom-inline-end-radius: 4px; }
+/* a just-arrived (unread) message stays grey until it's been seen */
+.msg.unread { background: #d8d4cb; color: var(--ink); box-shadow: 0 0 0 1.5px rgba(60,74,39,.22); }
 .chat-input { display: flex; gap: .4rem; padding: .5rem; border-top: 1px solid rgba(60,74,39,.12); flex: 0 0 auto; }
 .chat-input input {
   flex: 1; border: 1.5px solid rgba(60,74,39,.2); border-radius: 999px; padding: .55rem .9rem;
