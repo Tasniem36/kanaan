@@ -2,6 +2,7 @@
 // avoid a circular import with the auth store. Base URL is '/api' — the Vite
 // dev server and the production nginx both proxy '/api' to the API server.
 import { i18n } from '../i18n'
+import { reportError } from './report'
 
 const BASE = import.meta.env.VITE_API_URL || '/api'
 
@@ -24,6 +25,8 @@ export async function api(path, { method = 'GET', body, auth = true } = {}) {
   if (!res.ok) {
     const err = new Error(data?.error || i18n.global.t('common.error'))
     err.status = res.status
+    // only server errors (5xx) — expected 4xx (validation, auth, not-found) are normal flow
+    if (res.status >= 500) reportError(`API ${res.status} ${method} ${path}`, data?.error)
     throw err
   }
   return data

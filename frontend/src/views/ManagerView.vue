@@ -9,6 +9,7 @@
         <RouterLink :to="{ name: 'manager-clients' }">{{ t('manager.clients') }}</RouterLink>
         <RouterLink :to="{ name: 'manager-codes' }">{{ t('manager.codesTab') }}</RouterLink>
         <RouterLink :to="{ name: 'manager-audit' }">{{ t('manager.auditTab') }}</RouterLink>
+        <RouterLink :to="{ name: 'manager-errors' }">{{ t('manager.errorsTab') }}</RouterLink>
         <RouterLink :to="{ name: 'manager-content' }">{{ t('manager.contentTab') }}</RouterLink>
         <RouterLink :to="{ name: 'manager-delivery' }">{{ t('manager.deliveryTab') }}</RouterLink>
       </nav>

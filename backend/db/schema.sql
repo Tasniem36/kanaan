@@ -133,6 +133,21 @@ create table if not exists signup_verifications (
 );
 create index if not exists signup_verifications_email_idx on signup_verifications (lower(email));
 
+-- ---------- error_reports (customer-side errors, for the admin to follow up) -
+create table if not exists error_reports (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid references users (id) on delete set null,
+  name       text,   -- contact snapshot so the admin can reach the customer
+  email      text,
+  phone      text,
+  message    text not null,
+  detail     text,
+  page       text,
+  user_agent text,
+  created_at timestamptz not null default now()
+);
+create index if not exists error_reports_created_idx on error_reports (created_at desc);
+
 -- ---------- push_subscriptions (Web Push endpoints per user/device) ---------
 create table if not exists push_subscriptions (
   id         uuid primary key default gen_random_uuid(),

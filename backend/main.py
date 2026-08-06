@@ -37,6 +37,7 @@ from routers.content import router as content_router
 from routers.settings import router as settings_router
 from routers.inbox import notif_router, msg_router
 from routers.push import router as push_router
+from routers.errors import router as errors_router
 
 _IS_PROD = os.getenv("ENV", "").lower() in ("prod", "production")
 
@@ -95,6 +96,7 @@ app.include_router(settings_router, prefix="/api/settings")
 app.include_router(notif_router, prefix="/api/notifications")
 app.include_router(msg_router, prefix="/api/messages")
 app.include_router(push_router, prefix="/api/push")
+app.include_router(errors_router, prefix="/api/errors")
 
 # Serve stored product images at /media/... (nginx proxies /media/ here in prod).
 from fastapi.staticfiles import StaticFiles  # noqa: E402

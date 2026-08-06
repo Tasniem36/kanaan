@@ -3,6 +3,7 @@ import { createPinia } from 'pinia'
 import App from './App.vue'
 import { routes, scrollBehavior, registerGuards } from './router'
 import { i18n } from './i18n'
+import { reportError } from './services/report'
 import './style.css'
 
 // vite-ssg owns the app/router lifecycle: it prerenders the public routes to static
@@ -15,6 +16,20 @@ export const createApp = ViteSSG(
   ({ app, router, isClient }) => {
     app.use(createPinia())
     app.use(i18n)
-    if (isClient) registerGuards(router)
+    if (isClient) {
+      registerGuards(router)
+      // log customer-side errors so the admin can follow up (no one left blocked)
+      app.config.errorHandler = (err, _inst, info) => {
+        console.error(err)
+        reportError(err?.message || String(err), `${err?.stack || ''}\n${info || ''}`)
+      }
+      window.addEventListener('unhandledrejection', (e) => {
+        const r = e?.reason
+        reportError(`Unhandled: ${r?.message || r}`, r?.stack)
+      })
+      window.addEventListener('error', (e) => {
+        if (e?.message) reportError(e.message, `${e.filename || ''}:${e.lineno || ''}`)
+      })
+    }
   },
 )
