@@ -253,6 +253,7 @@ export default {
     auditTitle: 'سجلّ نشاط العملاء',
     noAudit: 'لا يوجد نشاطٌ بعد.',
     allActions: 'كل الإجراءات',
+    allLocations: 'كل المواقع',
     from: 'من تاريخ',
     to: 'إلى تاريخ',
     applyFilter: 'تطبيق',

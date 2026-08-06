@@ -253,6 +253,7 @@ export default {
     auditTitle: 'Customer activity log',
     noAudit: 'No activity yet.',
     allActions: 'All actions',
+    allLocations: 'All locations',
     from: 'From',
     to: 'To',
     applyFilter: 'Apply',
