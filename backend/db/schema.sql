@@ -133,6 +133,13 @@ create table if not exists signup_verifications (
 );
 create index if not exists signup_verifications_email_idx on signup_verifications (lower(email));
 
+-- ---------- carts (server-side basket so it follows a customer across devices)
+create table if not exists carts (
+  user_id    uuid primary key references users (id) on delete cascade,
+  items      jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+
 -- ---------- error_reports (customer-side errors, for the admin to follow up) -
 create table if not exists error_reports (
   id         uuid primary key default gen_random_uuid(),

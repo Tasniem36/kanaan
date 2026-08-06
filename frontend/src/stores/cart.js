@@ -1,4 +1,6 @@
 import { defineStore } from 'pinia'
+import { api } from '../services/api'
+import { useAuthStore } from './auth'
 
 const KEY = 'cart'
 
@@ -33,6 +35,34 @@ export const useCartStore = defineStore('cart', {
       try {
         localStorage.setItem(KEY, JSON.stringify(this.items))
       } catch { /* storage full/blocked — cart just won't survive the refresh */ }
+      this._pushToServer()
+    },
+    // debounced save to the server cart — only when signed in (so it syncs across devices)
+    _pushToServer() {
+      const auth = useAuthStore()
+      if (!auth.isAuthenticated) return
+      clearTimeout(this._t)
+      this._t = setTimeout(() => {
+        api('/cart', { method: 'PUT', body: { items: this.items } }).catch(() => {})
+      }, 600)
+    },
+    // on login / app-boot: pull the server cart and merge (keep the larger qty per
+    // product so nothing the customer added on either device is lost), then save back
+    async loadFromServer() {
+      const auth = useAuthStore()
+      if (!auth.isAuthenticated) return
+      try {
+        const { items } = await api('/cart')
+        if (items && typeof items === 'object') {
+          const merged = { ...items }
+          for (const [id, line] of Object.entries(this.items)) {
+            if (!merged[id]) merged[id] = line
+            else merged[id] = { product: merged[id].product || line.product, qty: Math.max(merged[id].qty, line.qty) }
+          }
+          this.items = merged
+          this.persist()
+        }
+      } catch { /* offline — keep the local cart */ }
     },
     add(product) {
       if (this.items[product.id]) this.items[product.id].qty++

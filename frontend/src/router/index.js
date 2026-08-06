@@ -1,5 +1,6 @@
 import { START_LOCATION } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { useCartStore } from '../stores/cart'
 import HomeView from '../views/HomeView.vue'
 
 // Plain route table. vite-ssg builds the router from this (createWebHistory in the
@@ -51,10 +52,22 @@ export function scrollBehavior(to, from, savedPosition) {
 // Auth guard. Registered on the CLIENT only — it resolves the session from a JWT in
 // localStorage, which doesn't exist during prerender (and authed pages never render
 // on the server anyway).
+let cartSyncedToken = null
 export function registerGuards(router) {
   router.beforeEach(async (to) => {
     const auth = useAuthStore()
     if (!auth.ready) await auth.fetchMe() // resolve session once on first navigation
+
+    // sync the server cart: on login/boot pull+merge (once per token); on logout
+    // clear the local cart so it never leaks to the next user (server cart is kept
+    // — pushToServer is a no-op when signed out).
+    const cart = useCartStore()
+    if (auth.isAuthenticated) {
+      if (auth.token !== cartSyncedToken) { cartSyncedToken = auth.token; cart.loadFromServer() }
+    } else if (cartSyncedToken) {
+      cartSyncedToken = null
+      cart.clear()
+    }
 
     if (to.meta.requiresAuth && !auth.isAuthenticated) {
       return { name: 'login', query: { redirect: to.fullPath } }
