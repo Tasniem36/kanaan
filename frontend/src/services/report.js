@@ -3,9 +3,25 @@
 // and never throws.
 let last = 0
 
+// Noise we never want in the log: scripts injected by Instagram/Facebook in-app
+// browsers (they error on their own, our site is fine), benign browser warnings,
+// and stale-chunk errors (handled by an auto-reload in the router instead).
+const IGNORE = [
+  'webkit.messageHandlers',
+  'postMessage: Java object is gone',
+  'iabjs://',
+  'navigation_performance_logger',
+  'Failed to fetch dynamically imported module',
+  'Importing a module script failed',
+  'error loading dynamically imported module',
+  'ResizeObserver loop',
+]
+
 export function reportError(message, detail) {
   try {
     if (typeof window === 'undefined') return
+    const text = `${message || ''} ${detail || ''}`
+    if (IGNORE.some((p) => text.includes(p))) return   // third-party / handled noise
     const now = Date.now()
     if (now - last < 1500) return   // throttle bursts
     last = now

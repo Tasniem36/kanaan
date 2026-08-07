@@ -41,7 +41,9 @@ const fmt = (d) => new Date(d).toLocaleString(locale.value, { dateStyle: 'medium
 
 async function load() {
   loading.value = true
-  try { const { errors: rows } = await api('/errors'); errors.value = rows } finally { loading.value = false }
+  try { const { errors: rows } = await api('/errors'); errors.value = rows }
+  catch { /* e.g. session expired — the auth guard handles the redirect; don't self-report */ }
+  finally { loading.value = false }
 }
 async function dismiss(e) {
   try { await api(`/errors/${e.id}`, { method: 'DELETE' }); errors.value = errors.value.filter((x) => x.id !== e.id) }

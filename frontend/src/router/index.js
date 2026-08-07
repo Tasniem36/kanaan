@@ -54,6 +54,20 @@ export function scrollBehavior(to, from, savedPosition) {
 // on the server anyway).
 let cartSyncedToken = null
 export function registerGuards(router) {
+  // After a deploy, a still-open tab may try to lazy-load an old chunk whose name
+  // changed → "Failed to fetch dynamically imported module". Reload once to pull the
+  // fresh files (guarded against a reload loop; cleared on the next good navigation).
+  router.onError((err) => {
+    const msg = String(err?.message || '')
+    if (/dynamically imported module|Importing a module script failed|error loading dynamically/i.test(msg)) {
+      if (!sessionStorage.getItem('chunk-reloaded')) {
+        sessionStorage.setItem('chunk-reloaded', '1')
+        window.location.reload()
+      }
+    }
+  })
+  router.afterEach(() => sessionStorage.removeItem('chunk-reloaded'))
+
   router.beforeEach(async (to) => {
     const auth = useAuthStore()
     if (!auth.ready) await auth.fetchMe() // resolve session once on first navigation
