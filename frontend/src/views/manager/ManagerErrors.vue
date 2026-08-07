@@ -15,7 +15,7 @@
               <span v-else class="a-muted">{{ t('manager.guestVisitor') }}</span>
               <div class="a-muted contact" dir="ltr">{{ e.email || '' }}<span v-if="e.phone"> · {{ e.phone }}</span></div>
             </td>
-            <td class="a-muted" dir="ltr" style="font-size:.82rem">{{ e.page || '—' }}</td>
+            <td class="page-cell"><a v-if="e.page" href="#" class="page-link" dir="ltr" :title="e.page" @click.prevent="goPage(e.page)">{{ e.page }}</a><span v-else class="a-muted">—</span></td>
             <td>
               <span style="color:var(--red);font-size:.86rem">{{ e.message }}</span>
               <div v-if="e.detail" class="err-detail">{{ e.detail }}</div>
@@ -30,11 +30,14 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '../../services/api'
 import Loader from '../../components/Loader.vue'
 
 const { t, locale } = useI18n()
+const router = useRouter()
+function goPage(p) { try { router.push(p) } catch { /* not an in-app route */ } }
 const errors = ref([])
 const loading = ref(false)
 const fmt = (d) => new Date(d).toLocaleString(locale.value, { dateStyle: 'medium', timeStyle: 'short' })
@@ -56,5 +59,13 @@ onMounted(load)
 h1 { font-family: 'Amiri', serif; color: var(--green); font-size: 1.9rem; margin-bottom: .3rem; }
 .contact { font-size: .8rem; }
 .err-detail { font-size: .74rem; margin-top: .25rem; white-space: pre-wrap; word-break: break-word; max-height: 4.5em; overflow: auto; opacity: .75; }
+/* page column: one line, truncated with … (full path on hover), clickable */
+.page-cell { max-width: 200px; }
+.page-link {
+  display: inline-block; max-width: 200px; vertical-align: bottom;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--green); text-decoration: underline; cursor: pointer; font-size: .8rem;
+}
+.page-link:hover { color: var(--gold); }
 .a-btn.ghost { background: var(--cream-2); color: var(--green); }
 </style>

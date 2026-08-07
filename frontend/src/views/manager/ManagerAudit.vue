@@ -28,7 +28,7 @@
             <td><span class="a-pill" :class="roleClass(a)">{{ roleLabel(a) }}</span></td>
             <td><span class="a-pill" :class="pillClass(a.action)">{{ actionLabel(a.action) }}</span></td>
             <td class="a-muted" style="font-size:.85rem">{{ detailText(a) }}</td>
-            <td class="page-cell"><a v-if="a.page" href="#" class="page-link" dir="ltr" @click.prevent="goPage(a.page)">{{ a.page }}</a><span v-else class="a-muted">—</span></td>
+            <td class="page-cell"><a v-if="a.page" href="#" class="page-link" dir="ltr" :title="a.page" @click.prevent="goPage(a.page)">{{ a.page }}</a><span v-else class="a-muted">—</span></td>
             <td class="a-muted" style="font-size:.82rem">{{ geo[a.ip] || '—' }}</td>
             <td class="a-muted" dir="ltr" style="font-size:.8rem">{{ a.ip || '—' }}</td>
           </tr>
@@ -143,8 +143,12 @@ h1 { font-family: 'Amiri', serif; color: var(--green); font-size: 1.9rem; margin
 .filters { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; margin-bottom: 1rem; }
 .filters .a-input, .filters .a-select { max-width: 180px; }
 .a-btn.ghost { background: var(--cream-2); color: var(--green); }
-/* keep the page column from stretching the table — wrap long paths instead */
+/* keep the page column compact: one line, truncated with … (full path on hover) */
 .page-cell { max-width: 200px; }
-.page-link { color: var(--green); text-decoration: underline; cursor: pointer; word-break: break-all; font-size: .8rem; }
+.page-link {
+  display: inline-block; max-width: 200px; vertical-align: bottom;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--green); text-decoration: underline; cursor: pointer; font-size: .8rem;
+}
 .page-link:hover { color: var(--gold); }
 </style>
