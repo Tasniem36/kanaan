@@ -53,6 +53,36 @@ def list_audit(request: Request, _m=Depends(require_manager)):
     return {"logs": rows}
 
 
+# GET /api/audit/top-products — admin only: the products shoppers opened most,
+# from the product_view trail. Honours the same from/to date range as the log.
+@router.get("/top-products")
+def top_products(request: Request, _m=Depends(require_manager)):
+    q = request.query_params
+    try:
+        limit = min(int(q.get("limit", 10)), 50)
+    except ValueError:
+        limit = 10
+    conds = ["a.action = 'product_view'", "a.detail->>'product_id' is not null"]
+    params = []
+    if q.get("from"):
+        conds.append("a.created_at >= %s::date")
+        params.append(q["from"])
+    if q.get("to"):
+        conds.append("a.created_at < (%s::date + 1)")
+        params.append(q["to"])
+    where = "where " + " and ".join(conds)
+    rows = fetch_all(
+        f"""select a.detail->>'product_id' as product_id,
+                   max(a.detail->>'name') as name,
+                   count(*)::int as views
+            from audit_logs a {where}
+            group by a.detail->>'product_id'
+            order by views desc, name limit %s""",
+        params + [limit],
+    )
+    return {"products": rows}
+
+
 # GET /api/audit/geo?ips=a,b,c — admin only: resolve IPs to "City, Country".
 # Best-effort via ip-api.com (free, HTTP-only, server-side); private/unknown → null.
 @router.get("/geo")

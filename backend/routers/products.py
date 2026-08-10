@@ -106,6 +106,11 @@ def get_product(pid: str, request: Request):
            from products where id = %s""", [pid])
     if not row or (not is_manager and not row["is_active"]):
         raise HTTPException(404, "Product not found")
+    # "opened a product" signal — shoppers only. Records which product (id + name)
+    # so the activity log can link straight to it and rank the most-opened items.
+    if not is_manager:
+        log_action(user_id=(user or {}).get("id"), action="product_view",
+                   detail={"product_id": row["id"], "name": row["name"]}, request=request)
     return {"product": row}
 
 
