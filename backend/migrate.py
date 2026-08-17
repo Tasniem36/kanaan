@@ -30,7 +30,14 @@ def _backfill_media(conn):
         images = [u for u in (save_image(i) for i in old_images) if u]
         image_url = save_image(row["image_url"]) or (images[0] if images else None)
         thumb = row["thumb_url"]
-        if not thumb or is_data_url(thumb):
+        # Thumbnails created before the WebP switch are still JPEG, and they're what
+        # every product list loads — so regenerate them once and the existing
+        # catalogue gets the same size win as new uploads. A thumbnail is derived
+        # data, so rebuilding it is safe; the original photo is never touched.
+        # Idempotent: a .webp thumb is skipped, and the local-path check keeps
+        # external/preset URLs from being retried on every deploy.
+        stale_format = bool(thumb) and not thumb.endswith(".webp") and str(image_url or "").startswith("/media/")
+        if not thumb or is_data_url(thumb) or stale_format:
             thumb = make_thumb(image_url)
         if images != old_images or image_url != row["image_url"] or thumb != row["thumb_url"]:
             conn.execute(
