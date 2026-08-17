@@ -30,7 +30,9 @@ def list_audit(request: Request, _m=Depends(require_manager)):
         limit = min(int(q.get("limit", 200)), 500)
     except ValueError:
         limit = 200
-    conds, params = [], []
+    # this is the *customer* activity log — never show the manager's own actions.
+    # (u.role is null for guests, so `is distinct from` keeps guest visits.)
+    conds, params = ["u.role is distinct from 'manager'"], []
     if q.get("action"):
         conds.append("a.action = %s")
         params.append(q["action"])
