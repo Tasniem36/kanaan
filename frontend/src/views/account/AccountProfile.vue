@@ -9,7 +9,6 @@
       <div class="a-field">
         <label>{{ t('account.email') }}</label>
         <input class="a-input" :value="auth.user?.email" dir="ltr" disabled>
-        <small class="a-muted">{{ t('account.emailLocked') }}</small>
       </div>
       <p v-if="profErr" class="auth-err">{{ profErr }}</p>
       <p v-if="profOk" class="prof-ok">✓ {{ t('account.saved') }}</p>
