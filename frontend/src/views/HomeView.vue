@@ -116,7 +116,7 @@
       <div><h5>{{ t('footer.links') }}</h5><a href="#story">{{ t('nav.story') }}</a><a href="#" @click.prevent="contactUs">{{ t('footer.contactUs') }}</a><RouterLink to="/account">{{ t('nav.account') }}</RouterLink></div>
       <div><h5>{{ t('footer.contact') }}</h5>
         <a href="https://wa.me/971522981187" target="_blank" rel="noopener">{{ t('footer.whatsapp') }}: <span dir="ltr">+971 52 298 1187</span></a>
-        <a href="mailto:mmn00@hotmail.com">mmn00@hotmail.com</a>
+        <a href="mailto:dukkan.kanaan@gmail.com">dukkan.kanaan@gmail.com</a>
         <a href="https://www.instagram.com/dukkan_kanaan" target="_blank" rel="noopener">{{ t('footer.instagram') }} @dukkan_kanaan</a>
         <a class="ig-qr" href="https://www.instagram.com/dukkan_kanaan" target="_blank" rel="noopener" :aria-label="t('footer.followQr')">
           <img src="/images/instagram-qr.svg" alt="Instagram QR">
