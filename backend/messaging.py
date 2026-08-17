@@ -11,6 +11,7 @@ import os
 import smtplib
 import ssl
 from email.message import EmailMessage
+from email.utils import formatdate, make_msgid
 
 import requests
 
@@ -36,6 +37,12 @@ def send_email(to: str, subject: str, body: str) -> bool:
         msg["Subject"] = subject
         msg["From"] = sender
         msg["To"] = to
+        # Date and Message-ID are required by RFC 5322 and Python does NOT add
+        # them. Gmail's submission server fills them in, but a self-hosted or
+        # relay SMTP_HOST may not — and a message with no Date is what makes mail
+        # clients show it with no timestamp or file it oddly. Cheap to be correct.
+        msg["Date"] = formatdate(localtime=True)
+        msg["Message-ID"] = make_msgid(domain=sender.split("@")[-1] if "@" in (sender or "") else None)
         msg.set_content(body)
         with smtplib.SMTP(host, port, timeout=15) as s:
             s.starttls(context=ssl.create_default_context())
