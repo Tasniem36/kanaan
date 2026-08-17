@@ -11,9 +11,42 @@ import os
 import smtplib
 import ssl
 from email.message import EmailMessage
-from email.utils import formatdate, make_msgid
+from email.utils import formataddr, formatdate, make_msgid, parseaddr
 
 import requests
+
+BRAND = "دكّان كنعان"
+_warned_alignment = False
+
+
+def _from_header(sender: str) -> str:
+    """"Name <address>" rather than a bare address — a sender with no display name
+    reads as machine mail and scores worse with spam filters. An SMTP_FROM that
+    already carries a name is left exactly as the admin wrote it."""
+    name, addr = parseaddr(sender or "")
+    if name or not addr:
+        return sender
+    return formataddr((os.getenv("SMTP_FROM_NAME", BRAND), addr))
+
+
+def _warn_if_misaligned(sender: str, user: str) -> None:
+    """A From on a different domain than the authenticated account fails SPF/DKIM
+    alignment at the receiver, which is the most common reason verification mail
+    lands in spam. Legitimate when the address is a verified "send mail as" alias,
+    so this warns rather than refuses — but it warns loudly, because the symptom
+    (mail silently filed as spam) gives no other clue. Logged once per process."""
+    global _warned_alignment
+    if _warned_alignment:
+        return
+    from_domain = parseaddr(sender or "")[1].rpartition("@")[2].lower()
+    user_domain = (user or "").rpartition("@")[2].lower()
+    if from_domain and user_domain and from_domain != user_domain:
+        _warned_alignment = True
+        print(f"[email] WARNING: SMTP_FROM is @{from_domain} but authenticating as "
+              f"@{user_domain}. Unless that address is a verified alias on the "
+              f"sending account, SPF/DKIM will not align and mail will be treated "
+              f"as spam. Set SMTP_FROM to the authenticated address, or send "
+              f"through a provider authenticated for your own domain.")
 
 
 def email_configured() -> bool:
@@ -33,10 +66,18 @@ def send_email(to: str, subject: str, body: str) -> bool:
         return False
     try:
         port = int(os.getenv("SMTP_PORT", "587"))
+        _warn_if_misaligned(sender, user)
         msg = EmailMessage()
         msg["Subject"] = subject
-        msg["From"] = sender
+        msg["From"] = _from_header(sender)
         msg["To"] = to
+        # A reply path a human actually reads. Mail with no usable Reply-To (or a
+        # noreply@ black hole) scores worse and leaves a stuck customer nowhere
+        # to turn.
+        msg["Reply-To"] = os.getenv("SMTP_REPLY_TO") or parseaddr(sender)[1] or sender
+        # RFC 3834: marks this as an automated transactional message, so receivers
+        # don't weigh it as bulk mail and auto-responders don't reply to it.
+        msg["Auto-Submitted"] = "auto-generated"
         # Date and Message-ID are required by RFC 5322 and Python does NOT add
         # them. Gmail's submission server fills them in, but a self-hosted or
         # relay SMTP_HOST may not — and a message with no Date is what makes mail

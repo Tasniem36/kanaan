@@ -6,6 +6,7 @@ message captured.
 """
 import smtplib
 from email import message_from_bytes
+from email.utils import parseaddr
 
 import pytest
 
@@ -102,8 +103,10 @@ def test_message_id_is_unique_per_send(smtp):
 
 
 def test_from_defaults_to_the_authenticated_account(smtp):
+    """The address must be the authenticated one — anything else fails SPF/DKIM
+    alignment. (The display name wrapped around it is asserted further down.)"""
     _send()
-    assert smtp.sent[0]["From"] == "shop@example.com"
+    assert parseaddr(smtp.sent[0]["From"])[1] == "shop@example.com"
 
 
 def test_explicit_from_is_honoured(smtp, monkeypatch):
@@ -134,3 +137,59 @@ def test_body_is_plain_text(smtp):
     the spam weighting an HTML-only mail attracts."""
     _send()
     assert smtp.sent[0].get_content_type() == "text/plain"
+
+
+# --- deliverability: the headers that decide inbox vs spam -------------------
+def test_from_gets_a_display_name(smtp):
+    """A bare address reads as machine mail; filters and people both prefer a name."""
+    _send()
+    assert smtp.sent[0]["From"] == "دكّان كنعان <shop@example.com>"
+
+
+def test_display_name_is_configurable(smtp, monkeypatch):
+    monkeypatch.setenv("SMTP_FROM_NAME", "Dukkan Kanaan")
+    _send()
+    assert smtp.sent[0]["From"] == "Dukkan Kanaan <shop@example.com>"
+
+
+def test_an_explicit_from_with_a_name_is_left_alone(smtp, monkeypatch):
+    """Don't double-wrap what the admin already formatted."""
+    monkeypatch.setenv("SMTP_FROM", "متجرنا <hello@example.com>")
+    _send()
+    assert smtp.sent[0]["From"] == "متجرنا <hello@example.com>"
+
+
+def test_reply_to_defaults_to_a_real_mailbox(smtp):
+    """Never a noreply black hole — a stuck customer needs somewhere to reply."""
+    _send()
+    assert smtp.sent[0]["Reply-To"] == "shop@example.com"
+
+
+def test_reply_to_is_overridable(smtp, monkeypatch):
+    monkeypatch.setenv("SMTP_REPLY_TO", "support@example.com")
+    _send()
+    assert smtp.sent[0]["Reply-To"] == "support@example.com"
+
+
+def test_marked_as_automated_transactional_mail(smtp):
+    """RFC 3834 — keeps receivers from weighing it as bulk, and stops
+    auto-responders replying to a verification code."""
+    _send()
+    assert smtp.sent[0]["Auto-Submitted"] == "auto-generated"
+
+
+def test_a_from_on_another_domain_is_warned_about(smtp, monkeypatch, capsys):
+    """SPF/DKIM misalignment is the usual reason this mail lands in spam, and it
+    is otherwise completely silent."""
+    monkeypatch.setattr(messaging, "_warned_alignment", False)
+    monkeypatch.setenv("SMTP_FROM", "noreply@dukkan-kanaan.com")
+    _send()
+    out = capsys.readouterr().out
+    assert "WARNING" in out and "SPF/DKIM" in out
+
+
+def test_matching_domains_produce_no_warning(smtp, monkeypatch, capsys):
+    monkeypatch.setattr(messaging, "_warned_alignment", False)
+    monkeypatch.setenv("SMTP_FROM", "orders@example.com")   # same domain as SMTP_USER
+    _send()
+    assert "WARNING" not in capsys.readouterr().out
