@@ -11,7 +11,7 @@
       <span class="ot-dot" aria-hidden="true">
         <svg v-if="s.done && !s.current" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l4 4 10-10"/></svg>
       </span>
-      <span class="ot-label">{{ t(`status.${s.key}`) }}</span>
+      <span class="ot-label">{{ t(`track.${s.key}`) }}</span>
       <span class="ot-at">{{ s.at ? fmt(s.at) : '' }}</span>
     </li>
   </ol>
@@ -21,13 +21,18 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-// The happy path a customer's order walks. 'pending' and 'paid' are the same
-// stage from the shopper's point of view (the order is in), so they share a step
-// — otherwise cash-on-delivery orders would look stuck at step one forever.
+// The happy path a customer's order walks.
+//
+// These labels describe FULFILMENT ONLY and never mention payment. 'pending' and
+// 'paid' share the first step because both mean "we have your order" — but that
+// step must not be *labelled* paid: on cash on delivery the customer hasn't paid
+// yet, so ticking "Paid" the moment the shop starts preparing is simply false.
+// Payment is shown separately from payment_method/payment_status, never inferred
+// from the fulfilment status.
 const STEPS = [
-  { key: 'paid', matches: ['pending', 'paid'] },
+  { key: 'placed', matches: ['pending', 'paid'] },
   { key: 'preparing', matches: ['preparing'] },
-  { key: 'fulfilled', matches: ['fulfilled'] },
+  { key: 'shipped', matches: ['fulfilled'] },
   { key: 'delivered', matches: ['delivered'] },
 ]
 

@@ -308,11 +308,14 @@ def _fire_stock_alerts(product):
     waiting = fetch_all("delete from stock_alerts where product_id = %s returning user_id", [product["id"]])
     if not waiting:
         return
+    # Plain service wording that points back at the customer's own request.
+    # Urgency/marketing phrasing ("order before it runs out") is what browser
+    # anti-spam classifiers flag as an unwanted notification.
     notify_users(
         [w["user_id"] for w in waiting],
         type="back_in_stock",
-        title="عاد للتوفّر ✨",
-        body=f"{product['name']} متوفّرٌ الآن — اطلبه قبل نفاده",
+        title="عاد للتوفّر",
+        body=f"{product['name']} — طلبتَ أن نُبلغك عند توفّره.",
     )
 
 

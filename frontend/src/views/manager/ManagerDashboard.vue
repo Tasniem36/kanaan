@@ -133,8 +133,14 @@ async function load() {
 
 const money = (n) => Math.round(Number(n || 0) * 100) / 100
 const peak = computed(() => Math.max(0, ...(data.value?.daily || []).map((d) => Number(d.revenue) || 0)))
-// bars are relative to the best day in the window; a day with sales never reads as empty
-const barHeight = (v) => (peak.value > 0 ? `${Math.max(3, (Number(v) / peak.value) * 100)}%` : '0%')
+// Bars are relative to the best day in the window. A day with *some* sales keeps a
+// visible 3% minimum so it never reads as empty — but a day with no sales must be
+// truly flat, or a zero day would look like a little income.
+const barHeight = (v) => {
+  const n = Number(v) || 0
+  if (n <= 0 || peak.value <= 0) return '0%'
+  return `${Math.max(3, (n / peak.value) * 100)}%`
+}
 
 const fmtDay = (d) => new Date(d).toLocaleDateString(locale.value, { day: 'numeric', month: 'short' })
 const dayNum = (d) => new Date(d).getDate()
@@ -150,7 +156,9 @@ onMounted(load)
 .d-refresh { white-space: nowrap; }
 .d-error { color: var(--red); margin-bottom: 1rem; }
 
-.d-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 1rem; }
+/* min(190px, 100%) so a viewport narrower than the track floor still fits
+   instead of forcing the grid wider than the screen */
+.d-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(190px, 100%), 1fr)); gap: 1rem; }
 .d-tile {
   background: #fff; border-radius: 16px; padding: 1rem 1.1rem;
   box-shadow: 0 8px 30px rgba(60, 74, 39, 0.06);
@@ -165,10 +173,14 @@ onMounted(load)
 }
 .d-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.8rem; margin-bottom: 0.7rem; flex-wrap: wrap; }
 .d-card-head h2 { font-family: 'Amiri', serif; color: var(--green); font-size: 1.15rem; }
-.d-two { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+/* minmax(0, …) instead of a bare 1fr: a 1fr track's automatic minimum is
+   min-content, and the nowrap status pills inside made that ~314px, so the
+   column refused to shrink and pushed the page wider than a small phone. */
+.d-two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; }
 
 .d-row {
-  display: flex; align-items: center; justify-content: space-between; gap: 0.7rem;
+  display: flex; align-items: center; justify-content: space-between; gap: 0.35rem 0.7rem;
+  flex-wrap: wrap;   /* a long status pill wraps instead of widening the card */
   padding: 0.42rem 0.2rem; border-top: 1px solid rgba(60, 74, 39, 0.08);
   font-size: 0.9rem; color: var(--ink);
 }
@@ -200,7 +212,7 @@ onMounted(load)
 @keyframes skshimmer { 100% { transform: translateX(100%); } }
 
 @media (max-width: 720px) {
-  .d-two { grid-template-columns: 1fr; }
+  .d-two { grid-template-columns: minmax(0, 1fr); }
   .d-bar-lbl { font-size: 0.56rem; }
 }
 </style>
