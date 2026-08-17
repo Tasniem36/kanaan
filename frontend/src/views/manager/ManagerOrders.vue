@@ -2,7 +2,6 @@
   <section>
     <div class="orders-head">
       <h1>{{ t('manager.allOrders') }}</h1>
-      <button class="a-btn" :disabled="testing" @click="testNotify">{{ testing ? '…' : t('manager.testNotify') }}</button>
     </div>
     <Loader v-if="ordersStore.loading && !ordersStore.orders.length" :label="t('common.loading')" />
     <p v-else-if="!ordersStore.orders.length" class="a-muted">{{ t('manager.noOrders') }}</p>
@@ -67,14 +66,12 @@ import { useOrdersStore } from '../../stores/orders'
 import { useToastStore } from '../../stores/toast'
 import { useConfirmStore } from '../../stores/confirm'
 import Loader from '../../components/Loader.vue'
-import { api } from '../../services/api'
 import { useInfiniteScroll } from '../../composables/useInfiniteScroll'
 
 const { t, locale } = useI18n()
 const ordersStore = useOrdersStore()
 const toast = useToastStore()
 const confirm = useConfirmStore()
-const testing = ref(false)
 
 function payLabel(o) {
   if (o.payment_method === 'ziina') return o.payment_status === 'paid' ? t('manager.payZiinaPaid') : t('manager.payZiinaUnpaid')
@@ -85,19 +82,6 @@ function payClass(o) {
   return 'pill-warn'
 }
 
-async function testNotify() {
-  testing.value = true
-  try {
-    const r = await api('/orders/notify-test', { method: 'POST' })
-    if (r.ok) toast.show(t('manager.testSent'))
-    else if (!r.configured) toast.show(t('manager.testNotConfigured'))
-    else toast.show(t('manager.testFailed', { e: r.error || '' }))
-  } catch (e) {
-    toast.show(e.message)
-  } finally {
-    testing.value = false
-  }
-}
 
 // status tabs following the order lifecycle: new → preparing → shipped → delivered → cancelled
 const STATUS_TABS = [
