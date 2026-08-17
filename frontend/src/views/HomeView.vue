@@ -452,10 +452,12 @@ async function openCheckout() {
   promoErr.value = ''
   discount.value = 0
   appliedCode.value = null
-  // checkout requires an account so the order is trackable under the customer
+  // checkout requires an account so the order is trackable under the customer.
+  // redirect back to '/?checkout=1' so the checkout reopens automatically once
+  // they've signed in — no need to find the cart and start over.
   if (!auth.isAuthenticated) {
     showToast(t('checkout.loginRequired'))
-    router.push({ name: 'login', query: { redirect: '/' } })
+    router.push({ name: 'login', query: { redirect: '/?checkout=1' } })
     return
   }
   coErr.value = ''
@@ -530,8 +532,11 @@ watch(openCart, (open) => {
 // on every re-activation, since keep-alive means onMounted fires only once
 function maybeOpenCheckout() {
   if (route.query.checkout && cart.list.length) {
-    openCheckout()
+    // clear the flag FIRST — otherwise this replace() cancels the redirect that
+    // openCheckout() fires when the shopper isn't signed in (that was the bug:
+    // checkout from a product page showed the toast but never reached /login).
     router.replace({ query: {} })
+    openCheckout()
   }
 }
 // fires on first render and on every return to the storefront
