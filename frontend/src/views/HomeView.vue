@@ -657,7 +657,7 @@ onMounted(() => {
 @media (max-width: 560px) { .search-bar { padding: .5rem 1rem; } }
 .sec-more { text-align: center; margin-top: 1.6rem; }
 .value { position: relative; }
-/* the values loader spans the whole row (grid is repeat(4,1fr)) and centers */
+/* the values loader spans the whole row (grid is repeat(3,1fr)) and centers */
 .values-loading { grid-column: 1 / -1; }
 .v-edit {
   position: absolute; top: 6px; inset-inline-end: 6px;
