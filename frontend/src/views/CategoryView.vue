@@ -22,8 +22,10 @@
       </div>
 
       <div v-if="types.length" class="type-filter">
-        <button class="type-chip" :class="{ on: !type }" @click="type = ''">{{ t('home.allTypes') }}</button>
-        <button v-for="ty in types" :key="ty" class="type-chip" :class="{ on: type === ty }" @click="type = ty">{{ ty }}</button>
+        <select class="type-select" v-model="type" :aria-label="t('home.allTypes')">
+          <option value="">{{ t('home.allTypes') }}</option>
+          <option v-for="ty in types" :key="ty" :value="ty">{{ ty }}</option>
+        </select>
       </div>
 
       <ProductFeed :key="activeCat" :category="activeCat" :type="type" :empty-text="t('search.noResults')" @added="onAdded" />
@@ -109,13 +111,20 @@ onBeforeUnmount(() => removeEventListener('scroll', onScroll))
 .cat-back:hover { color: var(--gold); }
 [dir="rtl"] .cat-back svg { transform: scaleX(-1); }
 .sec-head { text-align: center; margin-bottom: 1.4rem; }
-.type-filter { display: flex; flex-wrap: wrap; gap: .5rem; margin: 0 0 1.6rem; justify-content: center; }
-.type-chip {
-  padding: .45rem 1.1rem; border-radius: 999px;
-  border: 1.5px solid rgba(60,74,39,.22); background: transparent;
-  color: var(--green); font-family: inherit; font-size: .9rem; font-weight: 600;
-  cursor: pointer; transition: background .15s, color .15s, border-color .15s;
+.type-filter { display: flex; margin: 0 0 1.6rem; justify-content: center; }
+.type-select {
+  min-width: 220px; max-width: 100%;
+  padding: .6rem 2.6rem .6rem 1.2rem; border-radius: 999px;
+  border: 1.5px solid rgba(60,74,39,.22); background-color: var(--cream);
+  color: var(--green); font-family: inherit; font-size: .95rem; font-weight: 600;
+  cursor: pointer; transition: border-color .15s;
+  /* native arrow off; custom chevron on the trailing side */
+  appearance: none; -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%233c4a27' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right .95rem center;
 }
-.type-chip:hover { border-color: var(--green); }
-.type-chip.on { background: var(--green); color: #fff; border-color: var(--green); }
+.type-select:hover { border-color: var(--green); }
+.type-select:focus { outline: none; border-color: var(--green); }
+/* Arabic (RTL): chevron and padding move to the other side */
+[dir="rtl"] .type-select { padding: .6rem 1.2rem .6rem 2.6rem; background-position: left .95rem center; }
 </style>
