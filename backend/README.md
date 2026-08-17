@@ -81,3 +81,31 @@ TEST_PG_DSN=postgresql://postgres@127.0.0.1:5432/postgres pytest   # 152 tests
 It creates a scratch database called `dukkan_pytest`, applies `db/schema.sql`
 (twice, to prove migrations stay idempotent), and drops it afterwards — so point
 it at a local/throwaway server, never at production.
+
+## Verification email landing in spam
+
+The code sends over plain SMTP, so whether a message reaches the inbox is decided
+by *authentication*, not by the app. In order of impact:
+
+1. **`SMTP_FROM` must match `SMTP_USER`.** A From on another domain (e.g.
+   `noreply@dukkan-kanaan.com` while authenticating as a `gmail.com` account)
+   fails SPF/DKIM alignment at the receiver, and the mail is treated as forged.
+   Leave `SMTP_FROM` empty to use the authenticated address. The API logs a loud
+   warning when the two don't match — the failure is otherwise entirely silent.
+
+2. **A free Gmail account is not a sending domain.** Mail from `@gmail.com` for a
+   shop at `dukkan-kanaan.com` is a mismatch recipients' filters notice, and Gmail
+   rate-limits and reputation-scores personal accounts sending automated mail.
+   This is a ceiling no code change lifts.
+
+   The durable fix is a transactional provider (Resend, Brevo, Mailgun, SendGrid —
+   all have free tiers well above this shop's volume) authenticated for
+   `dukkan-kanaan.com`: publish their SPF and DKIM records, add a DMARC record,
+   then point `SMTP_HOST/USER/PASS` at them. Nothing else in the code changes.
+
+3. **Check what receivers actually see.** In Gmail, open the message → ⋮ →
+   *Show original*: `SPF: PASS`, `DKIM: PASS`, `DMARC: PASS` are what matter.
+   Any `FAIL`/`NONE` explains the spam filing precisely.
+
+Optional environment variables: `SMTP_FROM_NAME` (sender display name, defaults to
+دكّان كنعان) and `SMTP_REPLY_TO` (defaults to the From address).
