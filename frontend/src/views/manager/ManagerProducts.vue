@@ -11,7 +11,7 @@
           <tbody>
             <tr v-if="catalog.loading && !visibleProducts.length"><td colspan="5"><Loader :label="t('common.loading')" /></td></tr>
             <tr v-for="p in visibleProducts" :key="p.id" :class="{ 'row-hidden': !p.is_active }">
-              <td><div class="a-row" style="justify-content:flex-start;gap:.5rem"><img class="a-thumb" :src="p.thumb_url || p.image_url" :alt="p.name"><span style="font-weight:700;color:var(--green)">{{ p.name }}</span><span v-if="!p.is_active" class="a-pill pill-low" style="font-size:.66rem">{{ t('manager.hidden') }}</span></div></td>
+              <td><div class="a-row" style="justify-content:flex-start;gap:.5rem"><img class="a-thumb" :src="p.thumb_url || p.image_url" :alt="pName(p)"><span style="font-weight:700;color:var(--green)">{{ pName(p) }}</span><span v-if="!p.is_active" class="a-pill pill-low" style="font-size:.66rem">{{ t('manager.hidden') }}</span></div></td>
               <td>{{ p.price }}</td>
               <td class="tc"><span class="a-pill" :class="p.stock === 0 ? 'pill-low' : (p.stock <= 5 ? 'pill-warn' : 'pill-ok')">{{ p.stock }}</span></td>
               <td class="tc">
@@ -36,10 +36,14 @@
     <Dialog :open="showAdd" :title="t('manager.addProduct')" max-width="520px" @close="showAdd = false">
           <label class="co-l">{{ t('manager.image') }}</label>
           <ImagePicker v-model="np.images" />
-          <label class="co-l">{{ t('manager.name') }} *</label>
-          <input class="a-input" v-model.trim="np.name">
-          <label class="co-l">{{ t('manager.description') }}</label>
-          <input class="a-input" v-model.trim="np.description">
+          <div class="grid2">
+            <div><label class="co-l">{{ t('manager.name') }} (ع) *</label><input class="a-input" v-model.trim="np.name"></div>
+            <div><label class="co-l">{{ t('manager.name') }} (EN)</label><input class="a-input" dir="ltr" v-model.trim="np.name_en" :placeholder="t('manager.enOptional')"></div>
+          </div>
+          <div class="grid2">
+            <div><label class="co-l">{{ t('manager.description') }} (ع)</label><input class="a-input" v-model.trim="np.description"></div>
+            <div><label class="co-l">{{ t('manager.description') }} (EN)</label><input class="a-input" dir="ltr" v-model.trim="np.description_en" :placeholder="t('manager.enOptional')"></div>
+          </div>
           <div class="grid2">
             <div><label class="co-l">{{ t('manager.category') }}</label>
               <select class="a-select" style="width:100%" v-model="np.category">
@@ -47,15 +51,19 @@
                 <option value="pottery">{{ t('manager.pottery') }}</option>
               </select>
             </div>
-            <div><label class="co-l">{{ t('manager.unit') }}</label><input class="a-input" v-model.trim="np.unit" placeholder="400غ"></div>
-          </div>
-          <div class="grid2">
             <div><label class="co-l">{{ t('manager.price') }} *</label><input class="a-input" type="number" step="0.01" v-model="np.price"></div>
-            <div><label class="co-l">{{ t('manager.stock') }}</label><input class="a-input" type="number" v-model="np.stock"></div>
           </div>
           <div class="grid2">
+            <div><label class="co-l">{{ t('manager.unit') }} (ع)</label><input class="a-input" v-model.trim="np.unit" placeholder="400غ"></div>
+            <div><label class="co-l">{{ t('manager.unit') }} (EN)</label><input class="a-input" dir="ltr" v-model.trim="np.unit_en" :placeholder="t('manager.enOptional')"></div>
+          </div>
+          <div class="grid2">
+            <div><label class="co-l">{{ t('manager.tag') }} (ع)</label><input class="a-input" v-model.trim="np.tag" :placeholder="t('manager.tagPh')" list="tag-presets"></div>
+            <div><label class="co-l">{{ t('manager.tag') }} (EN)</label><input class="a-input" dir="ltr" v-model.trim="np.tag_en" :placeholder="t('manager.enOptional')"></div>
+          </div>
+          <div class="grid2">
+            <div><label class="co-l">{{ t('manager.stock') }}</label><input class="a-input" type="number" v-model="np.stock"></div>
             <div><label class="co-l">{{ t('manager.type') }}</label><input class="a-input" v-model.trim="np.type" :placeholder="t('manager.typePh')" list="type-presets"></div>
-            <div><label class="co-l">{{ t('manager.tag') }}</label><input class="a-input" v-model.trim="np.tag" :placeholder="t('manager.tagPh')" list="tag-presets"></div>
           </div>
           <div class="grid2">
             <div><label class="co-l">{{ t('manager.order') }}</label><input class="a-input" type="number" v-model="np.sort" :placeholder="t('manager.orderPh')"></div>
@@ -76,6 +84,7 @@
 import { reactive, ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useCatalogStore } from '../../stores/catalog'
+import { pName } from '../../utils/product'
 import { useConfirmStore } from '../../stores/confirm'
 import { useToastStore } from '../../stores/toast'
 import ImagePicker from '../../components/ImagePicker.vue'
@@ -94,13 +103,13 @@ const { visible: visibleProducts, sentinel, hasMore } = useInfiniteScroll(() => 
 
 const restockQty = reactive({})
 const showAdd = ref(false)
-const np = reactive({ name: '', description: '', category: 'pantry', unit: '', price: '', stock: '', type: '', tag: '', sort: '', images: [] })
+const np = reactive({ name: '', name_en: '', description: '', description_en: '', category: 'pantry', unit: '', unit_en: '', price: '', stock: '', type: '', tag: '', tag_en: '', sort: '', images: [] })
 const pErr = ref('')
 const pBusy = ref(false)
 
 function openAdd() {
   pErr.value = ''
-  Object.assign(np, { name: '', description: '', category: 'pantry', unit: '', price: '', stock: '', type: '', tag: '', sort: '', images: [] })
+  Object.assign(np, { name: '', name_en: '', description: '', description_en: '', category: 'pantry', unit: '', unit_en: '', price: '', stock: '', type: '', tag: '', tag_en: '', sort: '', images: [] })
   showAdd.value = true
 }
 
@@ -135,7 +144,7 @@ async function toggleActive(p) {
 async function removeProduct(p) {
   const ok = await confirm.ask({
     title: t('manager.delTitle'),
-    message: t('manager.delMsg', { name: p.name }),
+    message: t('manager.delMsg', { name: pName(p) }),
     confirmText: t('manager.remove'),
     danger: true,
   })

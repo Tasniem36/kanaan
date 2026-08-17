@@ -1,6 +1,6 @@
 <template>
   <div class="pdp">
-    <PortalBar :scrolled="scrolled">
+    <PortalBar :scrolled="scrolled" search>
       <template #actions>
         <button class="cart-btn" @click="openCart = true" aria-label="cart">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6h15l-1.5 9h-12L6 6Z"/><path d="M6 6 5 3H2"/><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/></svg>
@@ -40,7 +40,7 @@
           <!-- gallery -->
           <div class="pdp-gallery">
             <div class="pdp-main" @touchstart.passive="onTouchStart" @touchend.passive="onTouchEnd">
-              <img v-if="images.length" :src="images[idx]" :alt="product.name">
+              <img v-if="images.length" :src="images[idx]" :alt="pname">
               <span v-else class="thumb-empty">{{ t('image.noImage') }}</span>
               <template v-if="images.length > 1">
                 <button class="car-nav prev" @click="prev" :aria-label="t('image.prev')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button>
@@ -49,20 +49,28 @@
             </div>
             <div v-if="images.length > 1" class="pdp-thumbs">
               <button v-for="(im, i) in images" :key="i" :class="{ on: i === idx }" @click="idx = i">
-                <img :src="im" :alt="`${product.name} ${i + 1}`">
+                <img :src="im" :alt="`${pname} ${i + 1}`">
               </button>
             </div>
           </div>
 
           <!-- info + add to cart -->
           <div class="pdp-info">
-            <span v-if="product.tag" class="eyebrow">{{ product.tag }}</span>
-            <h1 class="display">{{ product.name }}</h1>
-            <p class="pdp-desc">{{ product.description }}</p>
-            <div class="pdp-price">{{ product.price }} <span class='dh' role='img' aria-label='درهم'></span> <small>/ {{ product.unit }}</small></div>
+            <span v-if="ptag" class="eyebrow">{{ ptag }}</span>
+            <h1 class="display">{{ pname }}</h1>
+            <p class="pdp-desc">{{ pdesc }}</p>
+            <div class="pdp-price">{{ product.price }} <span class='dh' role='img' aria-label='درهم'></span> <small>/ {{ punit }}</small></div>
 
+            <!-- in stock / sold out only; the remaining count stays internal -->
             <p v-if="product.stock === 0" class="pdp-stock out">{{ t('product.outOfStock') }}</p>
             <p v-else class="pdp-stock in">{{ t('product.inStock') }}</p>
+
+            <!-- sold out: let the customer ask to be told when it's back, so the
+                 visit isn't a dead end -->
+            <button v-if="product.stock === 0" class="pdp-notify" :class="{ on: notifyOn }" :disabled="notifyBusy || notifyOn" @click="notifyMe">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-2 8-2 8h16s-2-1-2-8"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+              {{ notifyOn ? t('product.notifyOn') : t('product.notifyMe') }}
+            </button>
 
             <button v-if="auth.isManager" class="pdp-edit" @click="editOpen = true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
@@ -104,6 +112,7 @@
             </div>
 
             <div class="pdp-actions">
+              <WishlistButton :product="product" size="md" label />
               <span v-if="product.stock === 0" class="btn btn-green" style="opacity:.5;pointer-events:none">{{ t('product.outOfStock') }}</span>
               <button v-else-if="!cart.qty(product.id)" class="btn btn-green" @click="add">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>{{ t('product.add') }}
@@ -118,6 +127,15 @@
             </div>
           </div>
         </div>
+
+        <!-- more from the same shelf — keeps the visit going instead of ending
+             at a single product -->
+        <section v-if="related.length" class="pdp-related">
+          <h2 class="display">{{ t('product.relatedTitle') }}</h2>
+          <div class="rel-row">
+            <ProductCard v-for="(p, i) in related" :key="p.id" :product="p" :index="i" @added="onRelatedAdded" />
+          </div>
+        </section>
       </template>
     </main>
 
@@ -130,17 +148,21 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useHead } from '@unhead/vue'
 import { useCatalogStore } from '../stores/catalog'
 import { useCartStore } from '../stores/cart'
 import { useAuthStore } from '../stores/auth'
+import { api } from '../services/api'
+import { pName, pDesc, pUnit, pTag } from '../utils/product'
 import PortalBar from '../components/PortalBar.vue'
 import CartDrawer from '../components/CartDrawer.vue'
 import Dialog from '../components/Dialog.vue'
 import ProductEditor from '../components/ProductEditor.vue'
+import ProductCard from '../components/ProductCard.vue'
+import WishlistButton from '../components/WishlistButton.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -163,18 +185,68 @@ const images = computed(() => {
   return product.value?.image_url ? [product.value.image_url] : []
 })
 
+// product copy in the active language (falls back to Arabic when untranslated)
+const pname = computed(() => pName(product.value))
+const pdesc = computed(() => pDesc(product.value))
+const punit = computed(() => pUnit(product.value))
+const ptag = computed(() => pTag(product.value))
+
 // Per-product <head> for SEO. Reactive to the loaded product, so it updates once
 // the detail loads. Runs client-side (product pages aren't prerendered); this gives
-// JS-capable crawlers a unique title/description per product. og:image is skipped on
-// purpose — product images are base64 data-URLs, useless (and huge) in a meta tag.
+// JS-capable crawlers a unique title/description per product.
 const brand = 'دكّان كنعان'
+const origin = computed(() => (typeof window !== 'undefined' ? window.location.origin : ''))
+const canonicalUrl = computed(() => (origin.value ? `${origin.value}/product/${route.params.id}` : ''))
+
+// Absolute URL for the primary image. Product photos are stored as files under
+// /media now, so unlike the old base64 data-URLs they work as an og:image.
+const absoluteImage = computed(() => {
+  const src = product.value?.image_url || images.value[0] || ''
+  if (!src || src.startsWith('data:')) return ''
+  return /^https?:\/\//.test(src) ? src : origin.value + src
+})
+
+// Product structured data. This is what lets Google show the price and an
+// in-stock badge next to the result instead of a plain blue link. Deliberately
+// carries no rating — we don't have real reviews yet, and inventing them is both
+// against Google's policy and a lie to the customer.
+const jsonLd = computed(() => {
+  const p = product.value
+  if (!p) return null
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: pname.value,
+    description: pdesc.value,
+    sku: p.id,
+    ...(absoluteImage.value ? { image: [absoluteImage.value] } : {}),
+    brand: { '@type': 'Brand', name: brand },
+    offers: {
+      '@type': 'Offer',
+      url: canonicalUrl.value,
+      price: Number(p.price),
+      priceCurrency: 'AED',
+      availability: p.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+      itemCondition: 'https://schema.org/NewCondition',
+    },
+  }
+})
+
 useHead({
-  title: () => (product.value?.name ? `${product.value.name} — ${brand}` : brand),
+  title: () => (pname.value ? `${pname.value} — ${brand}` : brand),
+  link: [{ rel: 'canonical', href: () => canonicalUrl.value }],
   meta: [
-    { name: 'description', content: () => product.value?.description || '' },
-    { property: 'og:title', content: () => product.value?.name || brand },
-    { property: 'og:description', content: () => product.value?.description || '' },
+    { name: 'description', content: () => pdesc.value },
+    { property: 'og:type', content: 'product' },
+    { property: 'og:title', content: () => pname.value || brand },
+    { property: 'og:description', content: () => pdesc.value },
+    { property: 'og:url', content: () => canonicalUrl.value },
+    { property: 'og:image', content: () => absoluteImage.value },
   ],
+  script: [{
+    type: 'application/ld+json',
+    innerHTML: () => (jsonLd.value ? JSON.stringify(jsonLd.value) : ''),
+  }],
 })
 
 function prev() { idx.value = (idx.value - 1 + images.value.length) % images.value.length }
@@ -199,7 +271,7 @@ const shareOpen = ref(false)
 const canNativeShare = ref(false)
 
 const shareUrl = computed(() => (typeof window !== 'undefined' ? window.location.href : ''))
-const shareMsg = computed(() => `${t('product.shareText')} — ${product.value?.name || ''}`)
+const shareMsg = computed(() => `${t('product.shareText')} — ${pname.value}`)
 const shareLinks = computed(() => {
   const u = encodeURIComponent(shareUrl.value)
   const txt = encodeURIComponent(shareMsg.value)
@@ -209,7 +281,7 @@ const shareLinks = computed(() => {
     facebook: `https://www.facebook.com/sharer/sharer.php?u=${u}`,
     telegram: `https://t.me/share/url?url=${u}&text=${txt}`,
     x: `https://twitter.com/intent/tweet?text=${txt}&url=${u}`,
-    email: `mailto:?subject=${encodeURIComponent(product.value?.name || '')}&body=${full}`,
+    email: `mailto:?subject=${encodeURIComponent(pname.value)}&body=${full}`,
   }
 })
 
@@ -225,7 +297,7 @@ async function copyLink() {
 }
 async function nativeShare() {
   shareOpen.value = false
-  try { await navigator.share({ title: product.value?.name, text: shareMsg.value, url: shareUrl.value }) } catch { /* dismissed */ }
+  try { await navigator.share({ title: pname.value, text: shareMsg.value, url: shareUrl.value }) } catch { /* dismissed */ }
 }
 
 let toastTimer
@@ -241,7 +313,7 @@ function onEdited() {
 function add() {
   if (cart.qty(product.value.id) >= product.value.stock) return
   cart.add(product.value)
-  toast.value = t('cart.added', { name: product.value.name })
+  toast.value = t('cart.added', { name: pname.value })
   clearTimeout(toastTimer)
   toastTimer = setTimeout(() => (toast.value = ''), 2200)
 }
@@ -261,21 +333,75 @@ function goCheckout() {
 
 function onScroll() { scrolled.value = scrollY > 10 }
 
-onMounted(async () => {
-  addEventListener('scroll', onScroll, { passive: true })
-  canNativeShare.value = typeof navigator !== 'undefined' && !!navigator.share
-  // load the full-quality product (with its gallery) for the detail page.
-  // only block on the loader when we have nothing to show yet — if the product
-  // was already in the catalog (came from the storefront feed) it shows instantly
-  // while the gallery refreshes in the background.
+// --- related products -----------------------------------------------------
+const related = ref([])
+
+async function loadRelated(id) {
+  related.value = []
+  try {
+    const { products } = await api(`/products/${id}/related`)
+    related.value = products || []
+  } catch { /* a missing suggestions row isn't worth interrupting the page for */ }
+}
+function onRelatedAdded(p) { showToast(t('cart.added', { name: pName(p) })) }
+
+// --- "tell me when it's back" ---------------------------------------------
+const notifyOn = ref(false)
+const notifyBusy = ref(false)
+
+async function loadStockAlert(id) {
+  notifyOn.value = false
+  if (!auth.isAuthenticated || product.value?.stock !== 0) return
+  try {
+    const { subscribed } = await api(`/products/${id}/stock-alert`)
+    notifyOn.value = subscribed
+  } catch { /* button just shows as un-subscribed */ }
+}
+
+async function notifyMe() {
+  if (!auth.isAuthenticated) {
+    showToast(t('product.notifyLogin'))
+    router.push({ name: 'login', query: { redirect: route.fullPath } })
+    return
+  }
+  notifyBusy.value = true
+  try {
+    await api(`/products/${route.params.id}/stock-alert`, { method: 'POST' })
+    notifyOn.value = true
+    showToast(t('product.notifyDone'))
+  } catch (e) {
+    showToast(e.message)
+  } finally {
+    notifyBusy.value = false
+  }
+}
+
+// Load the full-quality product (with its gallery) for the detail page. Only
+// block on the loader when there's nothing to show yet — if the product came
+// from a storefront feed it renders instantly while the gallery refreshes.
+async function load(id) {
+  idx.value = 0
   loading.value = !product.value
   try {
-    await catalog.fetchOne(route.params.id)
+    await catalog.fetchOne(id)
   } catch {
     if (!catalog.products.length) { try { await catalog.fetch() } catch { /* leave as not-found */ } }
   } finally {
     loading.value = false
   }
+  loadRelated(id)
+  loadStockAlert(id)
+}
+
+// A related-product card routes to this same view, so the component is reused
+// and onMounted won't fire again — the id has to be watched or the page would
+// keep showing the previous product's gallery.
+watch(() => route.params.id, (id) => { if (id) load(id) })
+
+onMounted(() => {
+  addEventListener('scroll', onScroll, { passive: true })
+  canNativeShare.value = typeof navigator !== 'undefined' && !!navigator.share
+  load(route.params.id)
 })
 onBeforeUnmount(() => removeEventListener('scroll', onScroll))
 </script>
@@ -381,8 +507,38 @@ onBeforeUnmount(() => removeEventListener('scroll', onScroll))
 .stepper.big { font-size: 1.1rem; }
 .stepper.big button { width: 42px; height: 42px; }
 
+/* "tell me when it's back" — shown only while sold out */
+.pdp-notify {
+  display: inline-flex; align-items: center; gap: .45rem;
+  margin-bottom: 1rem; padding: .55rem 1.1rem; border-radius: 999px;
+  border: 1.5px solid var(--green); background: transparent;
+  color: var(--green); font-family: inherit; font-size: .88rem; font-weight: 700;
+  cursor: pointer; transition: background .2s, color .2s;
+}
+.pdp-notify:hover:not(:disabled) { background: var(--green); color: var(--cream); }
+.pdp-notify.on { border-style: dashed; opacity: .8; cursor: default; }
+.pdp-notify:disabled { cursor: default; }
+.pdp-notify svg { width: 16px; height: 16px; }
+
+/* related products */
+.pdp-related { margin-top: 3.4rem; }
+.pdp-related h2 {
+  font-family: "Amiri", serif; font-size: clamp(1.4rem, 3vw, 2rem);
+  color: var(--green); margin-bottom: 1.2rem;
+}
+/* A scroll-snapping row on narrow screens, a plain grid once there's room. Cards
+   keep a fixed width while scrolling so they don't squash to nothing. */
+.rel-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(212px, 1fr)); gap: 1.2rem; }
+
 @media (max-width: 760px) {
   .pdp-grid { grid-template-columns: 1fr; gap: 1.4rem; }
+  .rel-row {
+    display: flex; overflow-x: auto; scroll-snap-type: x mandatory;
+    gap: 1rem; padding-bottom: .6rem; margin-inline: -1rem; padding-inline: 1rem;
+    scrollbar-width: none;
+  }
+  .rel-row::-webkit-scrollbar { display: none; }
+  .rel-row > * { flex: 0 0 62%; scroll-snap-align: start; }
 }
 
 /* loading skeleton — mirrors the real product layout so nothing is empty */

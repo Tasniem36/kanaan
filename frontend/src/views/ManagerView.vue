@@ -2,6 +2,7 @@
   <div class="portal">
     <PortalBar drawer>
       <nav class="tabs">
+        <RouterLink :to="{ name: 'manager-dashboard' }">{{ t('dash.tab') }}</RouterLink>
         <RouterLink :to="{ name: 'manager-orders' }">
           {{ t('manager.orders') }}<span v-if="newCount" class="nbadge">{{ newCount }}</span>
         </RouterLink>

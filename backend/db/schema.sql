@@ -72,6 +72,16 @@ alter table products add column if not exists type text;
 create index if not exists products_category_type_idx on products (category, type);
 -- manager-controlled display order (lower shows first); ties fall back to created_at
 alter table products add column if not exists sort integer not null default 0;
+-- last edit time, used as <lastmod> in sitemap.xml
+alter table products add column if not exists updated_at timestamptz;
+-- English copy, mirroring content_values' ar/en pairs. The existing columns stay
+-- the Arabic ones so nothing has to be renamed or backfilled; a blank _en falls
+-- back to the Arabic at render time, which is also what makes this safe to roll
+-- out gradually (the manager can translate products one at a time).
+alter table products add column if not exists name_en        text;
+alter table products add column if not exists description_en text;
+alter table products add column if not exists unit_en        text;
+alter table products add column if not exists tag_en         text;
 create index if not exists products_category_sort_idx on products (category, sort);
 -- Backfill: any product with a primary image but no gallery gets a one-item gallery.
 update products set images = jsonb_build_array(image_url)
@@ -117,6 +127,25 @@ create index if not exists order_status_events_order_idx on order_status_events 
 insert into order_status_events (order_id, status, created_at)
   select o.id, o.status, o.created_at from orders o
   where not exists (select 1 from order_status_events e where e.order_id = o.id);
+
+-- ---------- wishlists (saved products per customer) ------------------------
+create table if not exists wishlists (
+  user_id    uuid not null references users (id) on delete cascade,
+  product_id uuid not null references products (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (user_id, product_id)
+);
+create index if not exists wishlists_user_idx on wishlists (user_id, created_at desc);
+
+-- ---------- stock_alerts ("tell me when it's back") -----------------------
+-- Cleared once the alert fires, so a customer is notified once per restock.
+create table if not exists stock_alerts (
+  user_id    uuid not null references users (id) on delete cascade,
+  product_id uuid not null references products (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (user_id, product_id)
+);
+create index if not exists stock_alerts_product_idx on stock_alerts (product_id);
 
 -- ---------- audit_logs (customer action trail, admin-only) ------------------
 create table if not exists audit_logs (
@@ -253,6 +282,14 @@ create table if not exists delivery_zones (
   sort       integer not null default 0,
   created_at timestamptz not null default now()
 );
+
+-- ---------- performance indexes --------------------------------------------
+-- Added for the storefront sorts/filters and the manager dashboard. Each one
+-- backs a query that would otherwise be a full table scan.
+create index if not exists order_items_product_id_idx on order_items (product_id);
+create index if not exists orders_status_idx on orders (status);
+create index if not exists products_price_idx on products (price) where is_active;
+create index if not exists users_created_at_idx on users (created_at desc);
 
 -- ---------- content_values (editable "why us" cards, admin-managed) ---------
 create table if not exists content_values (

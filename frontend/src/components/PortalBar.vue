@@ -6,6 +6,8 @@
     </div>
     <div class="pb-center"><slot /></div>
     <div class="pb-actions">
+      <!-- search is reachable from every page, not just the storefront -->
+      <SearchBox v-if="search" />
       <NotificationBell v-if="auth.isAuthenticated" />
       <slot name="actions" />
       <button v-if="drawer" class="burger" @click="open = true" aria-label="menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
@@ -30,9 +32,15 @@ import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import UserMenu from './UserMenu.vue'
 import NotificationBell from './NotificationBell.vue'
+import SearchBox from './SearchBox.vue'
 import { useAuthStore } from '../stores/auth'
 
-defineProps({ scrolled: { type: Boolean, default: false }, drawer: { type: Boolean, default: false } })
+defineProps({
+  scrolled: { type: Boolean, default: false },
+  drawer: { type: Boolean, default: false },
+  // storefront pages show the search box; the account/manager portals don't
+  search: { type: Boolean, default: false },
+})
 const open = ref(false)
 const auth = useAuthStore()
 </script>

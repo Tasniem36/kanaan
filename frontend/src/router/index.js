@@ -1,6 +1,7 @@
 import { START_LOCATION } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useCartStore } from '../stores/cart'
+import { useWishlistStore } from '../stores/wishlist'
 import HomeView from '../views/HomeView.vue'
 
 // Plain route table. vite-ssg builds the router from this (createWebHistory in the
@@ -9,6 +10,7 @@ export const routes = [
   { path: '/', name: 'home', component: HomeView },
   { path: '/product/:id', name: 'product', component: () => import('../views/ProductView.vue') },
   { path: '/category/:cat', name: 'category', component: () => import('../views/CategoryView.vue') },
+  { path: '/search', name: 'search', component: () => import('../views/SearchView.vue') },
   { path: '/pay/return', name: 'pay-return', component: () => import('../views/PayReturn.vue') },
   { path: '/login', name: 'login', component: () => import('../views/LoginView.vue'), meta: { guestOnly: true } },
   { path: '/register', name: 'register', component: () => import('../views/RegisterView.vue'), meta: { guestOnly: true } },
@@ -20,6 +22,7 @@ export const routes = [
       { path: '', redirect: { name: 'account-profile' } },
       { path: 'profile', name: 'account-profile', component: () => import('../views/account/AccountProfile.vue') },
       { path: 'orders', name: 'account-orders', component: () => import('../views/account/AccountOrders.vue') },
+      { path: 'wishlist', name: 'account-wishlist', component: () => import('../views/account/AccountWishlist.vue') },
     ],
   },
   {
@@ -27,7 +30,8 @@ export const routes = [
     component: () => import('../views/ManagerView.vue'),
     meta: { requiresManager: true },
     children: [
-      { path: '', redirect: { name: 'manager-orders' } },
+      { path: '', redirect: { name: 'manager-dashboard' } },
+      { path: 'dashboard', name: 'manager-dashboard', component: () => import('../views/manager/ManagerDashboard.vue') },
       { path: 'orders', name: 'manager-orders', component: () => import('../views/manager/ManagerOrders.vue') },
       { path: 'products', name: 'manager-products', component: () => import('../views/manager/ManagerProducts.vue') },
       { path: 'clients', name: 'manager-clients', component: () => import('../views/manager/ManagerClients.vue') },
@@ -72,15 +76,21 @@ export function registerGuards(router) {
     const auth = useAuthStore()
     if (!auth.ready) await auth.fetchMe() // resolve session once on first navigation
 
-    // sync the server cart: on login/boot pull+merge (once per token); on logout
-    // clear the local cart so it never leaks to the next user (server cart is kept
-    // — pushToServer is a no-op when signed out).
+    // sync the server cart + saved products: on login/boot pull (once per token);
+    // on logout clear both locally so they never leak to the next user (the server
+    // copies are kept — pushToServer is a no-op when signed out).
     const cart = useCartStore()
+    const wishlist = useWishlistStore()
     if (auth.isAuthenticated) {
-      if (auth.token !== cartSyncedToken) { cartSyncedToken = auth.token; cart.loadFromServer() }
+      if (auth.token !== cartSyncedToken) {
+        cartSyncedToken = auth.token
+        cart.loadFromServer()
+        wishlist.loadIds()
+      }
     } else if (cartSyncedToken) {
       cartSyncedToken = null
       cart.clear()
+      wishlist.clear()
     }
 
     if (to.meta.requiresAuth && !auth.isAuthenticated) {

@@ -97,6 +97,3 @@ def notify_new_order(order: dict) -> dict:
     )
     return _send(text)
 
-
-def send_test_notification() -> dict:
-    return _send("🔔 دكّان كنعان — هذه رسالة اختبار. الإشعارات تعمل ✅")

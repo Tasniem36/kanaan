@@ -1,5 +1,5 @@
 <template>
-  <PortalBar :scrolled="scrolled">
+  <PortalBar :scrolled="scrolled" search>
     <nav class="tabs store-nav" aria-label="nav">
       <a href="#home" :class="{ active: activeSection === 'home' }">{{ t('nav.home') }}</a><a href="#pantry" :class="{ active: activeSection === 'pantry' }">{{ t('nav.pantry') }}</a><a href="#pottery" :class="{ active: activeSection === 'pottery' }">{{ t('nav.pottery') }}</a><a href="#story" :class="{ active: activeSection === 'story' }">{{ t('nav.story') }}</a><a href="#contact" :class="{ active: activeSection === 'contact' }">{{ t('nav.contact') }}</a>
     </nav>
@@ -29,27 +29,21 @@
     </nav>
   </aside>
 
-  <!-- product search — sticky under the nav; auto-hides on scroll down, returns on scroll up / at top -->
-  <div class="search-bar" :class="{ hidden: searchHidden }">
+  <!-- Product search — sticky under the nav; auto-hides on scroll down, returns on
+       scroll up / at top. Submitting hands off to /search, the same results page
+       the header's search box uses, so there's one search experience site-wide. -->
+  <form class="search-bar" :class="{ hidden: searchHidden }" role="search" @submit.prevent="runSearch">
     <div class="search-inner">
       <svg class="search-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-3.5-3.5"/></svg>
-      <input class="search-input" v-model="searchQuery" :placeholder="t('search.placeholder')" type="search" enterkeyhint="search" aria-label="search">
-      <button v-if="searchQuery" class="search-clear" @click="searchQuery = ''" :aria-label="t('search.clear')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      <input class="search-input" v-model="searchQuery" :placeholder="t('search.placeholder')" type="search" enterkeyhint="search" :aria-label="t('search.placeholder')">
+      <button v-if="searchQuery" type="button" class="search-clear" @click="searchQuery = ''" :aria-label="t('search.clear')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      <button v-if="searchQuery.trim()" type="submit" class="search-go">{{ t('search.go') }}</button>
     </div>
-  </div>
+  </form>
 
-  <!-- search results -->
-  <section v-if="searching" class="search-results">
-    <div class="wrap">
-      <div class="sec-head"><h2 class="display">{{ t('search.resultsTitle') }}</h2><p>{{ t('search.resultsFor', { q: activeQuery }) }}</p></div>
-      <ProductFeed :q="activeQuery" :empty-text="t('search.noResults')" @added="onAdded" />
-    </div>
-  </section>
-
-  <template v-else>
   <!-- hero -->
   <section class="hero" id="home">
-    <img class="hero-img" src="/images/hero.jpg" alt="دكّان كنعان — مونة وخزف فلسطيني" /><a class="scroll-cue" href="#pantry" aria-label="استكشف المتجر"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></a>
+    <img class="hero-img" src="/images/hero.jpg" alt="دكّان كنعان — مونة وخزف فلسطيني" fetchpriority="high" decoding="async" /><a class="scroll-cue" href="#pantry" aria-label="استكشف المتجر"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></a>
     <div class="cta">
       <a href="#pantry" class="btn btn-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6h15l-1.5 9h-12L6 6Z"/><path d="M6 6 5 3H2"/></svg>{{ t('hero.shopPantry') }}</a>
       <a href="#pottery" class="btn btn-gold">{{ t('hero.discoverPottery') }}</a>
@@ -106,7 +100,6 @@
       <div class="pic reveal"><img src="/images/tatreez.jpg" alt="قبة الصخرة"></div>
     </div>
   </section>
-  </template>
 
   <footer class="site" id="contact">
     <div class="band" aria-hidden="true"></div>
@@ -276,6 +269,7 @@ import PortalBar from '../components/PortalBar.vue'
 import ImagePicker from '../components/ImagePicker.vue'
 import Loader from '../components/Loader.vue'
 import { normalizeUaePhone } from '../utils/phone'
+import { pName } from '../utils/product'
 
 const { t, locale } = useI18n()
 const cart = useCartStore()
@@ -369,16 +363,15 @@ const showTop = ref(false)
 const activeSection = ref('home')
 
 // product search
-const searchQuery = ref('')   // what the customer is typing
-const activeQuery = ref('')   // debounced term actually sent to the API
+const searchQuery = ref('')     // what the customer is typing
 const searchHidden = ref(false) // search bar auto-hidden while scrolling down
-const searching = computed(() => activeQuery.value.trim().length > 0)
-let searchTimer
-watch(searchQuery, (v) => {
-  clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => { activeQuery.value = v.trim() }, 300)
-})
 
+// Hand off to the shared /search page rather than swapping the storefront's
+// content for results — one results view for both this field and the header box.
+function runSearch() {
+  const q = searchQuery.value.trim()
+  if (q) router.push({ name: 'search', query: { q } })
+}
 const checkoutOpen = ref(false)
 const coErr = ref('')
 const placing = ref(false)
@@ -434,7 +427,7 @@ function flashBadge() {
 }
 function onAdded(p) {
   flashBadge()
-  showToast(t('cart.added', { name: p.name }))
+  showToast(t('cart.added', { name: pName(p) }))
 }
 function subscribe() {
   showToast(t('home.subscribed'))
@@ -653,7 +646,13 @@ onMounted(() => {
   border-radius: 50%; background: var(--cream-2, rgba(60,74,39,.08)); color: var(--green); cursor: pointer;
 }
 .search-clear svg { width: 15px; height: 15px; }
-.search-results { padding-top: 2rem; min-height: 60vh; }
+.search-go {
+  flex: 0 0 auto; padding: .3rem .8rem; border-radius: 999px;
+  background: var(--green); color: var(--cream);
+  font-family: inherit; font-size: .82rem; font-weight: 700; cursor: pointer;
+  transition: background .15s;
+}
+.search-go:hover { background: var(--gold); }
 @media (max-width: 560px) { .search-bar { padding: .5rem 1rem; } }
 .sec-more { text-align: center; margin-top: 1.6rem; }
 .value { position: relative; }

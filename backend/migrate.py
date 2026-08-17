@@ -27,7 +27,7 @@ def _backfill_media(conn):
     done = 0
     for row in rows:
         old_images = row["images"] if isinstance(row["images"], list) else []
-        images = [save_image(i) for i in old_images]
+        images = [u for u in (save_image(i) for i in old_images) if u]
         image_url = save_image(row["image_url"]) or (images[0] if images else None)
         thumb = row["thumb_url"]
         if not thumb or is_data_url(thumb):

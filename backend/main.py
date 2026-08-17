@@ -39,6 +39,9 @@ from routers.inbox import notif_router, msg_router
 from routers.push import router as push_router
 from routers.errors import router as errors_router
 from routers.cart import router as cart_router
+from routers.wishlist import router as wishlist_router
+from routers.stats import router as stats_router
+from routers.seo import router as seo_router
 
 _IS_PROD = os.getenv("ENV", "").lower() in ("prod", "production")
 
@@ -99,6 +102,11 @@ app.include_router(msg_router, prefix="/api/messages")
 app.include_router(push_router, prefix="/api/push")
 app.include_router(errors_router, prefix="/api/errors")
 app.include_router(cart_router, prefix="/api/cart")
+app.include_router(wishlist_router, prefix="/api/wishlist")
+app.include_router(stats_router, prefix="/api/stats")
+# Mounted at the root, NOT under /api: crawlers expect /sitemap.xml, and the
+# no-store middleware above would strip its cache headers.
+app.include_router(seo_router)
 
 # Serve stored product images at /media/... (nginx proxies /media/ here in prod).
 from fastapi.staticfiles import StaticFiles  # noqa: E402

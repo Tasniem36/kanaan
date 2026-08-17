@@ -15,6 +15,7 @@
             <span class="a-pill" :class="statusClass(o.status)">{{ statusLabel(o.status) }}</span>
           </div>
         </div>
+        <OrderTimeline :status="o.status" :events="o.events || []" />
         <div style="margin-top:.4rem;border-top:1px solid rgba(60,74,39,.1);padding-top:.4rem">
           <div class="a-row" v-for="(it, ix) in o.items" :key="ix" style="font-size:.88rem;padding:.1rem 0">
             <span>{{ it.name }} × {{ it.qty }}</span><span class="a-muted">{{ it.price * it.qty }} <span class='dh' role='img' aria-label='درهم'></span></span>
@@ -33,6 +34,7 @@ import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useOrdersStore } from '../../stores/orders'
 import Loader from '../../components/Loader.vue'
+import OrderTimeline from '../../components/OrderTimeline.vue'
 import { useInfiniteScroll } from '../../composables/useInfiniteScroll'
 
 const { t, locale } = useI18n()

@@ -24,6 +24,10 @@ const props = defineProps({
   category: { type: String, default: '' },
   type: { type: String, default: '' },
   q: { type: String, default: '' },
+  // one of the keys in SORT_SQL on the API (featured | newest | price_asc | price_desc | name)
+  sort: { type: String, default: '' },
+  minPrice: { type: [Number, String], default: '' },
+  maxPrice: { type: [Number, String], default: '' },
   pageSize: { type: Number, default: 10 },
   emptyText: { type: String, default: '' },
   // preview: load a single page and stop (no infinite scroll) — used for the
@@ -41,25 +45,37 @@ const sentinel = ref(null)
 const hasMore = computed(() => !loaded.value || items.value.length < total.value)
 
 let io = null
+// Bumped by reload(). A page already in flight when the filters change belongs to
+// the old result set, so its rows must be dropped rather than appended.
+let gen = 0
 
 async function loadMore() {
   if (loading.value || (loaded.value && items.value.length >= total.value)) return
   loading.value = true
+  const mine = gen
   try {
     const qs = new URLSearchParams({ limit: props.pageSize, offset: items.value.length, active: '1' })
     if (props.category) qs.set('category', props.category)
     if (props.type) qs.set('type', props.type)
     if (props.q) qs.set('q', props.q)
+    if (props.sort) qs.set('sort', props.sort)
+    if (props.minPrice !== '' && props.minPrice !== null) qs.set('min_price', props.minPrice)
+    if (props.maxPrice !== '' && props.maxPrice !== null) qs.set('max_price', props.maxPrice)
     const { products, total: t } = await api(`/products?${qs}`)
+    if (mine !== gen) return
     items.value.push(...products)
     total.value = t
     loaded.value = true
     nextTick(revealCards)
   } catch {
-    loaded.value = true // stop retrying on error
+    if (mine === gen) loaded.value = true // stop retrying on error
   } finally {
-    loading.value = false
-    nextTick(arm)
+    // only the current request may release the loading flag — a newer one has
+    // already claimed it
+    if (mine === gen) {
+      loading.value = false
+      nextTick(arm)
+    }
   }
 }
 
@@ -79,15 +95,18 @@ function arm() {
 
 // let the parent refresh (e.g. after an order changes stock)
 function reload() {
+  gen++            // invalidate whatever page is in flight
   items.value = []
   total.value = 0
   loaded.value = false
+  loading.value = false
   loadMore()
 }
 defineExpose({ reload })
 
-// switching the active filter chip / search term restarts the feed from empty
-watch(() => [props.type, props.q], reload)
+// changing any filter (chip, search term, sort, price range) restarts the feed
+// from empty — offsets from the previous result set are meaningless afterwards
+watch(() => [props.type, props.q, props.sort, props.minPrice, props.maxPrice], reload)
 
 onMounted(loadMore)
 onBeforeUnmount(() => io && io.disconnect())

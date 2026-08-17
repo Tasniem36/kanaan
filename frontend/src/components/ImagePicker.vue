@@ -78,17 +78,27 @@ function makePrimary(i) {
   commit(next)
 }
 
-// Downscale each picked file to max 900px, re-encode as a compact JPEG data URL.
+// Downscale each picked file to max 1400px and encode it as a compact data URL.
+// WebP is ~35% smaller than JPEG at the same visual quality, which is the whole
+// upload payload — so a multi-photo product saves noticeably faster on mobile.
+// Browsers that can't encode WebP silently hand back a PNG (much *larger*), so
+// the result is checked and JPEG used instead.
+const MAX_DIM = 1400
+
+function encode(canvas) {
+  const webp = canvas.toDataURL('image/webp', 0.85)
+  return webp.startsWith('data:image/webp') ? webp : canvas.toDataURL('image/jpeg', 0.82)
+}
+
 function processFile(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => {
       const img = new Image()
       img.onload = () => {
-        const max = 900
         let { width, height } = img
-        if (width > max || height > max) {
-          const s = max / Math.max(width, height)
+        if (width > MAX_DIM || height > MAX_DIM) {
+          const s = MAX_DIM / Math.max(width, height)
           width = Math.round(width * s)
           height = Math.round(height * s)
         }
@@ -96,7 +106,7 @@ function processFile(file) {
         canvas.width = width
         canvas.height = height
         canvas.getContext('2d').drawImage(img, 0, 0, width, height)
-        resolve(canvas.toDataURL('image/jpeg', 0.82))
+        resolve(encode(canvas))
       }
       img.onerror = reject
       img.src = reader.result

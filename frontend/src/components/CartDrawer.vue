@@ -16,9 +16,9 @@
       </div>
       <div v-else>
         <div class="cart-item" v-for="it in cart.list" :key="it.id">
-          <span class="pic"><img :src="it.image_url" :alt="it.name"></span>
+          <span class="pic"><img :src="it.image_url" :alt="pName(it)"></span>
           <div class="info">
-            <h4>{{ it.name }}</h4>
+            <h4>{{ pName(it) }}</h4>
             <div class="u">{{ ar(it.price) }} <span class='dh' role='img' aria-label='درهم'></span> × {{ ar(it.q) }}</div>
             <button class="remove" @click="cart.removeAll(it.id)">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14" stroke-linecap="round"><path d="M5 7h14M9 7V5h6v2M7 7l1 13h8l1-13"/></svg>{{ t('cart.remove') }}
@@ -51,6 +51,7 @@ import { computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useCartStore } from '../stores/cart'
 import { useSettingsStore } from '../stores/settings'
+import { pName } from '../utils/product'
 
 const props = defineProps({ open: { type: Boolean, default: false } })
 const emit = defineEmits(['close', 'checkout'])

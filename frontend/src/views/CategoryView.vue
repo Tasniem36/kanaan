@@ -1,6 +1,6 @@
 <template>
   <div class="cat-page">
-    <PortalBar :scrolled="scrolled">
+    <PortalBar :scrolled="scrolled" search>
       <template #actions>
         <button class="cart-btn" @click="openCart = true" aria-label="cart">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6h15l-1.5 9h-12L6 6Z"/><path d="M6 6 5 3H2"/><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/></svg>
@@ -21,14 +21,24 @@
         <p>{{ t(meta.desc) }}</p>
       </div>
 
-      <div v-if="types.length" class="type-filter">
-        <select class="type-select" v-model="type" :aria-label="t('home.allTypes')">
-          <option value="">{{ t('home.allTypes') }}</option>
-          <option v-for="ty in types" :key="ty" :value="ty">{{ ty }}</option>
-        </select>
-      </div>
+      <ProductFilters
+        :types="types"
+        v-model:type="type"
+        v-model:sort="sort"
+        v-model:min-price="minPrice"
+        v-model:max-price="maxPrice"
+      />
 
-      <ProductFeed :key="activeCat" :category="activeCat" :type="type" :empty-text="t('search.noResults')" @added="onAdded" />
+      <ProductFeed
+        :key="activeCat"
+        :category="activeCat"
+        :type="type"
+        :sort="sort"
+        :min-price="minPrice"
+        :max-price="maxPrice"
+        :empty-text="t('filters.noMatch')"
+        @added="onAdded"
+      />
     </main>
 
     <CartDrawer :open="openCart" @close="openCart = false" @checkout="goCheckout" />
@@ -48,9 +58,11 @@ import { useI18n } from 'vue-i18n'
 import { useCartStore } from '../stores/cart'
 import { useCatalogStore } from '../stores/catalog'
 import { useToastStore } from '../stores/toast'
+import { pName } from '../utils/product'
 import PortalBar from '../components/PortalBar.vue'
 import CartDrawer from '../components/CartDrawer.vue'
 import ProductFeed from '../components/ProductFeed.vue'
+import ProductFilters from '../components/ProductFilters.vue'
 
 const CATS = {
   pantry: { eyebrow: 'home.pantryEyebrow', title: 'home.pantryTitle', desc: 'home.pantryDesc' },
@@ -71,10 +83,26 @@ const activeCat = ref(CATS[route.params.cat] ? route.params.cat : 'pantry')
 const meta = computed(() => CATS[activeCat.value] || CATS.pantry)
 const openCart = ref(false)
 const scrolled = ref(false)
-const type = ref('')
 const types = ref([])
 
-function onAdded(p) { toast.show(t('cart.added', { name: p.name })) }
+// Filter state lives in the query string, so a filtered shelf can be shared or
+// bookmarked and survives the back button. Seeded from the URL on load.
+const type = ref(String(route.query.type || ''))
+const sort = ref(String(route.query.sort || 'featured'))
+const minPrice = ref(route.query.min ? String(route.query.min) : '')
+const maxPrice = ref(route.query.max ? String(route.query.max) : '')
+
+watch([type, sort, minPrice, maxPrice], () => {
+  const query = {}
+  if (type.value) query.type = type.value
+  if (sort.value && sort.value !== 'featured') query.sort = sort.value
+  if (minPrice.value !== '') query.min = minPrice.value
+  if (maxPrice.value !== '') query.max = maxPrice.value
+  // replace, not push — filter tweaks shouldn't each become a back-button step
+  router.replace({ query })
+})
+
+function onAdded(p) { toast.show(t('cart.added', { name: pName(p) })) }
 function goCheckout() {
   openCart.value = false
   router.push({ name: 'home', query: { checkout: '1' } })
@@ -85,20 +113,20 @@ function backToStore() {
 }
 
 function loadTypes() {
-  type.value = ''
   catalog.fetchTypes(activeCat.value).then((t) => (types.value = t)).catch(() => {})
 }
 watch(cat, (c) => {
   if (!c) return                    // navigated away (e.g. to a product) — keep state for back
   if (!CATS[c]) { router.replace('/'); return } // unknown category → storefront
   activeCat.value = c               // switched to another real category
+  type.value = ''                   // sub-types are per-category; the old one won't exist here
   loadTypes()
 })
 
 function onScroll() { scrolled.value = scrollY > 10 }
 onMounted(() => {
   if (!CATS[cat.value]) { router.replace('/'); return }
-  loadTypes()
+  loadTypes()                       // note: does NOT reset `type` — it may come from the URL
   addEventListener('scroll', onScroll, { passive: true })
 })
 onBeforeUnmount(() => removeEventListener('scroll', onScroll))
@@ -111,20 +139,4 @@ onBeforeUnmount(() => removeEventListener('scroll', onScroll))
 .cat-back:hover { color: var(--gold); }
 [dir="rtl"] .cat-back svg { transform: scaleX(-1); }
 .sec-head { text-align: center; margin-bottom: 1.4rem; }
-.type-filter { display: flex; margin: 0 0 1.6rem; justify-content: center; }
-.type-select {
-  min-width: 220px; max-width: 100%;
-  padding: .6rem 2.6rem .6rem 1.2rem; border-radius: 999px;
-  border: 1.5px solid rgba(60,74,39,.22); background-color: var(--cream);
-  color: var(--green); font-family: inherit; font-size: .95rem; font-weight: 600;
-  cursor: pointer; transition: border-color .15s;
-  /* native arrow off; custom chevron on the trailing side */
-  appearance: none; -webkit-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%233c4a27' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
-  background-repeat: no-repeat; background-position: right .95rem center;
-}
-.type-select:hover { border-color: var(--green); }
-.type-select:focus { outline: none; border-color: var(--green); }
-/* Arabic (RTL): chevron and padding move to the other side */
-[dir="rtl"] .type-select { padding: .6rem 1.2rem .6rem 2.6rem; background-position: left .95rem center; }
 </style>

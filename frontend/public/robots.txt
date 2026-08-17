@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+
+# Nothing to index behind sign-in, and crawling a payment return URL is pointless.
+Disallow: /account
+Disallow: /manager
+Disallow: /pay
+Disallow: /login
+Disallow: /register
+
+Sitemap: https://dukkan-kanaan.com/sitemap.xml
