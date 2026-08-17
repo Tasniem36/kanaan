@@ -7,6 +7,9 @@ let last = 0
 // browsers (they error on their own, our site is fine), benign browser warnings,
 // and stale-chunk errors (handled by an auto-reload in the router instead).
 const IGNORE = [
+  // Opaque cross-origin error — carries no file/line/stack (detail is just ":").
+  // Almost always a third-party/ad script inside a social in-app browser, not us.
+  'Script error.',
   'webkit.messageHandlers',
   'postMessage: Java object is gone',
   'iabjs://',
