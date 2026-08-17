@@ -33,7 +33,13 @@ export const useOrdersStore = defineStore('orders', {
     async setStatus(id, status) {
       const { order } = await api(`/orders/${id}/status`, { method: 'PATCH', body: { status } })
       const i = this.orders.findIndex((o) => o.id === id)
-      if (i !== -1) this.orders[i] = { ...this.orders[i], status: order.status }
+      if (i !== -1) {
+        // extend the tracking timeline too, so the open order stays truthful
+        // without a full refetch
+        const prev = this.orders[i]
+        const events = [...(prev.events || []), { order_id: id, status: order.status, created_at: new Date().toISOString() }]
+        this.orders[i] = { ...prev, status: order.status, events }
+      }
       return order
     },
     // soft-delete on the server (kept in the DB, just hidden); drop it from the list

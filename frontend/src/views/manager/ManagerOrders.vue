@@ -30,14 +30,18 @@
         <div class="a-muted">{{ g.orders.length }} {{ t('manager.ordersLabel') }} · {{ g.total }} <span class='dh' role='img' aria-label='درهم'></span></div>
       </div>
 
-      <div class="a-card" v-for="o in g.orders" :key="o.id">
+      <div
+        class="a-card o-card" v-for="o in g.orders" :key="o.id"
+        role="button" tabindex="0" :aria-label="t('manager.detailsTitle')"
+        @click="detailId = o.id" @keydown.enter.prevent="detailId = o.id" @keydown.space.prevent="detailId = o.id"
+      >
         <div class="a-row order-top">
           <div>
             <div><span style="font-family:monospace;color:var(--green)">#{{ o.id.slice(0, 8) }}</span> <span class="a-muted">· {{ fmtDate(o.created_at) }}</span></div>
             <div style="margin:.25rem 0"><span class="a-pill" :class="payClass(o)">{{ payLabel(o) }}</span></div>
             <div class="a-muted">📍 {{ t('manager.orderAddr', { city: o.city, street: o.street, house: o.house }) }}<span v-if="o.notes"> ({{ o.notes }})</span></div>
           </div>
-          <div class="a-row order-ctrls" style="gap:.6rem">
+          <div class="a-row order-ctrls" style="gap:.6rem" @click.stop @keydown.stop>
             <span class="a-total">{{ o.total }} <span class='dh' role='img' aria-label='درهم'></span></span>
             <select class="a-status" :value="o.status" @change="changeStatus(o, $event)">
               <option value="pending">{{ t('status.pending') }}</option><option value="paid">{{ t('status.paid') }}</option><option value="preparing">{{ t('status.preparing') }}</option><option value="fulfilled">{{ t('status.fulfilled') }}</option><option value="delivered">{{ t('status.delivered') }}</option><option value="cancelled">{{ t('status.cancelled') }}</option>
@@ -56,6 +60,69 @@
       </div>
     </div>
     <div v-if="hasMore" ref="sentinel" class="load-more"><span class="ld-spin"></span></div>
+
+    <!-- full order details: who to call, what to deliver, where -->
+    <Dialog :open="!!detail" :title="t('manager.detailsTitle')" max-width="560px" @close="detailId = null">
+      <template v-if="detail">
+        <div class="d-head">
+          <span style="font-family:monospace;color:var(--green)">#{{ detail.id.slice(0, 8) }}</span>
+          <span class="a-muted">{{ fmtDate(detail.created_at) }}</span>
+          <span class="a-pill" :class="statusClass(detail.status)">{{ t(`status.${detail.status}`) }}</span>
+        </div>
+
+        <!-- contact the customer -->
+        <h4 class="d-sec">{{ t('manager.customerInfo') }}</h4>
+        <div class="d-box">
+          <div class="d-name">
+            {{ detail.customer_name }}
+            <span class="a-pill" :class="detail.user_id ? 'pill-ok' : 'pill-warn'">{{ detail.user_id ? t('manager.registered') : t('manager.guest') }}</span>
+          </div>
+          <div class="d-phone" dir="ltr">{{ detail.phone }}</div>
+          <div v-if="detail.customer_email" class="a-muted" dir="ltr">{{ detail.customer_email }}</div>
+          <div class="d-actions">
+            <a class="d-act call" :href="`tel:${detail.phone}`">☎ {{ t('manager.call') }}</a>
+            <a class="d-act wa" :href="waLink(detail)" target="_blank" rel="noopener">💬 {{ t('manager.whatsapp') }}</a>
+            <button class="d-act copy" @click="copyPhone(detail.phone)">⧉ {{ t('manager.copyPhone') }}</button>
+          </div>
+        </div>
+
+        <!-- where it goes -->
+        <h4 class="d-sec">{{ t('manager.deliveryInfo') }}</h4>
+        <div class="d-box">
+          <div>📍 {{ t('manager.orderAddr', { city: detail.city, street: detail.street, house: detail.house }) }}</div>
+          <div v-if="detail.notes" class="d-note">📝 {{ detail.notes }}</div>
+        </div>
+
+        <!-- what's in it -->
+        <h4 class="d-sec">{{ t('manager.orderItems') }}</h4>
+        <div class="d-box">
+          <div class="a-row d-line" v-for="(it, ix) in detail.items" :key="ix">
+            <span>{{ it.name }} × {{ it.qty }}</span><span class="a-muted">{{ money(it.price * it.qty) }} <span class='dh' role='img' aria-label='درهم'></span></span>
+          </div>
+          <div class="a-row d-line d-sum"><span class="a-muted">{{ t('manager.subtotal') }}</span><span class="a-muted">{{ money(subtotal) }} <span class='dh' role='img' aria-label='درهم'></span></span></div>
+          <div v-if="Number(detail.discount_amount) > 0" class="a-row d-line"><span class="a-muted">{{ t('manager.discountLine', { code: detail.discount_code || '—' }) }}</span><span class="a-muted">− {{ money(detail.discount_amount) }} <span class='dh' role='img' aria-label='درهم'></span></span></div>
+          <div v-if="Number(detail.delivery_fee) > 0" class="a-row d-line"><span class="a-muted">{{ t('checkout.deliveryFee') }}</span><span class="a-muted">{{ money(detail.delivery_fee) }} <span class='dh' role='img' aria-label='درهم'></span></span></div>
+          <div class="a-row d-line d-total"><span>{{ t('manager.totalLine') }}</span><span class="a-total">{{ money(detail.total) }} <span class='dh' role='img' aria-label='درهم'></span></span></div>
+        </div>
+
+        <!-- how it was paid -->
+        <h4 class="d-sec">{{ t('manager.paymentInfo') }}</h4>
+        <div class="d-box">
+          <span class="a-pill" :class="payClass(detail)">{{ payLabel(detail) }}</span>
+        </div>
+
+        <!-- how it got here -->
+        <template v-if="detail.events && detail.events.length">
+          <h4 class="d-sec">{{ t('manager.timeline') }}</h4>
+          <ol class="d-time">
+            <li v-for="(ev, ix) in detail.events" :key="ix">
+              <span>{{ t(`status.${ev.status}`) }}</span>
+              <span class="a-muted">{{ fmtDate(ev.created_at) }}</span>
+            </li>
+          </ol>
+        </template>
+      </template>
+    </Dialog>
   </section>
 </template>
 
@@ -66,6 +133,7 @@ import { useOrdersStore } from '../../stores/orders'
 import { useToastStore } from '../../stores/toast'
 import { useConfirmStore } from '../../stores/confirm'
 import Loader from '../../components/Loader.vue'
+import Dialog from '../../components/Dialog.vue'
 import { useInfiniteScroll } from '../../composables/useInfiniteScroll'
 
 const { t, locale } = useI18n()
@@ -80,6 +148,36 @@ function payLabel(o) {
 function payClass(o) {
   if (o.payment_method === 'ziina') return o.payment_status === 'paid' ? 'pill-ok' : 'pill-low'
   return 'pill-warn'
+}
+const statusClass = (s) => ({ pending: 'pill-warn', paid: 'pill-ok', preparing: 'pill-warn', fulfilled: 'pill-ok', delivered: 'pill-ok', cancelled: 'pill-low' }[s] || '')
+
+// details dialog — held by id, so the card keeps following the store (a status
+// change made from the list stays in sync with the open dialog)
+const detailId = ref(null)
+const detail = computed(() => ordersStore.orders.find((o) => o.id === detailId.value) || null)
+const subtotal = computed(() => (detail.value?.items || []).reduce((s, it) => s + Number(it.price) * Number(it.qty), 0))
+const money = (n) => Math.round(Number(n) * 100) / 100
+
+// wa.me wants bare international digits, no '+' or spaces. New orders are stored
+// as +9715XXXXXXXX, but older rows may still hold a local 05… number.
+function waDigits(phone) {
+  let d = String(phone || '').replace(/\D/g, '')
+  if (d.startsWith('00')) d = d.slice(2)
+  return d.startsWith('971') ? d : '971' + d.replace(/^0+/, '')
+}
+// opens WhatsApp with the order already written out, so the manager just sends
+const waLink = (o) => {
+  const text = t('manager.waMessage', {
+    name: o.customer_name,
+    id: o.id.slice(0, 8),
+    status: t(`status.${o.status}`),
+  })
+  return `https://wa.me/${waDigits(o.phone)}?text=${encodeURIComponent(text)}`
+}
+
+async function copyPhone(phone) {
+  try { await navigator.clipboard.writeText(phone); toast.show(t('manager.phoneCopied')) }
+  catch { toast.show(phone) }   // clipboard blocked (insecure context) → show it to copy by hand
 }
 
 
@@ -187,6 +285,32 @@ h1 { font-family: 'Amiri', serif; color: var(--green); font-size: 1.9rem; }
 .cust-head { display: flex; justify-content: space-between; align-items: center; gap: .6rem; flex-wrap: wrap; padding: .5rem .2rem; margin-bottom: .5rem; border-bottom: 2px solid rgba(60,74,39,.15); }
 .cust-head b { color: var(--green); font-size: 1.05rem; }
 .a-status { max-width: 100%; }
+/* the whole card opens the details dialog */
+.o-card { cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+.o-card:hover { border-color: rgba(60,74,39,.35); box-shadow: 0 10px 24px -18px rgba(60,74,39,.9); }
+.o-card:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+/* details dialog */
+.d-head { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; justify-content: center; margin-bottom: .4rem; }
+.d-sec { font-size: .82rem; font-weight: 700; color: var(--green); margin: .9rem 0 .35rem; }
+.d-box { background: var(--paper, #fff); border: 1px solid rgba(60,74,39,.12); border-radius: 12px; padding: .7rem .85rem; }
+.d-name { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; font-weight: 700; color: var(--green); }
+.d-phone { font-family: monospace; font-size: 1.15rem; color: var(--terra-deep, var(--green)); margin-top: .2rem; }
+.d-note { margin-top: .3rem; color: var(--muted); font-size: .88rem; }
+.d-actions { display: flex; gap: .45rem; flex-wrap: wrap; margin-top: .6rem; }
+.d-act {
+  padding: .4rem .85rem; border-radius: 999px; font-size: .85rem; font-weight: 600;
+  border: 1.5px solid rgba(60,74,39,.25); color: var(--green); background: transparent;
+  cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: .3rem;
+}
+.d-act:hover { background: var(--green); color: #fff; border-color: var(--green); }
+/* WhatsApp is the fastest way to reach a customer here — make it the loud one */
+.d-act.wa { background: #25d366; border-color: #25d366; color: #fff; }
+.d-act.wa:hover { background: #1da851; border-color: #1da851; }
+.d-line { font-size: .88rem; padding: .12rem 0; }
+.d-sum { border-top: 1px solid rgba(60,74,39,.1); margin-top: .35rem; padding-top: .35rem; }
+.d-total { border-top: 1px solid rgba(60,74,39,.15); margin-top: .35rem; padding-top: .35rem; font-weight: 700; color: var(--green); }
+.d-time { list-style: none; margin: 0; padding: 0; }
+.d-time li { display: flex; justify-content: space-between; gap: .6rem; font-size: .85rem; padding: .25rem 0; border-inline-start: 2px solid rgba(60,74,39,.15); padding-inline-start: .7rem; }
 .o-del {
   flex: 0 0 auto; width: 34px; height: 34px; border-radius: 9px;
   display: grid; place-items: center; cursor: pointer;

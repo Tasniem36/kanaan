@@ -102,6 +102,22 @@ alter table orders add column if not exists hidden boolean not null default fals
 alter table orders add column if not exists discount_code text;
 alter table orders add column if not exists discount_amount numeric(10, 2) not null default 0;
 
+-- ---------- order_status_events (when each status was reached) --------------
+-- Powers the customer-facing tracking timeline: one row per transition, so the
+-- account page can show *when* an order was paid / prepared / delivered.
+create table if not exists order_status_events (
+  id         uuid primary key default gen_random_uuid(),
+  order_id   uuid not null references orders (id) on delete cascade,
+  status     order_status not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists order_status_events_order_idx on order_status_events (order_id, created_at);
+-- Backfill: orders placed before this table existed get a single event for the
+-- status they're currently in, timed at their creation.
+insert into order_status_events (order_id, status, created_at)
+  select o.id, o.status, o.created_at from orders o
+  where not exists (select 1 from order_status_events e where e.order_id = o.id);
+
 -- ---------- audit_logs (customer action trail, admin-only) ------------------
 create table if not exists audit_logs (
   id         uuid primary key default gen_random_uuid(),
