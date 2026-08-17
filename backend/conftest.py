@@ -17,6 +17,10 @@ os.environ.pop("ENV", None)
 # Stub the connection pool before anything imports db.py, so no socket is opened.
 import psycopg_pool
 
+# Kept so the opt-in integration tests (test_db_integration.py) can build a real
+# pool against a scratch database. Nothing else should use it.
+REAL_CONNECTION_POOL = psycopg_pool.ConnectionPool
+
 
 class _FakePool:
     def __init__(self, *a, **k):

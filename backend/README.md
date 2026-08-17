@@ -58,3 +58,26 @@ Register through the app (Phase 2), then once:
 ```sql
 update users set role = 'manager' where email = 'you@example.com';
 ```
+
+## Tests
+
+```bash
+pip install -r requirements-dev.txt
+pytest                    # 131 tests, no database needed
+```
+
+The default run patches the database out, so it's fast and works offline. It
+covers request handling, access control, the image pipeline, and the SQL each
+endpoint *builds* (filters, the sort whitelist, parameterisation).
+
+A second tier exercises the SQL for real — window-function counts, the CTEs,
+stock restores, and the dashboard's revenue arithmetic. It's skipped unless you
+point it at a PostgreSQL server:
+
+```bash
+TEST_PG_DSN=postgresql://postgres@127.0.0.1:5432/postgres pytest   # 152 tests
+```
+
+It creates a scratch database called `dukkan_pytest`, applies `db/schema.sql`
+(twice, to prove migrations stay idempotent), and drops it afterwards — so point
+it at a local/throwaway server, never at production.
