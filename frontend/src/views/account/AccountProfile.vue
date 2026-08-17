@@ -1,5 +1,23 @@
 <template>
   <section class="panel">
+    <div class="panel-head"><h2>{{ t('account.profileTitle') }}</h2></div>
+    <form class="prof-form" @submit.prevent="saveProfile">
+      <div class="a-grid">
+        <div class="a-field"><label>{{ t('account.fullName') }}</label><input class="a-input" v-model.trim="pf.full_name" autocomplete="name"></div>
+        <div class="a-field"><label>{{ t('account.phone') }}</label><input class="a-input" type="tel" inputmode="tel" dir="ltr" v-model.trim="pf.phone" placeholder="050 123 4567"></div>
+      </div>
+      <div class="a-field">
+        <label>{{ t('account.email') }}</label>
+        <input class="a-input" :value="auth.user?.email" dir="ltr" disabled>
+        <small class="a-muted">{{ t('account.emailLocked') }}</small>
+      </div>
+      <p v-if="profErr" class="auth-err">{{ profErr }}</p>
+      <p v-if="profOk" class="prof-ok">✓ {{ t('account.saved') }}</p>
+      <button class="a-btn" :disabled="profBusy">{{ profBusy ? '…' : t('account.saveProfile') }}</button>
+    </form>
+  </section>
+
+  <section class="panel">
     <div class="panel-head"><h2>{{ t('account.addresses') }}</h2></div>
     <Loader v-if="addr.loading && !addr.addresses.length" :label="t('common.loading')" />
     <div v-else-if="addr.addresses.length" class="addr-grid">
@@ -40,16 +58,44 @@
 </template>
 
 <script setup>
-import { reactive, ref, onMounted } from 'vue'
+import { reactive, ref, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAddressesStore } from '../../stores/addresses'
 import { useConfirmStore } from '../../stores/confirm'
+import { useAuthStore } from '../../stores/auth'
 import Loader from '../../components/Loader.vue'
 import { EMIRATES } from '../../utils/delivery'
+import { normalizeUaePhone } from '../../utils/phone'
 
 const { t, locale } = useI18n()
 const addr = useAddressesStore()
 const confirm = useConfirmStore()
+const auth = useAuthStore()
+
+// profile (name + phone) — email is fixed, verified at signup
+const pf = reactive({ full_name: '', phone: '' })
+const profErr = ref('')
+const profOk = ref(false)
+const profBusy = ref(false)
+// keep the form in sync with the loaded user (populates once /auth/me resolves)
+watch(() => auth.user, (u) => { pf.full_name = u?.full_name || ''; pf.phone = u?.phone || '' }, { immediate: true })
+
+async function saveProfile() {
+  profErr.value = ''
+  profOk.value = false
+  const phone = normalizeUaePhone(pf.phone)
+  if (!phone) { profErr.value = t('auth.errPhoneUAE'); return }
+  profBusy.value = true
+  try {
+    await auth.updateProfile({ full_name: pf.full_name, phone })
+    profOk.value = true
+    setTimeout(() => (profOk.value = false), 2500)
+  } catch (e) {
+    profErr.value = e.message
+  } finally {
+    profBusy.value = false
+  }
+}
 
 const na = reactive({ label: '', city: '', street: '', house: '', notes: '', is_default: false })
 const addrErr = ref('')
@@ -88,4 +134,8 @@ onMounted(() => addr.fetch())
 .addr-actions .danger { background: rgba(156,43,43,.1); color: var(--red, #9c2b2b); }
 .addr-form { border-top: 1px dashed rgba(60,74,39,.2); padding-top: 1rem; margin-top: .4rem; }
 .auth-err { color: var(--red, #9c2b2b); font-size: .85rem; }
+.prof-form { display: grid; gap: .4rem; }
+.prof-form .a-field { margin-bottom: .4rem; }
+.prof-form .a-input:disabled { opacity: .65; cursor: not-allowed; background: var(--cream-2, rgba(60,74,39,.06)); }
+.prof-ok { color: var(--green); font-size: .85rem; font-weight: 600; }
 </style>

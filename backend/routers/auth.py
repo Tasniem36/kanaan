@@ -203,3 +203,29 @@ def me(user=Depends(current_user)):
     if not row:
         raise HTTPException(404, "User not found")
     return {"user": row}
+
+
+# PATCH /api/auth/me — let a signed-in customer edit their own name/phone.
+# Email is intentionally NOT editable: it's verified at signup and is the login
+# identity, so changing it would need a fresh verification flow.
+@router.patch("/me")
+def update_me(user=Depends(current_user), payload: dict = Body(default={})):
+    fields, values = [], []
+    if "full_name" in payload:
+        fields.append("full_name = %s")
+        values.append((payload.get("full_name") or "").strip() or None)
+    if "phone" in payload:
+        phone = normalize_uae_phone(payload.get("phone"))
+        if not phone:
+            raise HTTPException(400, "Invalid UAE phone number")
+        fields.append("phone = %s")
+        values.append(phone)
+    if not fields:
+        raise HTTPException(400, "Nothing to update")
+    row = fetch_one(
+        f"update users set {', '.join(fields)} where id = %s returning id, email, full_name, phone, role",
+        values + [user["id"]],
+    )
+    if not row:
+        raise HTTPException(404, "User not found")
+    return {"user": row}

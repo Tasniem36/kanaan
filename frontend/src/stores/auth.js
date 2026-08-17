@@ -52,6 +52,12 @@ export const useAuthStore = defineStore('auth', {
       const { token, user } = await api('/auth/login', { method: 'POST', body: { email, password }, auth: false })
       this.setSession(token, user)
     },
+    // update the signed-in customer's own name/phone (email is not editable)
+    async updateProfile(patch) {
+      const { user } = await api('/auth/me', { method: 'PATCH', body: patch })
+      this.user = user
+      return user
+    },
     async fetchMe() {
       if (!this.token) { this.ready = true; return }
       try {
