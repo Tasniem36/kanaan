@@ -9,7 +9,9 @@
         <h2 v-if="copy.title" class="display">{{ copy.title }}</h2>
         <p v-if="copy.desc">{{ copy.desc }}</p>
         <div v-if="reviews.total" class="rv-summary">
-          <Stars :value="Math.round(reviews.average || 0)" />
+          <!-- the exact average, not a rounded one: the number beside it says 4.6,
+               so the stars must not show five -->
+          <Stars :value="reviews.average || 0" />
           <span>{{ summary }}</span>
         </div>
       </div>
@@ -136,7 +138,10 @@ const form = reactive({ rating: 0, body: '', city: '' })
 
 // "4.5 out of 5 · 12 reviews" — the count is pluralized separately so the average
 // clause isn't repeated once per Arabic plural form.
-const summary = computed(() => t('reviews.summary', {
+//
+// With a single review there is no average to speak of, so that wording drops out:
+// "متوسّط 5 من 5 · رأيٌ واحد" claims a statistic that doesn't exist yet.
+const summary = computed(() => t(reviews.total === 1 ? 'reviews.summaryOne' : 'reviews.summary', {
   avg: reviews.average,
   count: t('reviews.reviewCount', { n: reviews.total }, reviews.total),
 }))

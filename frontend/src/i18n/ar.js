@@ -82,6 +82,8 @@ export default {
     title: 'ماذا يقول عملاؤنا',
     desc: 'تجاربُ حقيقيّة من عملاءَ طلبوا مونتنا وخزفنا — بأصواتهم كما كتبوها.',
     summary: 'متوسّط {avg} من 5 · {count}',
+    // one review has no average — say the rating plainly instead
+    summaryOne: 'تقييم {avg} من 5 · {count}',
     // counted the way Arabic actually counts — see arabicPlural in i18n/index.js
     reviewCount: 'لا آراء | رأيٌ واحد | رأيان | {n} آراء | {n} رأيًا | {n} رأي',
     empty: 'لا آراء منشورة بعد — كن أوّل من يشارك تجربته معنا.',
