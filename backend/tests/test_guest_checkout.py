@@ -64,6 +64,8 @@ def stub_order(monkeypatch):
     monkeypatch.setattr(orders, "notify_new_order", lambda *a, **k: None)
     monkeypatch.setattr(orders, "_notify_new_order_admins", lambda *a, **k: None)
     monkeypatch.setattr(orders, "compute_delivery_fee", lambda city, total: 25)
+    # the manager switch — on for these tests; the gate itself is covered below
+    monkeypatch.setattr(orders, "get_checkout_config", lambda: {"guest_allowed": True})
     sent = []
     monkeypatch.setattr(orders, "send_email", lambda to, subject, body: sent.append((to, subject, body)) or True)
     return calls, sent, state
@@ -87,12 +89,14 @@ def test_a_guest_order_gets_an_account_for_its_e_mail(client, stub_order):
     assert params[0] == GUEST["email"]
 
 
-def test_the_order_carries_a_tracking_token(client, stub_order):
+def test_the_order_carries_a_tracking_token_and_a_short_number(client, stub_order):
     calls, _, _ = stub_order
     client.post("/api/orders", json=GUEST)
     sql, params = next(c for c in calls if "insert into orders" in c[0])
-    assert "track_token" in sql
-    assert params[-1] and len(params[-1]) > 16, "the token must be long enough not to be guessable"
+    assert "track_token, ref" in sql
+    token, ref = params[-2], params[-1]
+    assert len(token) > 16, "the token is the credential, so it must not be guessable"
+    assert len(ref) == 7, "the number is read out loud and typed, so it stays short"
 
 
 def test_the_guest_is_e_mailed_the_tracking_link(client, stub_order):
@@ -243,3 +247,109 @@ def test_an_empty_password_hash_can_never_log_in():
     from security import verify_password
     for attempt in ["", " ", "Abcdef12", "x" * 72]:
         assert verify_password(attempt, "") is False
+
+# --- the manager's guest-checkout switch -------------------------------------
+def test_guest_ordering_is_refused_unless_the_manager_allows_it(client, stub_order, monkeypatch):
+    """Off by default: a guest gets 401 so the storefront sends them to sign in."""
+    monkeypatch.setattr(orders, "get_checkout_config", lambda: {"guest_allowed": False})
+    assert client.post("/api/orders", json=GUEST).status_code == 401
+
+
+def test_the_switch_defaults_to_closed(monkeypatch):
+    """A missing settings row must read as 'not allowed', not as 'allowed'."""
+    import routers.settings as settings_mod
+    monkeypatch.setattr(settings_mod, "fetch_one", lambda sql, params=None: None)
+    assert settings_mod.get_checkout_config()["guest_allowed"] is False
+    monkeypatch.setattr(settings_mod, "fetch_one", lambda sql, params=None: {"value": {}})
+    assert settings_mod.get_checkout_config()["guest_allowed"] is False
+    monkeypatch.setattr(settings_mod, "fetch_one", lambda sql, params=None: {"value": {"guest_allowed": True}})
+    assert settings_mod.get_checkout_config()["guest_allowed"] is True
+
+
+def test_a_signed_in_customer_is_unaffected_by_the_switch(client, app, stub_order, monkeypatch):
+    monkeypatch.setattr(orders, "get_checkout_config", lambda: {"guest_allowed": False})
+    from security import optional_user
+    app.dependency_overrides[optional_user] = lambda: {"id": "me", "role": "customer"}
+    body = {k: v for k, v in GUEST.items() if k != "email"}
+    assert client.post("/api/orders", json=body).status_code == 200
+
+
+def test_only_a_manager_may_flip_the_switch(client, monkeypatch):
+    from conftest import token_for
+    monkeypatch.setattr("routers.settings.fetch_one", lambda sql, params=None: {"key": "checkout"})
+    assert client.patch("/api/settings/checkout", json={"guest_allowed": True}).status_code == 401
+    shopper = {"Authorization": f"Bearer {token_for('me', 'customer')}"}
+    assert client.patch("/api/settings/checkout", json={"guest_allowed": True}, headers=shopper).status_code == 403
+    mgr = {"Authorization": f"Bearer {token_for('boss', 'manager')}"}
+    res = client.patch("/api/settings/checkout", json={"guest_allowed": "yes"}, headers=mgr)
+    assert res.status_code == 200 and res.json()["checkout"] == {"guest_allowed": True}
+
+
+# --- finding an order without the e-mailed link ------------------------------
+@pytest.fixture
+def lookup_row(monkeypatch):
+    row = {"id": OID, "phone": "+971501234567", "track_token": "tok-abc", "email": "guest@example.com"}
+    monkeypatch.setattr(orders, "fetch_one", lambda sql, params=None: dict(row))
+    return row
+
+
+@pytest.mark.parametrize("contact", ["0501234567", "+971501234567", "971501234567",
+                                     "guest@example.com", "GUEST@example.com"])
+def test_the_order_number_plus_a_matching_contact_finds_it(client, lookup_row, contact):
+    """The phone in any local format, or the e-mail — whichever they remember."""
+    res = client.post("/api/orders/lookup", json={"ref": "DK-K7M2XPQ", "contact": contact})
+    assert res.status_code == 200, res.text
+    assert res.json() == {"id": OID, "token": "tok-abc"}
+
+
+@pytest.mark.parametrize("contact", ["0509999999", "someone@else.com", "x"])
+def test_the_number_alone_is_not_enough(client, lookup_row, contact):
+    """It's short and printed on paper, so it must be paired with something known."""
+    assert client.post("/api/orders/lookup", json={"ref": "DK-K7M2XPQ", "contact": contact}).status_code == 404
+
+
+def test_a_wrong_number_and_a_wrong_contact_look_identical(client, monkeypatch):
+    """Same 404 either way, so the endpoint can't be used to discover live numbers."""
+    monkeypatch.setattr(orders, "fetch_one", lambda sql, params=None: None)
+    missing = client.post("/api/orders/lookup", json={"ref": "DK-NOSUCH", "contact": "0501234567"})
+    assert missing.status_code == 404
+    monkeypatch.setattr(orders, "fetch_one", lambda sql, params=None: {
+        "id": OID, "phone": "+971501234567", "track_token": "tok-abc", "email": "a@b.com"})
+    mismatch = client.post("/api/orders/lookup", json={"ref": "DK-K7M2XPQ", "contact": "0509999999"})
+    assert mismatch.status_code == 404
+    assert missing.json() == mismatch.json()
+
+
+def test_the_number_is_accepted_however_it_is_typed(client, lookup_row, monkeypatch):
+    seen = {}
+
+    def fake(sql, params=None):
+        seen["ref"] = (params or [None])[0]
+        return dict(lookup_row)
+
+    monkeypatch.setattr(orders, "fetch_one", fake)
+    for typed in ["DK-K7M2XPQ", "dk-k7m2xpq", "K7M2XPQ", " k7m2xpq ", "#K7M2XPQ"]:
+        client.post("/api/orders/lookup", json={"ref": typed, "contact": "0501234567"})
+        assert seen["ref"] == "K7M2XPQ", f"{typed!r} normalised to {seen['ref']!r}"
+
+
+def test_lookup_needs_both_fields(client, lookup_row):
+    assert client.post("/api/orders/lookup", json={"ref": "DK-K7M2XPQ"}).status_code == 400
+    assert client.post("/api/orders/lookup", json={"contact": "0501234567"}).status_code == 400
+
+
+def test_lookup_is_rate_limited(client, lookup_row):
+    """Guessing pairs has to be expensive."""
+    codes = [client.post("/api/orders/lookup", json={"ref": "DK-XXXXXXX", "contact": "0509999999"}).status_code
+             for _ in range(14)]
+    assert 429 in codes, "no rate limit on the lookup"
+
+
+def test_order_numbers_avoid_ambiguous_characters():
+    """A number read out over the phone shouldn't hinge on 0-vs-O or 1-vs-I."""
+    seen = set()
+    for _ in range(200):
+        ref = orders.new_ref(lambda r: False)
+        assert len(ref) == 7
+        seen.update(ref)
+    assert not (seen & set("01IO")), f"ambiguous characters in use: {seen & set('01IO')}"

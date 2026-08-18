@@ -79,3 +79,33 @@ def delete_zone(zid: str, _m=Depends(require_manager)):
     if not row:
         raise HTTPException(404, "Zone not found")
     return {"ok": True}
+
+# ---- checkout policy (manager) ---------------------------------------------
+_CHECKOUT_DEFAULTS = {"guest_allowed": False}   # ordering requires an account unless turned on
+
+
+def get_checkout_config() -> dict:
+    """Read the checkout policy, falling back to the defaults for anything unset."""
+    row = fetch_one("select value from settings where key = 'checkout'")
+    saved = (row or {}).get("value") or {}
+    return {**_CHECKOUT_DEFAULTS, "guest_allowed": bool(saved.get("guest_allowed"))}
+
+
+# GET /api/settings/checkout — public: the storefront needs to know whether to send
+# a guest to the login page before opening the checkout form
+@router.get("/checkout")
+def get_checkout():
+    return {"checkout": get_checkout_config()}
+
+
+# PATCH /api/settings/checkout — manager: turn guest ordering on or off
+@router.patch("/checkout")
+def update_checkout(_m=Depends(require_manager), payload: dict = Body(default={})):
+    cfg = {"guest_allowed": bool((payload or {}).get("guest_allowed"))}
+    fetch_one(
+        """insert into settings (key, value) values ('checkout', %s)
+           on conflict (key) do update set value = excluded.value, updated_at = now()
+           returning key""",
+        [Json(cfg)],
+    )
+    return {"checkout": cfg}

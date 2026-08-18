@@ -1,6 +1,7 @@
 """Apply db/schema.sql + db/seed.sql, and optionally seed the first manager
 from SEED_MANAGER_EMAIL / SEED_MANAGER_PASSWORD. Run: python migrate.py"""
 import os
+import secrets
 
 from dotenv import load_dotenv
 
@@ -11,6 +12,7 @@ from psycopg.types.json import Json
 from db import pool
 from security import hash_password
 from media import save_image, make_thumb, is_data_url
+from routers.orders import new_ref
 
 
 def _run_file(conn, path):
@@ -49,11 +51,33 @@ def _backfill_media(conn):
         print(f"✓ migrated {done} product image(s) to files")
 
 
+def _backfill_order_tracking(conn):
+    """Orders placed before the tracking link existed have no number and no token, so
+    their customers couldn't use the order lookup. Give every one of them both.
+    Idempotent: rows that already have them are skipped."""
+    rows = conn.execute("select id, ref, track_token from orders "
+                        "where ref is null or track_token is null").fetchall()
+    if not rows:
+        return
+    taken = {r["ref"] for r in conn.execute("select ref from orders where ref is not null").fetchall()}
+    for row in rows:
+        ref = row["ref"]
+        if not ref:
+            ref = new_ref(lambda candidate: candidate in taken)
+            taken.add(ref)
+        conn.execute(
+            "update orders set ref = %s, track_token = coalesce(track_token, %s) where id = %s",
+            [ref, secrets.token_urlsafe(16), row["id"]],
+        )
+    print(f"✓ numbered {len(rows)} existing order(s) for tracking")
+
+
 def main():
     with pool.connection() as conn:
         _run_file(conn, "db/schema.sql")
         _run_file(conn, "db/seed.sql")
         _backfill_media(conn)
+        _backfill_order_tracking(conn)
         email = os.getenv("SEED_MANAGER_EMAIL")
         password = os.getenv("SEED_MANAGER_PASSWORD")
         if email and password:

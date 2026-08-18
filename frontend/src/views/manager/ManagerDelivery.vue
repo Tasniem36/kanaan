@@ -5,6 +5,16 @@
       <button v-if="availableEmirates.length" class="a-btn" @click="openAdd"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> {{ t('manager.addZone') }}</button>
     </div>
 
+    <!-- checkout policy -->
+    <div class="a-card" style="max-width:520px;margin-bottom:1.4rem">
+      <h3 class="ttl">{{ t('manager.checkoutTitle') }}</h3>
+      <label class="sw">
+        <input type="checkbox" v-model="guestAllowed">
+        <span><b>{{ t('manager.guestAllowed') }}</b><br><span class="a-muted">{{ t('manager.guestAllowedHint') }}</span></span>
+      </label>
+      <button class="a-btn" :disabled="cBusy" @click="saveCheckout">{{ cBusy ? '…' : t('manager.save') }}</button>
+    </div>
+
     <!-- global settings -->
     <div class="a-card" style="max-width:520px;margin-bottom:1.4rem">
       <h3 class="ttl">{{ t('manager.deliveryTitle') }}</h3>
@@ -66,6 +76,23 @@ const confirm = useConfirmStore()
 
 const g = reactive({ free_threshold: 250, default_fee: 25 })
 const gBusy = ref(false)
+
+// checkout policy: ordering without an account, off unless the manager allows it
+const guestAllowed = ref(false)
+const cBusy = ref(false)
+watch(() => settings.checkout.guest_allowed, (v) => { guestAllowed.value = !!v }, { immediate: true })
+
+async function saveCheckout() {
+  cBusy.value = true
+  try {
+    await settings.updateCheckout({ guest_allowed: guestAllowed.value })
+    toast.show(t('manager.checkoutSaved'))
+  } catch (e) {
+    toast.show(e.message)
+  } finally {
+    cBusy.value = false
+  }
+}
 const showAdd = ref(false)
 const nz = reactive({ emirate: '', fee: '' })
 const nzErr = ref('')
@@ -134,6 +161,7 @@ async function removeZone(f) {
 
 onMounted(async () => {
   loading.value = true
+  settings.fetchCheckout() // fills the guest-checkout switch
   try { await settings.fetchDelivery() } finally { loading.value = false }
 })
 </script>
@@ -142,6 +170,9 @@ onMounted(async () => {
 h1 { font-family: 'Amiri', serif; color: var(--green); font-size: 1.9rem; margin-bottom: 1rem; }
 .p-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
 .p-head h1 { margin-bottom: 0; }
+.sw { display: flex; gap: .6rem; align-items: flex-start; font-size: .9rem; cursor: pointer; margin-bottom: .9rem; }
+.sw input { margin-top: .35rem; width: 18px; height: 18px; accent-color: var(--green); }
+.sw b { color: var(--green); }
 .ttl { color: var(--green); font-family: 'Amiri', serif; margin-bottom: .6rem; }
 .zones-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: .8rem; align-items: start; }
 .rm-btn { font-size: .82rem; padding: .35rem .7rem; border-radius: 8px; background: rgba(156,43,43,.1); color: var(--red, #9c2b2b); cursor: pointer; }

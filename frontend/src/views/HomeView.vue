@@ -110,7 +110,7 @@
     <div class="wrap fcols">
       <div class="about"><div class="name display"><span class="g">دكّان</span> كنعان</div><p>{{ t('footer.about') }}</p></div>
       <div><h5>{{ t('footer.shop') }}</h5><a href="#pantry">{{ t('nav.pantry') }}</a><a href="#pottery">{{ t('nav.pottery') }}</a></div>
-      <div><h5>{{ t('footer.links') }}</h5><a href="#story">{{ t('nav.story') }}</a><a href="#" @click.prevent="contactUs">{{ t('footer.contactUs') }}</a><RouterLink to="/account">{{ t('nav.account') }}</RouterLink></div>
+      <div><h5>{{ t('footer.links') }}</h5><a href="#story">{{ t('nav.story') }}</a><a href="#" @click.prevent="contactUs">{{ t('footer.contactUs') }}</a><RouterLink to="/track">{{ t('track.findOrder') }}</RouterLink><RouterLink to="/account">{{ t('nav.account') }}</RouterLink></div>
       <div><h5>{{ t('footer.contact') }}</h5>
         <a href="https://wa.me/971522981187" target="_blank" rel="noopener">{{ t('footer.whatsapp') }}: <span dir="ltr">+971 52 298 1187</span></a>
         <a href="mailto:dukkan.kanaan@gmail.com">dukkan.kanaan@gmail.com</a>
@@ -140,6 +140,10 @@
         <RouterLink class="btn btn-green" :to="{ name: 'track', params: { id: placed.id }, query: { t: placed.token } }" @click="placed = null">
           {{ t('checkout.trackOrder') }}
         </RouterLink>
+        <p class="a-muted" style="margin-top:.9rem;font-size:.82rem">
+          {{ t('checkout.placedSignupNudge') }}
+          <RouterLink to="/register" class="lnk" @click="placed = null">{{ t('auth.registerTitle') }}</RouterLink>
+        </p>
       </div>
     </div>
   </transition>
@@ -202,9 +206,15 @@
       </div>
 
       <template v-else>
-        <p v-if="!auth.isAuthenticated" class="a-muted" style="margin-bottom:.6rem;font-size:.82rem">
-          <RouterLink to="/login" style="color:var(--green);text-decoration:underline">{{ t('checkout.loginWord') }}</RouterLink> {{ t('checkout.loginPrompt') }}
-        </p>
+        <!-- Ordering as a guest works, but the order lives on a link rather than in
+             an account — say so plainly before they type anything. -->
+        <div v-if="!auth.isAuthenticated" class="guest-warn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4"/><path d="M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>
+          <span>
+            {{ t('checkout.guestWarn') }}
+            <RouterLink to="/login" class="lnk">{{ t('checkout.loginWord') }}</RouterLink>
+          </span>
+        </div>
         <label class="co-l">{{ t('checkout.fullName') }} *</label>
         <input class="a-input" v-model.trim="co.name">
         <label class="co-l">{{ t('checkout.phone') }} *</label>
@@ -481,10 +491,17 @@ async function openCheckout() {
   appliedCode.value = null
   coErr.value = ''
   newAddress.value = false
-  // Guests check out too: they type the same delivery details plus an e-mail, and
-  // get a tracking link instead of an order history. There are no saved addresses
-  // to choose from, so go straight to the form.
+  // Guests: allowed only if the manager turned guest checkout on. Otherwise it's
+  // the old flow — sign in first, and '/?checkout=1' reopens the checkout after.
   if (!auth.isAuthenticated) {
+    if (!settings.checkoutLoaded) await settings.fetchCheckout()
+    if (!settings.checkout.guest_allowed) {
+      showToast(t('checkout.loginRequired'))
+      router.push({ name: 'login', query: { redirect: '/?checkout=1' } })
+      return
+    }
+    // they type the same delivery details plus an e-mail, and get a tracking link
+    // instead of an order history. No saved addresses, so go straight to the form.
     newAddress.value = true
     checkoutOpen.value = true
     return
@@ -561,7 +578,11 @@ watch(() => auth.isAuthenticated, () => {}) // keep header reactive
 // delivery config is only needed for the cart note + checkout — fetch it lazily, once
 let deliveryLoaded = false
 watch(openCart, (open) => {
-  if (open && !deliveryLoaded) { deliveryLoaded = true; settings.fetchDelivery() }
+  if (open && !deliveryLoaded) {
+    deliveryLoaded = true
+    settings.fetchDelivery()
+    if (!auth.isAuthenticated) settings.fetchCheckout() // decides guest vs. sign-in first
+  }
 })
 
 // arriving from the product page's "checkout" button — runs on first mount and
@@ -672,6 +693,14 @@ onMounted(() => {
   transition: border-color .15s, background .15s;
 }
 .addr-pick.on { border-color: var(--green); background: rgba(60,74,39,.06); }
+.guest-warn {
+  display: flex; gap: .5rem; align-items: flex-start;
+  background: rgba(184,144,47,.12); border: 1px solid rgba(184,144,47,.4);
+  border-radius: 12px; padding: .6rem .75rem; margin-bottom: .8rem;
+  font-size: .82rem; color: var(--ink);
+}
+.guest-warn svg { width: 17px; height: 17px; flex: 0 0 auto; color: var(--gold); margin-top: .15rem; }
+.lnk { color: var(--green); text-decoration: underline; font-weight: 700; }
 .search-bar {
   position: sticky;
   top: var(--nav-h, 56px);

@@ -15,6 +15,7 @@ from notify import notify_new_order
 from notifications import notify_managers, notify_users
 from delivery import compute_fee as compute_delivery_fee
 from routers.discounts import evaluate_code
+from routers.settings import get_checkout_config
 
 router = APIRouter()
 
@@ -57,17 +58,39 @@ def cancel_and_restore(order_id):
         cur.execute("insert into order_status_events (order_id, status) values (%s, 'cancelled')", [order_id])
 
 
+# Order-number alphabet: no 0/O/1/I, so a customer reading it out over the phone
+# or typing it from an e-mail can't land on the wrong order.
+_REF_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
+_REF_LEN = 7
+
+
+def new_ref(exists):
+    """A free order number. `exists(ref)` tells us whether one is taken — checked in
+    the caller's transaction, so two orders can't be handed the same number."""
+    for _ in range(8):
+        ref = "".join(secrets.choice(_REF_ALPHABET) for _ in range(_REF_LEN))
+        if not exists(ref):
+            return ref
+    raise HTTPException(503, "Could not allocate an order number — please try again")
+
+
+def display_ref(ref, oid):
+    """What the customer sees. Orders from before ref existed fall back to the id."""
+    return f"DK-{ref}" if ref else f"#{str(oid)[:8]}"
+
+
 def _order_email_body(order, track_url):
     """Plain-text confirmation. Deliberately no prices per line — the total and the
     live status live on the tracking page, which can't go stale the way an e-mail can."""
-    oid = str(order["id"])
+    number = display_ref(order.get("ref"), order["id"])
     return (
         f"مرحباً {order['customer_name']},\n\n"
-        f"استلمنا طلبك رقم #{oid[:8]} في دكّان كنعان.\n"
+        f"استلمنا طلبك رقم {number} في دكّان كنعان.\n"
         f"الإجمالي: {order['total']} درهم\n"
         f"طريقة الدفع: {'الدفع عند الاستلام' if order['payment_method'] == 'cod' else 'مدفوع إلكترونياً'}\n\n"
         f"تابع حالة طلبك من هنا:\n{track_url}\n\n"
-        f"احفظ هذا الرابط — يفتح صفحة طلبك دون تسجيل دخول.\n\n"
+        f"احفظ هذا الرابط — يفتح صفحة طلبك دون تسجيل دخول.\n"
+        f"وإن فقدته، ابحث عن طلبك برقمه ({number}) ورقم هاتفك أو بريدك من صفحة تتبّع الطلب.\n\n"
         f"لأي استفسار راسلنا على واتساب: +971 52 298 1187\n"
         f"دكّان كنعان"
     )
@@ -80,7 +103,7 @@ def _send_order_email(order, email, request):
     try:
         base = os.getenv("APP_URL") or request.headers.get("origin") or ""
         track_url = f"{base}/track/{order['id']}?t={order['track_token']}"
-        send_email(email, f"تأكيد طلبك #{str(order['id'])[:8]} — دكّان كنعان",
+        send_email(email, f"تأكيد طلبك {display_ref(order.get('ref'), order['id'])} — دكّان كنعان",
                    _order_email_body(order, track_url))
     except Exception as e:  # noqa: BLE001 — never break checkout over a mail failure
         print("[order-email]", e)
@@ -125,8 +148,13 @@ def create_order(request: Request, user=Depends(optional_user), payload: dict = 
         raise HTTPException(400, "Invalid UAE phone number")
     guest_email = None
     if not user:
-        # Checkout without an account: the e-mail is the second way to reach them and
-        # the key their order history hangs off, so it has to be real-looking.
+        # Guest checkout is off unless the manager turned it on (Dashboard → delivery
+        # settings). This is the backstop: the storefront also checks the flag before
+        # it opens the form, and sends the shopper to sign in instead.
+        if not get_checkout_config()["guest_allowed"]:
+            raise HTTPException(401, "Please sign in to place your order")
+        # The e-mail is the second way to reach them and the key their order history
+        # hangs off, so it has to be real-looking.
         guest_email = (payload.get("email") or "").strip().lower()
         if not is_email(guest_email):
             raise HTTPException(400, "A valid e-mail address is required")
@@ -192,11 +220,12 @@ def create_order(request: Request, user=Depends(optional_user), payload: dict = 
         order = run(
             """insert into orders (user_id, customer_name, phone, city, street, house, notes, total,
                                    payment_method, discount_code, discount_amount, delivery_fee,
-                                   track_token)
-               values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) returning *""",
+                                   track_token, ref)
+               values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) returning *""",
             [user_id, customer_name, phone_norm, city, street, house, payload.get("notes"),
              final_total, payment_method, discount_code, discount, delivery_fee,
-             secrets.token_urlsafe(16)],
+             secrets.token_urlsafe(16),
+             new_ref(lambda r: bool(run("select 1 from orders where ref = %s", [r])))],
         )[0]
         # Write the whole basket in two statements instead of two per line item.
         pids = [x["product_id"] for x in lines]
@@ -276,6 +305,37 @@ def list_orders(user=Depends(current_user)):
     return {"orders": orders}
 
 
+# POST /api/orders/lookup — public: find your own order without an account, from the
+# number on the confirmation e-mail plus the phone or e-mail it was placed with.
+#
+# The number alone is not enough to open an order (it's short, and printed on paper),
+# so it must be paired with a contact detail that matches the order. Every failure
+# returns the same 404 — a wrong number and a wrong contact are indistinguishable, so
+# this can't be used to discover which numbers exist. Rate-limited on top.
+@router.post("/lookup")
+def lookup_order(request: Request, payload: dict = Body(default={})):
+    rate_limit(request, bucket="order_lookup", limit=10, window=60)
+    raw = str((payload or {}).get("ref") or "").strip().upper()
+    ref = raw.replace("DK-", "").replace("#", "").replace(" ", "")
+    contact = str((payload or {}).get("contact") or "").strip().lower()
+    if not ref or not contact:
+        raise HTTPException(400, "Order number and phone or e-mail are required")
+
+    order = fetch_one(
+        """select o.id, o.phone, o.track_token, u.email from orders o
+           left join users u on u.id = o.user_id
+           where o.ref = %s""", [ref])
+    not_found = HTTPException(404, "We could not find an order with those details")
+    if not order or not order["track_token"]:
+        raise not_found
+    # the contact may be the phone in any local format, or the e-mail on the account
+    phone = normalize_uae_phone(contact)
+    matches = (phone and phone == order["phone"]) or (contact == (order["email"] or "").lower())
+    if not matches:
+        raise not_found
+    return {"id": order["id"], "token": order["track_token"]}
+
+
 def _own_order_or_404(oid, user, token=None):
     """Fetch an order the caller is allowed to act on. 404 (not 403) for orders
     that aren't theirs, so order ids can't be probed for existence.
@@ -307,6 +367,7 @@ def track_order(oid: str, request: Request, t: str = Query(""), user=Depends(opt
     fields = ("id", "customer_name", "city", "street", "house", "notes", "status", "total",
               "payment_method", "payment_status", "delivery_fee", "discount_amount", "created_at")
     safe = {k: order[k] for k in fields}
+    safe["number"] = display_ref(order.get("ref"), order["id"])
     # the phone is shown back partially, so they can check what they typed without
     # the full number sitting behind a link that might be forwarded
     phone = order["phone"] or ""

@@ -266,6 +266,14 @@ create index if not exists order_items_order_id_idx on order_items (order_id);
 -- account (/track/<id>?t=<token>) and lets a guest returning from Ziina confirm
 -- their own payment. Unguessable, and scoped to that one order.
 alter table orders add column if not exists track_token text;
+
+-- Short, human-readable order number (shown as DK-XXXXXXX). Printed on the
+-- confirmation e-mail and used with the customer's phone/e-mail by the guest order
+-- lookup, so someone without an account can find their order from the number alone
+-- plus something only they know. Unique, and drawn from an alphabet with no 0/O/1/I
+-- so it survives being read out over the phone.
+alter table orders add column if not exists ref text;
+create unique index if not exists orders_ref_key on orders (ref) where ref is not null;
 create unique index if not exists orders_track_token_key on orders (track_token) where track_token is not null;
 
 -- Guest checkout creates an account with an EMPTY password_hash: it can't be
