@@ -20,7 +20,7 @@
       <div v-else-if="reviews.list.length" class="rv-grid">
         <article class="rv-card reveal" v-for="r in reviews.list" :key="r.id">
           <Stars :value="r.rating" />
-          <blockquote>“{{ r.body }}”</blockquote>
+          <blockquote>{{ r.body }}</blockquote>
           <!-- the customer's photo, if they attached one; opens full size in a tab -->
           <a v-if="r.thumb_url || r.image_url" class="rv-shot" :href="r.image_url || r.thumb_url" target="_blank" rel="noopener">
             <img :src="r.thumb_url || r.image_url" :alt="t('reviews.photoOf', { name: r.author || t('reviews.anonymous') })" loading="lazy">
