@@ -39,6 +39,7 @@ export const routes = [
       { path: 'audit', name: 'manager-audit', component: () => import('../views/manager/ManagerAudit.vue') },
       { path: 'errors', name: 'manager-errors', component: () => import('../views/manager/ManagerErrors.vue') },
       { path: 'content', name: 'manager-content', component: () => import('../views/manager/ManagerContent.vue') },
+      { path: 'reviews', name: 'manager-reviews', component: () => import('../views/manager/ManagerReviews.vue') },
       { path: 'delivery', name: 'manager-delivery', component: () => import('../views/manager/ManagerDelivery.vue') },
     ],
   },
@@ -46,6 +47,11 @@ export const routes = [
 ]
 
 export function scrollBehavior(to, from, savedPosition) {
+  // an anchored target ('/#reviews', from a review notification) — checked before the
+  // rules below so it survives a cold open, which is how a push notification arrives
+  if (to.hash && document.getElementById(to.hash.slice(1))) {
+    return { el: to.hash, behavior: 'smooth' }
+  }
   // fresh page load / hard refresh → always start at the top
   if (from === START_LOCATION) return { top: 0 }
   // returning via back/forward → restore where the customer was

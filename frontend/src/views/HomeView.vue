@@ -1,7 +1,7 @@
 <template>
   <PortalBar :scrolled="scrolled" search>
     <nav class="tabs store-nav" aria-label="nav">
-      <a href="#home" :class="{ active: activeSection === 'home' }">{{ t('nav.home') }}</a><a href="#pantry" :class="{ active: activeSection === 'pantry' }">{{ t('nav.pantry') }}</a><a href="#pottery" :class="{ active: activeSection === 'pottery' }">{{ t('nav.pottery') }}</a><a href="#story" :class="{ active: activeSection === 'story' }">{{ t('nav.story') }}</a><a href="#contact" :class="{ active: activeSection === 'contact' }">{{ t('nav.contact') }}</a>
+      <a href="#home" :class="{ active: activeSection === 'home' }">{{ t('nav.home') }}</a><a v-if="reviews.visible" href="#reviews" :class="{ active: activeSection === 'reviews' }">{{ t('nav.reviews') }}</a><a href="#pantry" :class="{ active: activeSection === 'pantry' }">{{ t('nav.pantry') }}</a><a href="#pottery" :class="{ active: activeSection === 'pottery' }">{{ t('nav.pottery') }}</a><a href="#story" :class="{ active: activeSection === 'story' }">{{ t('nav.story') }}</a><a href="#contact" :class="{ active: activeSection === 'contact' }">{{ t('nav.contact') }}</a>
     </nav>
     <template #actions>
       <button class="cart-btn" @click="openCart = true" aria-label="cart">
@@ -20,6 +20,7 @@
     </div>
     <nav class="mm-links">
       <a href="#home" :class="{ active: activeSection === 'home' }" @click="mobileMenu = false">{{ t('nav.home') }}</a>
+      <a v-if="reviews.visible" href="#reviews" :class="{ active: activeSection === 'reviews' }" @click="mobileMenu = false">{{ t('nav.reviews') }}</a>
       <a href="#pantry" :class="{ active: activeSection === 'pantry' }" @click="mobileMenu = false">{{ t('nav.pantry') }}</a>
       <a href="#pottery" :class="{ active: activeSection === 'pottery' }" @click="mobileMenu = false">{{ t('nav.pottery') }}</a>
       <a href="#story" :class="{ active: activeSection === 'story' }" @click="mobileMenu = false">{{ t('nav.story') }}</a>
@@ -70,6 +71,9 @@
          cards render once it responds -->
     <Loader v-if="!content.loaded" class="values-loading" />
   </div></div>
+
+  <!-- what customers say about the shop (general reviews, not per product) -->
+  <ReviewsSection ref="reviewsSection" />
 
   <!-- pantry -->
   <section id="pantry">
@@ -260,10 +264,12 @@ import { useAuthStore } from '../stores/auth'
 import { useOrdersStore } from '../stores/orders'
 import { useAddressesStore } from '../stores/addresses'
 import { useContentStore } from '../stores/content'
+import { useReviewsStore } from '../stores/reviews'
 import { useSettingsStore } from '../stores/settings'
 import { useInboxStore } from '../stores/inbox'
 import { deliveryFee, EMIRATES } from '../utils/delivery'
 import ProductFeed from '../components/ProductFeed.vue'
+import ReviewsSection from '../components/ReviewsSection.vue'
 import CartDrawer from '../components/CartDrawer.vue'
 import PortalBar from '../components/PortalBar.vue'
 import ImagePicker from '../components/ImagePicker.vue'
@@ -276,9 +282,11 @@ const cart = useCartStore()
 const auth = useAuthStore()
 const pantryFeed = ref(null)
 const potteryFeed = ref(null)
+const reviewsSection = ref(null)
 const ordersStore = useOrdersStore()
 const addresses = useAddressesStore()
 const content = useContentStore()
+const reviews = useReviewsStore() // only for the nav link's visibility (see its store)
 const settings = useSettingsStore()
 const inbox = useInboxStore()
 
@@ -532,8 +540,19 @@ function maybeOpenCheckout() {
     openCheckout()
   }
 }
+// arriving from the reviews section's "write a review" button after signing in —
+// scroll back to the section and reopen the form they were sent away from
+function maybeOpenReview() {
+  if (!route.query.review) return
+  router.replace({ query: {} })
+  nextTick(() => {
+    document.getElementById('reviews')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    reviewsSection.value?.openForm()
+  })
+}
 // fires on first render and on every return to the storefront
 onActivated(maybeOpenCheckout)
+onActivated(maybeOpenReview)
 
 // scroll-reveal for sec-heads, value cards and the story block. Kept at setup
 // scope (not inside onMounted) so it can re-run whenever content loads: the
@@ -568,7 +587,7 @@ onMounted(() => {
   }
   nextTick(updateNavH)
   addEventListener('resize', updateNavH, { passive: true })
-  const navSections = ['home', 'pantry', 'pottery', 'story', 'contact']
+  const navSections = ['home', 'reviews', 'pantry', 'pottery', 'story', 'contact']
   function updateActiveSection() {
     const line = scrollY + innerHeight * 0.3 // a bit below the sticky header
     let current = navSections[0]

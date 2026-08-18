@@ -20,7 +20,11 @@ def notify_users(user_ids, *, type, title, body=None, order_id=None):
     # also fire a device push (best-effort). Deep-link orders; messages open the app.
     try:
         import push
-        url = "/manager/orders" if type == "new_order" else "/account/orders" if type == "order_status" else "/"
+        url = ("/manager/orders" if type == "new_order"
+               else "/account/orders" if type == "order_status"
+               else "/manager/reviews" if type == "new_review"
+               else "/#reviews" if type == "review_status"
+               else "/")
         push.push_to_users(ids, title=title, body=body, url=url, tag=type)
     except Exception as e:  # noqa: BLE001
         print("[notify.push]", e)

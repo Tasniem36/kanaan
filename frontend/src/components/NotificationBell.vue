@@ -90,6 +90,9 @@ function onNotifClick(n) {
   if (!n.read) inbox.markRead(n.id)
   if (n.type === 'reply' || n.type === 'message') { goMessages(); return }
   open.value = false
+  // reviews: the manager goes to the moderation queue, the author to the published card
+  if (n.type === 'new_review') { router.push('/manager/reviews'); return }
+  if (n.type === 'review_status') { router.push({ path: '/', hash: '#reviews' }); return }
   router.push(isManager ? '/manager/orders' : '/account/orders')
 }
 

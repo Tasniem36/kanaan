@@ -215,7 +215,7 @@ create index if not exists push_subscriptions_user_idx on push_subscriptions (us
 create table if not exists notifications (
   id         uuid primary key default gen_random_uuid(),
   user_id    uuid not null references users (id) on delete cascade,
-  type       text not null,                 -- 'new_order' | 'order_status' | 'message' | 'reply'
+  type       text not null,                 -- 'new_order' | 'order_status' | 'message' | 'reply' | 'new_review' | 'review_status'
   title      text not null,
   body       text,
   order_id   uuid references orders (id) on delete set null,
@@ -305,3 +305,23 @@ create table if not exists content_values (
   more_en    text not null default '',
   updated_at timestamptz not null default now()
 );
+
+-- ---------- reviews (general shop reviews, written by customers) -------------
+-- One review per customer (they edit it by submitting again). Nothing is public
+-- until a manager approves it, so the storefront section can't be spammed.
+create table if not exists reviews (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references users (id) on delete cascade,
+  rating     smallint not null check (rating between 1 and 5),
+  body       text not null default '',
+  city       text,                                    -- shown under the name; optional
+  status     text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+-- one per customer: POST /api/reviews upserts on this
+create unique index if not exists reviews_user_key on reviews (user_id);
+-- the storefront's read: approved only, newest first
+create index if not exists reviews_approved_idx on reviews (created_at desc) where status = 'approved';
+-- the manager's moderation queue
+create index if not exists reviews_status_idx on reviews (status, created_at desc);

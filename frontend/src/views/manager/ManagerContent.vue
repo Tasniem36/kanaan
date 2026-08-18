@@ -3,6 +3,29 @@
     <h1>{{ t('manager.contentTitle') }}</h1>
     <Loader v-if="content.loading && !forms.length" :label="t('common.loading')" />
 
+    <!-- headings of the customer-reviews section on the homepage -->
+    <h2 class="sub">{{ t('manager.secReviews') }}</h2>
+    <p class="a-muted hint">{{ t('manager.secHint') }}</p>
+    <div class="a-card">
+      <div class="grid2">
+        <div><label class="co-l">{{ t('manager.secEyebrow') }} (ع)</label><input class="a-input" v-model.trim="sec.eyebrow_ar" :placeholder="def('reviews.eyebrow', 'ar')"></div>
+        <div><label class="co-l">{{ t('manager.secEyebrow') }} (EN)</label><input class="a-input" dir="ltr" v-model.trim="sec.eyebrow_en" :placeholder="def('reviews.eyebrow', 'en')"></div>
+      </div>
+      <div class="grid2">
+        <div><label class="co-l">{{ t('manager.vcTitle') }} (ع)</label><input class="a-input" v-model.trim="sec.title_ar" :placeholder="def('reviews.title', 'ar')"></div>
+        <div><label class="co-l">{{ t('manager.vcTitle') }} (EN)</label><input class="a-input" dir="ltr" v-model.trim="sec.title_en" :placeholder="def('reviews.title', 'en')"></div>
+      </div>
+      <label class="co-l">{{ t('manager.vcDesc') }} (ع)</label>
+      <textarea class="a-input" rows="2" v-model.trim="sec.desc_ar" :placeholder="def('reviews.desc', 'ar')"></textarea>
+      <label class="co-l">{{ t('manager.vcDesc') }} (EN)</label>
+      <textarea class="a-input" rows="2" dir="ltr" v-model.trim="sec.desc_en" :placeholder="def('reviews.desc', 'en')"></textarea>
+      <div class="acts">
+        <button class="a-btn" :disabled="secBusy" @click="saveSection">{{ secBusy ? '…' : t('manager.save') }}</button>
+        <button class="a-btn ghost" :disabled="secBusy" @click="resetSection">{{ t('manager.secReset') }}</button>
+      </div>
+    </div>
+
+    <h2 class="sub">{{ t('manager.secCards') }}</h2>
     <div class="cards">
       <div class="a-card" v-for="f in forms" :key="f.id">
         <div class="c-grid">
@@ -43,11 +66,49 @@ import { useConfirmStore } from '../../stores/confirm'
 import ImagePicker from '../../components/ImagePicker.vue'
 import Loader from '../../components/Loader.vue'
 
+const SECTION = 'reviews'
+const SECTION_FIELDS = ['eyebrow_ar', 'eyebrow_en', 'title_ar', 'title_en', 'desc_ar', 'desc_en']
+
 const { t } = useI18n()
 const content = useContentStore()
 const toast = useToastStore()
 const confirm = useConfirmStore()
 const forms = ref([])
+
+// the bundled translation, shown as each input's placeholder so the manager sees
+// what an empty field falls back to
+const def = (key, lang) => t(key, {}, { locale: lang })
+
+// --- reviews section headings ---
+const sec = ref(Object.fromEntries(SECTION_FIELDS.map((f) => [f, ''])))
+const secBusy = ref(false)
+
+// fill the form once the saved copy arrives (and whenever it changes)
+watch(
+  () => content.sections[SECTION],
+  (row) => { SECTION_FIELDS.forEach((f) => { sec.value[f] = (row || {})[f] || '' }) },
+  { immediate: true }
+)
+
+async function saveSection() {
+  secBusy.value = true
+  try {
+    await content.updateSection(SECTION, { ...sec.value })
+    toast.show(t('manager.secSaved'))
+  } catch (e) {
+    toast.show(e.message)
+  } finally {
+    secBusy.value = false
+  }
+}
+
+// clearing every field is how the section goes back to the bundled translation
+async function resetSection() {
+  const ok = await confirm.ask({ message: t('manager.secResetMsg'), confirmText: t('manager.secReset') })
+  if (!ok) return
+  SECTION_FIELDS.forEach((f) => { sec.value[f] = '' })
+  await saveSection()
+}
 
 // build editable copies whenever the source cards load/change
 watch(
@@ -97,6 +158,10 @@ content.fetch()
 
 <style scoped>
 h1 { font-family: 'Amiri', serif; color: var(--green); font-size: 1.9rem; margin-bottom: 1rem; }
+h2.sub { font-family: 'Amiri', serif; color: var(--green); font-size: 1.3rem; margin: 1.6rem 0 .2rem; }
+.hint { margin-bottom: .6rem; }
+.acts { display: flex; gap: .6rem; margin-top: .8rem; }
+.a-btn.ghost { background: var(--cream-2); color: var(--green); }
 .cards { display: grid; gap: 1rem; }
 .c-grid { display: grid; grid-template-columns: 220px 1fr; gap: 1.2rem; align-items: start; }
 @media (max-width: 640px) { .c-grid { grid-template-columns: 1fr; } }

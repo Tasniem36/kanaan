@@ -12,6 +12,9 @@
         <RouterLink :to="{ name: 'manager-audit' }">{{ t('manager.auditTab') }}</RouterLink>
         <RouterLink :to="{ name: 'manager-errors' }">{{ t('manager.errorsTab') }}</RouterLink>
         <RouterLink :to="{ name: 'manager-content' }">{{ t('manager.contentTab') }}</RouterLink>
+        <RouterLink :to="{ name: 'manager-reviews' }">
+          {{ t('manager.reviewsTab') }}<span v-if="reviews.pending" class="nbadge">{{ reviews.pending }}</span>
+        </RouterLink>
         <RouterLink :to="{ name: 'manager-delivery' }">{{ t('manager.deliveryTab') }}</RouterLink>
       </nav>
     </PortalBar>
@@ -27,11 +30,13 @@ import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import PortalBar from '../components/PortalBar.vue'
 import { useOrdersStore } from '../stores/orders'
+import { useReviewsStore } from '../stores/reviews'
 import { useToastStore } from '../stores/toast'
 
 const { t } = useI18n()
 const route = useRoute()
 const ordersStore = useOrdersStore()
+const reviews = useReviewsStore()
 const toast = useToastStore()
 
 // "new" = orders created after the last time the manager viewed the Orders tab
@@ -40,6 +45,7 @@ const newCount = computed(
   () => ordersStore.orders.filter((o) => new Date(o.created_at).getTime() > lastSeen.value).length
 )
 let prev = 0
+let prevPending = 0
 let timer = null
 
 function markSeen() {
@@ -74,12 +80,18 @@ async function poll() {
   }
   prev = newCount.value
   if (route.name === 'manager-orders') markSeen()
+  // reviews waiting for approval — badge only, no chime (nothing is time-critical)
+  await reviews.fetchPendingCount().catch(() => {})
+  if (reviews.pending > prevPending) toast.show(t('manager.revNew'))
+  prevPending = reviews.pending
 }
 
 onMounted(async () => {
   if (!lastSeen.value) markSeen() // first-ever visit: baseline = now, don't flag old orders
   await ordersStore.fetch().catch(() => {})
   prev = newCount.value // silent baseline (no chime on load)
+  await reviews.fetchPendingCount().catch(() => {})
+  prevPending = reviews.pending // same for reviews: badge on load, toast only on new ones
   if (route.name === 'manager-orders') markSeen()
   timer = setInterval(poll, 30000) // check every 30s
 })
