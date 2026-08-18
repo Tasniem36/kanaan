@@ -39,20 +39,23 @@ const ordersStore = useOrdersStore()
 
 const state = ref('verifying') // verifying | success | failed
 const orderId = String(route.query.order || '')
+// guests have no session here — the tracking token from the return URL is what
+// authorises confirming/cancelling their own payment
+const token = String(route.query.t || '')
 const shortId = computed(() => orderId.slice(0, 8))
 
 onMounted(async () => {
   if (!orderId) { state.value = 'failed'; return }
   // customer cancelled on Ziina → release the reserved stock, show failed
   if (route.query.cancel) {
-    await ordersStore.cancelPayment(orderId).catch(() => {})
+    await ordersStore.cancelPayment(orderId, token).catch(() => {})
     state.value = 'failed'
     return
   }
   // Ziina may take a moment to mark the intent completed — retry a few times.
   for (let i = 0; i < 3; i++) {
     try {
-      const r = await ordersStore.confirmPayment(orderId)
+      const r = await ordersStore.confirmPayment(orderId, token)
       if (r.paid) { state.value = 'success'; return }
     } catch { /* keep trying */ }
     await new Promise((res) => setTimeout(res, 1500))

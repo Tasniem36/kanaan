@@ -3,7 +3,6 @@ import secrets
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response
-from psycopg import errors as pg_errors
 
 from db import fetch_one, execute
 from security import hash_password, verify_password, sign_token, current_user
@@ -35,11 +34,26 @@ def _required_channels():
 
 
 def _create_user(email, password_hash, full_name, phone, request):
+    """Create the account — or claim the password-less one guest checkout made for
+    this e-mail, so the orders already placed against it stay in the same history.
+
+    The ON CONFLICT guard is what makes that safe: it only overwrites a row with no
+    password. A real account's row can't be taken over by re-registering its e-mail,
+    and two simultaneous claims can't both win.
+    """
     user = fetch_one(
         """insert into users (email, password_hash, full_name, phone)
-           values (%s, %s, %s, %s) returning id, email, full_name, phone, role""",
+                values (%s, %s, %s, %s)
+           on conflict (email) do update
+                  set password_hash = excluded.password_hash,
+                      full_name = coalesce(nullif(excluded.full_name, ''), users.full_name),
+                      phone = coalesce(nullif(excluded.phone, ''), users.phone)
+                where coalesce(users.password_hash, '') = ''
+           returning id, email, full_name, phone, role""",
         [email, password_hash, full_name, phone],
     )
+    if not user:   # the row exists and already has a password — nothing to claim
+        raise HTTPException(409, "This email is already registered")
     log_action(user_id=user["id"], action="register", request=request)
     return {"verified": True, "token": sign_token(user), "user": public_user(user)}
 
@@ -82,7 +96,9 @@ def register_start(request: Request, payload: dict = Body(default={})):
         raise HTTPException(400, "Invalid UAE phone number")
     if not is_strong_password(password):
         raise HTTPException(400, WEAK_PW_MSG)
-    if fetch_one("select 1 from users where email = %s", [email]):
+    # An account created by guest checkout has no password yet: that e-mail may
+    # still register — doing so claims the row (see _create_user).
+    if fetch_one("select 1 from users where email = %s and coalesce(password_hash, '') <> ''", [email]):
         raise HTTPException(409, "This email is already registered")
 
     pw_hash = hash_password(password)
@@ -90,10 +106,7 @@ def register_start(request: Request, payload: dict = Body(default={})):
     if not email_req and not phone_req:
         # no verification channel available → create the account directly (a broken
         # or unconfigured provider must never block sales)
-        try:
-            return _create_user(email, pw_hash, payload.get("full_name"), phone_norm, request)
-        except pg_errors.UniqueViolation:
-            raise HTTPException(409, "This email is already registered")
+        return _create_user(email, pw_hash, payload.get("full_name"), phone_norm, request)
 
     ec, pc = _code(), _code()
     execute("delete from signup_verifications where lower(email) = %s", [email])
@@ -149,18 +162,13 @@ def register_verify(request: Request, payload: dict = Body(default={})):
     if not (email_ok and phone_ok):
         return {"verified": False, "email_ok": email_ok, "phone_ok": phone_ok}
 
+    # One creation path for both flows (this one and the no-verification-channel
+    # shortcut in register_start), so claiming a guest account works in both.
     try:
-        user = fetch_one(
-            """insert into users (email, password_hash, full_name, phone)
-               values (%s, %s, %s, %s) returning id, email, full_name, phone, role""",
-            [v["email"], v["password_hash"], v["full_name"], v["phone"]],
-        )
-    except pg_errors.UniqueViolation:
+        result = _create_user(v["email"], v["password_hash"], v["full_name"], v["phone"], request)
+    finally:
         execute("delete from signup_verifications where id = %s", [vid])
-        raise HTTPException(409, "This email is already registered")
-    execute("delete from signup_verifications where id = %s", [vid])
-    log_action(user_id=user["id"], action="register", request=request)
-    return {"verified": True, "token": sign_token(user), "user": public_user(user)}
+    return result
 
 
 # Resend fresh codes for an in-progress signup.

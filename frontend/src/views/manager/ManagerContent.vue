@@ -7,18 +7,22 @@
     <h2 class="sub">{{ t('manager.secReviews') }}</h2>
     <p class="a-muted hint">{{ t('manager.secHint') }}</p>
     <div class="a-card">
+      <label class="sw">
+        <input type="checkbox" v-model="sec.shown">
+        <span><b>{{ t('manager.secShow') }}</b><br><span class="a-muted">{{ t('manager.secShowHint') }}</span></span>
+      </label>
       <div class="grid2">
-        <div><label class="co-l">{{ t('manager.secEyebrow') }} (ع)</label><input class="a-input" v-model.trim="sec.eyebrow_ar" :placeholder="def('reviews.eyebrow', 'ar')"></div>
-        <div><label class="co-l">{{ t('manager.secEyebrow') }} (EN)</label><input class="a-input" dir="ltr" v-model.trim="sec.eyebrow_en" :placeholder="def('reviews.eyebrow', 'en')"></div>
+        <div><label class="co-l">{{ t('manager.secEyebrow') }} (ع)</label><input class="a-input" v-model.trim="sec.eyebrow_ar"></div>
+        <div><label class="co-l">{{ t('manager.secEyebrow') }} (EN)</label><input class="a-input" dir="ltr" v-model.trim="sec.eyebrow_en"></div>
       </div>
       <div class="grid2">
-        <div><label class="co-l">{{ t('manager.vcTitle') }} (ع)</label><input class="a-input" v-model.trim="sec.title_ar" :placeholder="def('reviews.title', 'ar')"></div>
-        <div><label class="co-l">{{ t('manager.vcTitle') }} (EN)</label><input class="a-input" dir="ltr" v-model.trim="sec.title_en" :placeholder="def('reviews.title', 'en')"></div>
+        <div><label class="co-l">{{ t('manager.vcTitle') }} (ع)</label><input class="a-input" v-model.trim="sec.title_ar"></div>
+        <div><label class="co-l">{{ t('manager.vcTitle') }} (EN)</label><input class="a-input" dir="ltr" v-model.trim="sec.title_en"></div>
       </div>
       <label class="co-l">{{ t('manager.vcDesc') }} (ع)</label>
-      <textarea class="a-input" rows="2" v-model.trim="sec.desc_ar" :placeholder="def('reviews.desc', 'ar')"></textarea>
+      <textarea class="a-input" rows="2" v-model.trim="sec.desc_ar"></textarea>
       <label class="co-l">{{ t('manager.vcDesc') }} (EN)</label>
-      <textarea class="a-input" rows="2" dir="ltr" v-model.trim="sec.desc_en" :placeholder="def('reviews.desc', 'en')"></textarea>
+      <textarea class="a-input" rows="2" dir="ltr" v-model.trim="sec.desc_en"></textarea>
       <div class="acts">
         <button class="a-btn" :disabled="secBusy" @click="saveSection">{{ secBusy ? '…' : t('manager.save') }}</button>
         <button class="a-btn ghost" :disabled="secBusy" @click="resetSection">{{ t('manager.secReset') }}</button>
@@ -75,25 +79,38 @@ const toast = useToastStore()
 const confirm = useConfirmStore()
 const forms = ref([])
 
-// the bundled translation, shown as each input's placeholder so the manager sees
-// what an empty field falls back to
+// a translation in a specific language, regardless of the dashboard's own locale
 const def = (key, lang) => t(key, {}, { locale: lang })
 
 // --- reviews section headings ---
-const sec = ref(Object.fromEntries(SECTION_FIELDS.map((f) => [f, ''])))
+const sec = ref({ ...Object.fromEntries(SECTION_FIELDS.map((f) => [f, ''])), shown: true })
 const secBusy = ref(false)
 
 // fill the form once the saved copy arrives (and whenever it changes)
+// The built-in wording, per field — what a never-saved section shows.
+function bundled(field) {
+  const [name, lang] = [field.replace(/_(ar|en)$/, ''), field.endsWith('_ar') ? 'ar' : 'en']
+  return def(`reviews.${name}`, lang)
+}
+
+// Fill the form with the text that is actually on the page: the manager's saved
+// version once it exists, otherwise the built-in wording. Prefilling (rather than
+// showing it as a placeholder) is what makes an emptied field mean "remove this
+// line" — see the `copy` computed in ReviewsSection.vue.
 watch(
   () => content.sections[SECTION],
-  (row) => { SECTION_FIELDS.forEach((f) => { sec.value[f] = (row || {})[f] || '' }) },
+  (row) => {
+    SECTION_FIELDS.forEach((f) => { sec.value[f] = row ? (row[f] || '') : bundled(f) })
+    sec.value.shown = !(row || {}).hidden   // stored as `hidden`, shown as a positive switch
+  },
   { immediate: true }
 )
 
 async function saveSection() {
   secBusy.value = true
   try {
-    await content.updateSection(SECTION, { ...sec.value })
+    const { shown, ...copy } = sec.value
+    await content.updateSection(SECTION, { ...copy, hidden: !shown })
     toast.show(t('manager.secSaved'))
   } catch (e) {
     toast.show(e.message)
@@ -102,11 +119,11 @@ async function saveSection() {
   }
 }
 
-// clearing every field is how the section goes back to the bundled translation
+// puts the built-in wording back in every field (leaves the show/hide switch alone)
 async function resetSection() {
   const ok = await confirm.ask({ message: t('manager.secResetMsg'), confirmText: t('manager.secReset') })
   if (!ok) return
-  SECTION_FIELDS.forEach((f) => { sec.value[f] = '' })
+  SECTION_FIELDS.forEach((f) => { sec.value[f] = bundled(f) })
   await saveSection()
 }
 
@@ -161,6 +178,9 @@ h1 { font-family: 'Amiri', serif; color: var(--green); font-size: 1.9rem; margin
 h2.sub { font-family: 'Amiri', serif; color: var(--green); font-size: 1.3rem; margin: 1.6rem 0 .2rem; }
 .hint { margin-bottom: .6rem; }
 .acts { display: flex; gap: .6rem; margin-top: .8rem; }
+.sw { display: flex; gap: .6rem; align-items: flex-start; font-size: .9rem; cursor: pointer; margin-bottom: .9rem; }
+.sw input { margin-top: .35rem; width: 18px; height: 18px; accent-color: var(--green); }
+.sw b { color: var(--green); }
 .a-btn.ghost { background: var(--cream-2); color: var(--green); }
 .cards { display: grid; gap: 1rem; }
 .c-grid { display: grid; grid-template-columns: 220px 1fr; gap: 1.2rem; align-items: start; }

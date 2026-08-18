@@ -36,7 +36,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import main
-from security import current_user, sign_token
+from security import current_user, optional_user, sign_token
 
 
 @pytest.fixture
@@ -53,9 +53,13 @@ def client(app):
 
 @pytest.fixture
 def as_user(app):
-    """Override the current_user dependency to impersonate a given user dict."""
+    """Impersonate a user dict. Overrides both auth dependencies: endpoints open to
+    guests (checkout, order tracking, the payment callbacks) resolve the caller
+    through optional_user, so overriding current_user alone would leave them
+    looking like an anonymous visitor."""
     def _set(user):
         app.dependency_overrides[current_user] = lambda: user
+        app.dependency_overrides[optional_user] = lambda: user
     yield _set
     app.dependency_overrides.clear()
 

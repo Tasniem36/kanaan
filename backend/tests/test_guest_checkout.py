@@ -1,0 +1,245 @@
+"""Checkout without an account, and the tracking link that replaces an order history.
+
+The risks worth pinning down:
+  * a guest order must still capture the delivery details and a usable e-mail;
+  * the tracking token must be the *only* way in without a session, and must not
+    let one order's link open another's;
+  * registering later must be able to claim the account guest checkout created —
+    but must never take over an account that already has a password.
+"""
+import pytest
+
+import routers.orders as orders
+import routers.auth as auth
+
+
+GUEST = {"customer_name": "تسنيم", "phone": "0501234567", "city": "دبي",
+         "street": "شارع", "house": "12", "email": "guest@example.com",
+         "items": [{"product_id": "6f1d4e0e-0000-4000-8000-000000000000", "qty": 1}]}
+
+
+@pytest.fixture
+def stub_order(monkeypatch):
+    """Stand in for the whole transactional body of create_order, capturing what
+    SQL it ran so the guest-account path can be asserted on."""
+    calls = []
+    state = {"order": None}
+
+    class FakeCur:
+        description = True
+
+        def execute(self, sql, params=None):
+            calls.append((" ".join(str(sql).split()), list(params or [])))
+
+        def fetchall(self):
+            sql = calls[-1][0]
+            if "from users where email" in sql:
+                return []                      # no existing account for this e-mail
+            if "insert into users" in sql:
+                return [{"id": "new-user", "email": GUEST["email"], "full_name": "تسنيم",
+                         "phone": "+971501234567", "role": "customer"}]
+            if "from products" in sql:
+                return [{"id": GUEST["items"][0]["product_id"], "name": "زيت", "price": 65, "stock": 5}]
+            if "insert into orders" in sql:
+                state["order"] = {
+                    "id": "0f1d4e0e-1111-4000-8000-000000000000", "user_id": "new-user",
+                    "customer_name": "تسنيم", "phone": "+971501234567", "total": 90,
+                    "payment_method": "cod", "status": "pending", "track_token": "tok-abc",
+                }
+                return [state["order"]]
+            return []
+
+    class FakeConn:
+        def cursor(self): return _ctx(FakeCur())
+        def transaction(self): return _ctx(None)
+
+    class _ctx:
+        def __init__(self, v): self.v = v
+        def __enter__(self): return self.v
+        def __exit__(self, *a): return False
+
+    monkeypatch.setattr(orders, "pool", type("P", (), {"connection": staticmethod(lambda: _ctx(FakeConn()))})())
+    monkeypatch.setattr(orders, "execute", lambda *a, **k: None)
+    monkeypatch.setattr(orders, "log_action", lambda **k: None)
+    monkeypatch.setattr(orders, "notify_new_order", lambda *a, **k: None)
+    monkeypatch.setattr(orders, "_notify_new_order_admins", lambda *a, **k: None)
+    monkeypatch.setattr(orders, "compute_delivery_fee", lambda city, total: 25)
+    sent = []
+    monkeypatch.setattr(orders, "send_email", lambda to, subject, body: sent.append((to, subject, body)) or True)
+    return calls, sent, state
+
+
+# --- placing an order without a session --------------------------------------
+def test_a_guest_can_place_an_order(client, stub_order):
+    calls, _, state = stub_order
+    res = client.post("/api/orders", json=GUEST)
+    assert res.status_code == 200, res.text
+    assert state["order"], "the order row was never written"
+
+
+def test_a_guest_order_gets_an_account_for_its_e_mail(client, stub_order):
+    calls, _, _ = stub_order
+    client.post("/api/orders", json=GUEST)
+    inserted = [c for c in calls if "insert into users" in c[0]]
+    assert inserted, "no account was created for the guest"
+    sql, params = inserted[0]
+    assert "values (%s, '', %s, %s)" in sql, "the guest account must have an empty password_hash"
+    assert params[0] == GUEST["email"]
+
+
+def test_the_order_carries_a_tracking_token(client, stub_order):
+    calls, _, _ = stub_order
+    client.post("/api/orders", json=GUEST)
+    sql, params = next(c for c in calls if "insert into orders" in c[0])
+    assert "track_token" in sql
+    assert params[-1] and len(params[-1]) > 16, "the token must be long enough not to be guessable"
+
+
+def test_the_guest_is_e_mailed_the_tracking_link(client, stub_order):
+    _, sent, _ = stub_order
+    client.post("/api/orders", json=GUEST)
+    assert sent, "no confirmation e-mail"
+    to, _subject, body = sent[0]
+    assert to == GUEST["email"]
+    assert "/track/0f1d4e0e-1111-4000-8000-000000000000?t=tok-abc" in body
+
+
+@pytest.mark.parametrize("missing", ["customer_name", "phone", "city", "street", "house"])
+def test_the_delivery_details_are_still_required(client, stub_order, missing):
+    assert client.post("/api/orders", json={**GUEST, missing: ""}).status_code == 400
+
+
+@pytest.mark.parametrize("email", ["", "not-an-email", "a@b", "  "])
+def test_a_guest_must_give_a_usable_e_mail(client, stub_order, email):
+    """It's the fallback channel when the phone is wrong, so a junk value is no use."""
+    assert client.post("/api/orders", json={**GUEST, "email": email}).status_code == 400
+
+
+def test_a_signed_in_customer_needs_no_e_mail(client, app, stub_order):
+    from security import optional_user
+    app.dependency_overrides[optional_user] = lambda: {"id": "me", "role": "customer"}
+    body = {k: v for k, v in GUEST.items() if k != "email"}
+    assert client.post("/api/orders", json=body).status_code == 200
+
+
+# --- the tracking link -------------------------------------------------------
+@pytest.fixture
+def one_order(monkeypatch):
+    row = {"id": "0f1d4e0e-1111-4000-8000-000000000000", "user_id": "someone-else",
+           "customer_name": "تسنيم", "phone": "+971501234567", "city": "دبي", "street": "ش",
+           "house": "12", "notes": None, "status": "preparing", "total": 90,
+           "payment_method": "cod", "payment_status": "unpaid", "delivery_fee": 25,
+           "discount_amount": 0, "created_at": "2026-08-18T10:00:00Z", "track_token": "tok-abc"}
+    monkeypatch.setattr(orders, "fetch_one", lambda sql, params=None: dict(row))
+    monkeypatch.setattr(orders, "fetch_all", lambda sql, params=None: [])
+    monkeypatch.setattr(orders, "cancel_and_restore", lambda oid: None)  # no live pool in tests
+    return row
+
+
+OID = "0f1d4e0e-1111-4000-8000-000000000000"
+
+
+def test_the_right_token_opens_the_order(client, one_order):
+    res = client.get(f"/api/orders/track/{OID}?t=tok-abc")
+    assert res.status_code == 200
+    o = res.json()["order"]
+    assert o["status"] == "preparing" and o["items"] == [] and o["events"] == []
+
+
+@pytest.mark.parametrize("qs", ["", "?t=", "?t=wrong", "?t=tok-ab"])
+def test_no_token_or_a_wrong_one_is_a_404(client, one_order, qs):
+    """404 rather than 403 — a guessed order id shouldn't confirm the order exists."""
+    assert client.get(f"/api/orders/track/{OID}{qs}").status_code == 404
+
+
+def test_the_tracking_page_hides_the_full_phone_and_the_account(client, one_order):
+    o = client.get(f"/api/orders/track/{OID}?t=tok-abc").json()["order"]
+    assert "user_id" not in o and "track_token" not in o and "phone" not in o
+    assert o["phone_hint"] == "+971*****4567"
+
+
+def test_a_malformed_order_id_is_a_404(client, one_order):
+    assert client.get("/api/orders/track/not-a-uuid?t=tok-abc").status_code == 404
+
+
+def test_a_guest_can_settle_their_own_payment_with_the_token(client, one_order):
+    """Coming back from Ziina there's no session, so the token has to be enough."""
+    assert client.post(f"/api/orders/{OID}/cancel-payment?t=tok-abc").status_code != 401
+    assert client.post(f"/api/orders/{OID}/cancel-payment?t=nope").status_code == 404
+
+
+# --- claiming the account later ----------------------------------------------
+def test_register_treats_an_unclaimed_guest_account_as_available(client, monkeypatch):
+    """The e-mail exists but has no password, so registering must proceed, not 409."""
+    seen = {}
+
+    def fake_fetch_one(sql, params=None):
+        flat = " ".join(sql.split())
+        if "from users where email" in flat:
+            seen["guard"] = flat
+            return None          # the guard excludes password-less rows
+        if "insert into signup_verifications" in flat:
+            return {"id": "v-1"}
+        return None
+
+    monkeypatch.setattr(auth, "fetch_one", fake_fetch_one)
+    monkeypatch.setattr(auth, "execute", lambda *a, **k: None)
+    monkeypatch.setattr(auth, "send_email", lambda *a, **k: True)
+    monkeypatch.setattr(auth, "send_sms", lambda *a, **k: True)
+    res = client.post("/api/auth/register", json={
+        "email": "guest@example.com", "password": "Abcdef12", "phone": "0501234567"})
+    assert res.status_code == 200, res.text
+    assert "coalesce(password_hash, '') <> ''" in seen["guard"], \
+        "the duplicate-e-mail guard must ignore accounts that have no password yet"
+
+
+def test_claiming_only_overwrites_a_password_less_row(client, monkeypatch):
+    """A real account must not be hijacked by re-registering its e-mail."""
+    captured = {}
+
+    def fake_fetch_one(sql, params=None):
+        flat = " ".join(sql.split())
+        if "insert into users" in flat:
+            captured["sql"] = flat
+            return None          # ON CONFLICT ... WHERE matched nothing → has a password
+        return None
+
+    monkeypatch.setattr(auth, "fetch_one", fake_fetch_one)
+    monkeypatch.setattr(auth, "log_action", lambda **k: None)
+    with pytest.raises(Exception) as e:
+        auth._create_user("taken@example.com", "hash", "n", "+971500000000", None)
+    assert "already registered" in str(e.value)
+    assert "where coalesce(users.password_hash, '') = ''" in captured["sql"]
+
+
+def test_the_verify_step_claims_through_the_same_creation_path(client, monkeypatch):
+    """Regression: register_verify used to run its own INSERT, so it hit the unique
+    constraint and 409'd on a guest account instead of claiming it. Both register
+    paths must go through _create_user, which is where the claim lives."""
+    from datetime import datetime, timedelta, timezone
+    pending = {
+        "id": "v-1", "email": "guest@example.com", "phone": "+971501234567",
+        "full_name": "زائر", "password_hash": "new-hash", "email_code": "111111",
+        "phone_code": "222222", "email_ok": False, "phone_ok": False, "attempts": 0,
+        "expires_at": datetime.now(timezone.utc) + timedelta(minutes=5),
+    }
+    called = {}
+    monkeypatch.setattr(auth, "fetch_one", lambda sql, params=None: dict(pending))
+    monkeypatch.setattr(auth, "execute", lambda *a, **k: None)
+    def fake_create_user(*args, **kwargs):
+        called["args"] = args
+        return {"verified": True, "token": "t", "user": {"id": "same-row"}}
+
+    monkeypatch.setattr(auth, "_create_user", fake_create_user)
+    res = client.post("/api/auth/register/verify", json={
+        "verification_id": "v-1", "email_code": "111111", "phone_code": "222222"})
+    assert res.status_code == 200, res.text
+    assert called.get("args"), "verify must delegate to _create_user, not INSERT on its own"
+    assert called["args"][0] == "guest@example.com"
+
+
+def test_an_empty_password_hash_can_never_log_in():
+    """The guest account's stored hash is '' — bcrypt must reject every attempt."""
+    from security import verify_password
+    for attempt in ["", " ", "Abcdef12", "x" * 72]:
+        assert verify_password(attempt, "") is False

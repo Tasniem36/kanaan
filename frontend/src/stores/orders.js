@@ -15,11 +15,14 @@ export const useOrdersStore = defineStore('orders', {
     async validateCode(code, subtotal) {
       return api('/discounts/validate', { method: 'POST', body: { code, subtotal } })
     },
-    async confirmPayment(orderId) {
-      return api(`/orders/${orderId}/confirm-payment`, { method: 'POST' })
+    // `token` is the order's tracking token: how a guest returning from Ziina
+    // proves the order is theirs, since they have no session. Signed-in customers
+    // pass '' and are authorised by their JWT as before.
+    async confirmPayment(orderId, token = '') {
+      return api(`/orders/${orderId}/confirm-payment?t=${encodeURIComponent(token)}`, { method: 'POST' })
     },
-    async cancelPayment(orderId) {
-      return api(`/orders/${orderId}/cancel-payment`, { method: 'POST' })
+    async cancelPayment(orderId, token = '') {
+      return api(`/orders/${orderId}/cancel-payment?t=${encodeURIComponent(token)}`, { method: 'POST' })
     },
     async fetch() {
       this.loading = true

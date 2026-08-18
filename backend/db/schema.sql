@@ -262,6 +262,17 @@ create table if not exists order_items (
 );
 create index if not exists order_items_order_id_idx on order_items (order_id);
 
+-- Tracking token: lets whoever placed an order open its status page without an
+-- account (/track/<id>?t=<token>) and lets a guest returning from Ziina confirm
+-- their own payment. Unguessable, and scoped to that one order.
+alter table orders add column if not exists track_token text;
+create unique index if not exists orders_track_token_key on orders (track_token) where track_token is not null;
+
+-- Guest checkout creates an account with an EMPTY password_hash: it can't be
+-- logged into (bcrypt rejects it), it exists so the order, the in-app chat and the
+-- notifications have a user to hang off. Registering with that e-mail later claims
+-- the row and sets a real password — see routers/auth.py.
+
 -- ---------- settings (admin-editable key/value config) ---------------------
 create table if not exists settings (
   key        text primary key,

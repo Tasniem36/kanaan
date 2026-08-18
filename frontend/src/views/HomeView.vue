@@ -127,6 +127,23 @@
   <!-- basket sidebar -->
   <CartDrawer :open="openCart" @close="openCart = false" @checkout="openCheckout" />
 
+  <!-- guest order placed: their only route back to the order, so it's on screen
+       as well as in the confirmation e-mail -->
+  <transition name="v">
+    <div class="modal-overlay" v-if="placed" @click.self="placed = null">
+      <div class="modal">
+        <button class="m-close" @click="placed = null" :aria-label="t('common.close')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        <span class="m-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l4 4 10-10"/></svg></span>
+        <h3 class="display">{{ t('checkout.placedTitle') }}</h3>
+        <p>{{ t('checkout.received', { id: placed.id.slice(0, 8) }) }}</p>
+        <p class="a-muted" style="margin:.5rem 0 .9rem">{{ t('checkout.placedEmailed') }}</p>
+        <RouterLink class="btn btn-green" :to="{ name: 'track', params: { id: placed.id }, query: { t: placed.token } }" @click="placed = null">
+          {{ t('checkout.trackOrder') }}
+        </RouterLink>
+      </div>
+    </div>
+  </transition>
+
   <!-- value modal -->
   <transition name="v">
     <div class="modal-overlay" v-if="modal" @click.self="modal = null">
@@ -192,6 +209,13 @@
         <input class="a-input" v-model.trim="co.name">
         <label class="co-l">{{ t('checkout.phone') }} *</label>
         <input class="a-input" v-model.trim="co.phone" type="tel" inputmode="tel" dir="ltr" placeholder="050 123 4567">
+        <!-- guests only: the second way to reach them if the phone is wrong, and
+             where the tracking link is sent -->
+        <template v-if="!auth.isAuthenticated">
+          <label class="co-l">{{ t('checkout.email') }} *</label>
+          <input class="a-input" v-model.trim="co.email" type="email" inputmode="email" dir="ltr" autocomplete="email" placeholder="you@example.com">
+          <p class="a-muted" style="font-size:.78rem;margin-top:.25rem">{{ t('checkout.emailWhy') }}</p>
+        </template>
         <div class="grid2">
           <div><label class="co-l">{{ t('checkout.city') }} *</label>
             <select class="a-input" v-model="co.city">
@@ -383,7 +407,9 @@ function runSearch() {
 const checkoutOpen = ref(false)
 const coErr = ref('')
 const placing = ref(false)
-const co = reactive({ name: '', phone: '', city: '', street: '', house: '', notes: '' })
+const co = reactive({ name: '', phone: '', city: '', street: '', house: '', notes: '', email: '' })
+// set after a guest's order goes through: { id, token } for the tracking link
+const placed = ref(null)
 const selectedAddressId = ref(null)
 const newAddress = ref(false)
 const saveAddress = ref(false)
@@ -453,16 +479,16 @@ async function openCheckout() {
   promoErr.value = ''
   discount.value = 0
   appliedCode.value = null
-  // checkout requires an account so the order is trackable under the customer.
-  // redirect back to '/?checkout=1' so the checkout reopens automatically once
-  // they've signed in — no need to find the cart and start over.
-  if (!auth.isAuthenticated) {
-    showToast(t('checkout.loginRequired'))
-    router.push({ name: 'login', query: { redirect: '/?checkout=1' } })
-    return
-  }
   coErr.value = ''
   newAddress.value = false
+  // Guests check out too: they type the same delivery details plus an e-mail, and
+  // get a tracking link instead of an order history. There are no saved addresses
+  // to choose from, so go straight to the form.
+  if (!auth.isAuthenticated) {
+    newAddress.value = true
+    checkoutOpen.value = true
+    return
+  }
   co.name = co.name || auth.user.full_name || ''
   co.phone = co.phone || auth.user.phone || ''
   await addresses.fetch().catch(() => {})
@@ -486,6 +512,11 @@ async function placeOrder() {
       return
     }
     delivery = { customer_name: co.name, phone: co.phone, city: co.city, street: co.street, house: co.house, notes: co.notes }
+    // a guest is reachable only by what they type here, so the e-mail is required
+    if (!auth.isAuthenticated) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(co.email)) { coErr.value = t('checkout.errEmail'); return }
+      delivery.email = co.email
+    }
   }
 
   // delivery phone must be a valid UAE mobile
@@ -508,12 +539,16 @@ async function placeOrder() {
       return
     }
     // Cash on delivery
+    const wasGuest = !auth.isAuthenticated
     cart.clear()
     checkoutOpen.value = false
     saveAddress.value = false
-    Object.assign(co, { name: '', phone: '', city: '', street: '', house: '', notes: '' })
+    Object.assign(co, { name: '', phone: '', city: '', street: '', house: '', notes: '', email: '' })
     pantryFeed.value?.reload(); potteryFeed.value?.reload() // refresh stock
-    showToast(t('checkout.received', { id: result.order.id.slice(0, 8) }))
+    // A guest has no حسابي to find the order in, so hand them the tracking link on
+    // screen as well as by e-mail — the e-mail address could have a typo in it.
+    if (wasGuest) placed.value = { id: result.order.id, token: result.order.track_token }
+    else showToast(t('checkout.received', { id: result.order.id.slice(0, 8) }))
   } catch (e) {
     coErr.value = e.message
   } finally {

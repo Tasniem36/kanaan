@@ -1,11 +1,14 @@
 import os
+import secrets
 import uuid
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 
 from db import pool, fetch_all, fetch_one, execute
-from security import current_user, require_manager
-from validate import normalize_uae_phone
+from messaging import send_email
+from ratelimit import rate_limit
+from security import current_user, optional_user, require_manager
+from validate import is_email, normalize_uae_phone
 from audit import log_action
 from ziina import create_payment_intent, get_payment_intent
 from notify import notify_new_order
@@ -54,8 +57,64 @@ def cancel_and_restore(order_id):
         cur.execute("insert into order_status_events (order_id, status) values (%s, 'cancelled')", [order_id])
 
 
+def _order_email_body(order, track_url):
+    """Plain-text confirmation. Deliberately no prices per line — the total and the
+    live status live on the tracking page, which can't go stale the way an e-mail can."""
+    oid = str(order["id"])
+    return (
+        f"مرحباً {order['customer_name']},\n\n"
+        f"استلمنا طلبك رقم #{oid[:8]} في دكّان كنعان.\n"
+        f"الإجمالي: {order['total']} درهم\n"
+        f"طريقة الدفع: {'الدفع عند الاستلام' if order['payment_method'] == 'cod' else 'مدفوع إلكترونياً'}\n\n"
+        f"تابع حالة طلبك من هنا:\n{track_url}\n\n"
+        f"احفظ هذا الرابط — يفتح صفحة طلبك دون تسجيل دخول.\n\n"
+        f"لأي استفسار راسلنا على واتساب: +971 52 298 1187\n"
+        f"دكّان كنعان"
+    )
+
+
+def _send_order_email(order, email, request):
+    """Best-effort: a failed e-mail must never fail the order that triggered it."""
+    if not email:
+        return
+    try:
+        base = os.getenv("APP_URL") or request.headers.get("origin") or ""
+        track_url = f"{base}/track/{order['id']}?t={order['track_token']}"
+        send_email(email, f"تأكيد طلبك #{str(order['id'])[:8]} — دكّان كنعان",
+                   _order_email_body(order, track_url))
+    except Exception as e:  # noqa: BLE001 — never break checkout over a mail failure
+        print("[order-email]", e)
+
+
+def _guest_account(run, email, full_name, phone, request):
+    """The account a guest order hangs off.
+
+    Reuses the row for that e-mail when there is one — so a customer who once
+    ordered as a guest, or who already has a real account, keeps a single history.
+    Otherwise creates one with an empty password_hash: unusable for login until
+    they claim it through /register (see routers/auth.py).
+    """
+    rows = run("select id, email, full_name, phone, role, password_hash from users where email = %s", [email])
+    if rows:
+        u = rows[0]
+        # fill in details the row is missing (an earlier guest order may have had none)
+        if not (u["full_name"] or "").strip() or not (u["phone"] or "").strip():
+            run("""update users set full_name = coalesce(nullif(full_name, ''), %s),
+                                    phone = coalesce(nullif(phone, ''), %s) where id = %s""",
+                [full_name, phone, u["id"]])
+        return u
+    u = run("""insert into users (email, password_hash, full_name, phone)
+               values (%s, '', %s, %s) returning id, email, full_name, phone, role""",
+            [email, full_name, phone])[0]
+    log_action(user_id=u["id"], action="guest_account_created", detail={"email": email}, request=request)
+    return u
+
+
 @router.post("")
-def create_order(request: Request, user=Depends(current_user), payload: dict = Body(default={})):
+def create_order(request: Request, user=Depends(optional_user), payload: dict = Body(default={})):
+    """Place an order. A session is optional: a guest supplies an e-mail instead and
+    the order is attached to an account created (or reused) for that address, so the
+    shop keeps its in-app channel to them even if the phone number turns out wrong."""
     customer_name = payload.get("customer_name")
     city, street, house = payload.get("city"), payload.get("street"), payload.get("house")
     payment_method = "ziina" if payload.get("payment_method") == "ziina" else "cod"
@@ -64,6 +123,15 @@ def create_order(request: Request, user=Depends(current_user), payload: dict = B
     phone_norm = normalize_uae_phone(payload.get("phone"))
     if not phone_norm:
         raise HTTPException(400, "Invalid UAE phone number")
+    guest_email = None
+    if not user:
+        # Checkout without an account: the e-mail is the second way to reach them and
+        # the key their order history hangs off, so it has to be real-looking.
+        guest_email = (payload.get("email") or "").strip().lower()
+        if not is_email(guest_email):
+            raise HTTPException(400, "A valid e-mail address is required")
+        # ordering reserves stock, so throttle it now that no login stands in the way
+        rate_limit(request, bucket="guest_order", limit=6, window=60)
     items = payload.get("items")
     if not isinstance(items, list) or not items:
         raise HTTPException(400, "Your cart is empty")
@@ -72,6 +140,11 @@ def create_order(request: Request, user=Depends(current_user), payload: dict = B
         def run(sql, params=None):
             cur.execute(sql, params or [])
             return cur.fetchall() if cur.description else []
+
+        # A guest's account is resolved in the same transaction as the order, so a
+        # failure later can't leave an account behind with no order.
+        account = user or _guest_account(run, guest_email, customer_name, phone_norm, request)
+        user_id = account["id"]
 
         # Collapse duplicate lines for the same product BEFORE checking stock.
         # Two lines of qty 1 would each pass the check on a product with 1 left,
@@ -108,7 +181,7 @@ def create_order(request: Request, user=Depends(current_user), payload: dict = B
 
         discount, discount_code = 0, None
         if payload.get("code"):
-            r = evaluate_code(run, payload["code"], user["id"], total)
+            r = evaluate_code(run, payload["code"], user_id, total)
             if r.get("error"):
                 raise HTTPException(400, r["error"])
             discount, discount_code = r["discount"], r["dc"]["code"]
@@ -118,10 +191,12 @@ def create_order(request: Request, user=Depends(current_user), payload: dict = B
 
         order = run(
             """insert into orders (user_id, customer_name, phone, city, street, house, notes, total,
-                                   payment_method, discount_code, discount_amount, delivery_fee)
-               values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) returning *""",
-            [user["id"], customer_name, phone_norm, city, street, house, payload.get("notes"),
-             final_total, payment_method, discount_code, discount, delivery_fee],
+                                   payment_method, discount_code, discount_amount, delivery_fee,
+                                   track_token)
+               values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) returning *""",
+            [user_id, customer_name, phone_norm, city, street, house, payload.get("notes"),
+             final_total, payment_method, discount_code, discount, delivery_fee,
+             secrets.token_urlsafe(16)],
         )[0]
         # Write the whole basket in two statements instead of two per line item.
         pids = [x["product_id"] for x in lines]
@@ -139,21 +214,23 @@ def create_order(request: Request, user=Depends(current_user), payload: dict = B
         run("insert into order_status_events (order_id, status) values (%s, %s)", [order["id"], order["status"]])
         order["items"] = lines
 
-    log_action(user_id=user["id"], action="order_placed",
+    log_action(user_id=user_id, action="order_placed",
                detail={"order_id": str(order["id"]), "total": order["total"],
                        "payment_method": payment_method, "discount_code": discount_code}, request=request)
 
     if payment_method == "ziina":
         app_url = os.getenv("APP_URL") or request.headers.get("origin") or ""
         oid = str(order["id"])
+        tok = order["track_token"]
         try:
             intent = create_payment_intent(
                 amount_fils=round(final_total * 100),
-                success_url=f"{app_url}/pay/return?order={oid}",
-                cancel_url=f"{app_url}/pay/return?order={oid}&cancel=1",
+                success_url=f"{app_url}/pay/return?order={oid}&t={tok}",
+                cancel_url=f"{app_url}/pay/return?order={oid}&t={tok}&cancel=1",
                 message=f"دكّان كنعان — طلب #{oid[:8]}",
             )
             execute("update orders set ziina_payment_id = %s where id = %s", [intent.get("id"), oid])
+            _send_order_email(order, guest_email, request)
             return {"order": order, "redirect_url": intent.get("redirect_url")}
         except HTTPException:
             cancel_and_restore(oid)
@@ -161,6 +238,9 @@ def create_order(request: Request, user=Depends(current_user), payload: dict = B
 
     notify_new_order(order)  # COD: alert the manager now (Ziina alerts once paid)
     _notify_new_order_admins(order)  # in-app bell for managers
+    # A guest has no order history to come back to, so the tracking link in this
+    # e-mail is their only route to the order. Signed-in customers find it in حسابي.
+    _send_order_email(order, guest_email, request)
     return {"order": order}
 
 
@@ -196,18 +276,52 @@ def list_orders(user=Depends(current_user)):
     return {"orders": orders}
 
 
-def _own_order_or_404(oid, user):
+def _own_order_or_404(oid, user, token=None):
     """Fetch an order the caller is allowed to act on. 404 (not 403) for orders
-    that aren't theirs, so order ids can't be probed for existence."""
-    order = fetch_one("select * from orders where id = %s", [oid])
-    if not order or (user["role"] != "manager" and str(order["user_id"]) != str(user["id"])):
+    that aren't theirs, so order ids can't be probed for existence.
+
+    Three ways to qualify: a manager, the customer it belongs to, or anyone holding
+    its tracking token — which is how a guest with no session returns from Ziina.
+    """
+    try:
+        uuid.UUID(str(oid))   # a malformed id is a 404, not a cast error
+    except (ValueError, TypeError):
         raise HTTPException(404, "Order not found")
-    return order
+    order = fetch_one("select * from orders where id = %s", [oid])
+    if not order:
+        raise HTTPException(404, "Order not found")
+    if user and (user["role"] == "manager" or str(order["user_id"]) == str(user["id"])):
+        return order
+    # compare_digest keeps a wrong token from being narrowed down by timing
+    if token and order["track_token"] and secrets.compare_digest(str(token), order["track_token"]):
+        return order
+    raise HTTPException(404, "Order not found")
+
+
+# GET /api/orders/track/{oid}?t=… — public: the status page for whoever placed the
+# order. The token is the credential, so this returns only what that page shows and
+# never the customer's e-mail or account id.
+@router.get("/track/{oid}")
+def track_order(oid: str, request: Request, t: str = Query(""), user=Depends(optional_user)):
+    order = _own_order_or_404(oid, user, token=t)
+    fields = ("id", "customer_name", "city", "street", "house", "notes", "status", "total",
+              "payment_method", "payment_status", "delivery_fee", "discount_amount", "created_at")
+    safe = {k: order[k] for k in fields}
+    # the phone is shown back partially, so they can check what they typed without
+    # the full number sitting behind a link that might be forwarded
+    phone = order["phone"] or ""
+    safe["phone_hint"] = (phone[:4] + "*" * (len(phone) - 8) + phone[-4:]) if len(phone) > 8 else phone
+    safe["items"] = fetch_all("select name, price, qty from order_items where order_id = %s", [oid])
+    safe["events"] = fetch_all(
+        "select status, created_at from order_status_events where order_id = %s order by created_at", [oid])
+    return {"order": safe}
 
 
 @router.post("/{oid}/confirm-payment")
-def confirm_payment(oid: str, request: Request, user=Depends(current_user)):
-    order = _own_order_or_404(oid, user)
+def confirm_payment(oid: str, request: Request, t: str = Query(""), user=Depends(optional_user)):
+    if not user and not t:
+        raise HTTPException(401, "Authentication required")
+    order = _own_order_or_404(oid, user, token=t)
     if order["payment_status"] == "paid":
         return {"paid": True, "status": order["status"]}
     if order["payment_method"] != "ziina" or not order["ziina_payment_id"]:
@@ -229,8 +343,10 @@ def confirm_payment(oid: str, request: Request, user=Depends(current_user)):
 
 
 @router.post("/{oid}/cancel-payment")
-def cancel_payment(oid: str, user=Depends(current_user)):
-    order = _own_order_or_404(oid, user)
+def cancel_payment(oid: str, t: str = Query(""), user=Depends(optional_user)):
+    if not user and not t:
+        raise HTTPException(401, "Authentication required")
+    order = _own_order_or_404(oid, user, token=t)
     if order["payment_status"] == "paid":
         return {"cancelled": False, "paid": True}
     if order["payment_method"] == "ziina" and order["ziina_payment_id"]:

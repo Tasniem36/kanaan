@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { api } from '../services/api'
 import { useAuthStore } from './auth'
+import { useContentStore } from './content'
 
 const PAGE = 3      // the storefront shows the best three, then "show all"
 const BATCH_MAX = 50 // the endpoint's per-request cap
@@ -22,11 +23,14 @@ export const useReviewsStore = defineStore('reviews', {
   }),
   getters: {
     hasMore: (s) => s.list.length < s.total,
-    // The homepage section stays hidden until there's something approved to show —
-    // an empty testimonials block above the shop looks worse than no block at all.
-    // Signed-in customers are the exception: they're the only ones who can write a
-    // review, so hiding it from them would leave the very first one unwritable.
+    // Two gates on the homepage section:
+    //  1. the manager's switch in /manager/content wins outright — off means off;
+    //  2. otherwise it stays hidden until something is approved, because an empty
+    //     testimonials block above the shop looks worse than no block at all.
+    // Signed-in customers are exempt from (2): they're the only ones who can write
+    // a review, so hiding it from them would leave the very first one unwritable.
     visible() {
+      if (useContentStore().sectionHidden('reviews')) return false
       return this.total > 0 || useAuthStore().isAuthenticated
     },
   },

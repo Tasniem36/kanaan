@@ -68,6 +68,9 @@ def update_section(key: str, _m=Depends(require_manager), payload: dict = Body(d
     # clearing one is how the manager goes back to the bundled translation
     copy = {f: " ".join(str((payload or {}).get(f) or "").split())[:cap]
             for f, cap in _SECTION_FIELDS.items()}
+    # the manager's own show/hide switch for the section, independent of whether
+    # there is anything in it yet (the storefront hides an empty section anyway)
+    copy["hidden"] = bool((payload or {}).get("hidden"))
     fetch_one(
         """insert into settings (key, value) values (%s, %s)
            on conflict (key) do update set value = excluded.value, updated_at = now()

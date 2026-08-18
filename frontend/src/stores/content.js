@@ -13,6 +13,11 @@ export const useContentStore = defineStore('content', {
       const pick = (f) => (row[`${f}_${locale === 'ar' ? 'ar' : 'en'}`] || '').trim()
       return { eyebrow: pick('eyebrow'), title: pick('title'), desc: pick('desc') }
     },
+    // the manager's switch in /manager/content — off by default, i.e. sections show
+    sectionHidden: (s) => (key) => !!s.sections[key]?.hidden,
+    // Has the manager ever saved this section? Until they have, the view uses the
+    // bundled translation; afterwards their text is authoritative, empties included.
+    sectionSaved: (s) => (key) => !!s.sections[key],
   },
   actions: {
     async fetch() {

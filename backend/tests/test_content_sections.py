@@ -53,7 +53,9 @@ def test_a_save_writes_every_field_and_caps_the_length(client, spy):
                        json={"desc_ar": "  آراءٌ   حقيقيّة  ", "desc_en": "x" * 900, "nope": "ignored"},
                        headers=headers)
     saved = res.json()["section"]
-    assert set(saved) == set(content._SECTION_FIELDS), "a save is a full replace, so blanks can clear a field"
+    assert set(saved) == set(content._SECTION_FIELDS) | {"hidden"}, \
+        "a save is a full replace, so blanks can clear a field"
+    assert saved["hidden"] is False, "the section shows unless the manager hides it"
     assert saved["desc_ar"] == "آراءٌ حقيقيّة", "runs of whitespace are collapsed"
     assert len(saved["desc_en"]) == content._SECTION_FIELDS["desc_en"]
     assert "nope" not in saved

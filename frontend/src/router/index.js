@@ -12,6 +12,9 @@ export const routes = [
   { path: '/category/:cat', name: 'category', component: () => import('../views/CategoryView.vue') },
   { path: '/search', name: 'search', component: () => import('../views/SearchView.vue') },
   { path: '/pay/return', name: 'pay-return', component: () => import('../views/PayReturn.vue') },
+  // public order status page — the ?t= token in the link is the credential, so a
+  // guest who checked out without an account can still follow their order
+  { path: '/track/:id', name: 'track', component: () => import('../views/TrackView.vue') },
   { path: '/login', name: 'login', component: () => import('../views/LoginView.vue'), meta: { guestOnly: true } },
   { path: '/register', name: 'register', component: () => import('../views/RegisterView.vue'), meta: { guestOnly: true } },
   {
