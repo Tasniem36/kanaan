@@ -535,6 +535,7 @@ export default {
     review_submitted: 'كتابة رأي',
     review_approved: 'نشر رأي',
     review_rejected: 'رفض رأي',
+    review_pending: 'إلغاء نشر رأي',
     review_deleted: 'حذف رأي',
   },
   track: {

@@ -535,6 +535,7 @@ export default {
     review_submitted: 'Review written',
     review_approved: 'Review published',
     review_rejected: 'Review rejected',
+    review_pending: 'Review unpublished',
     review_deleted: 'Review deleted',
   },
   track: {
