@@ -330,7 +330,7 @@ create table if not exists content_values (
 -- until a manager approves it, so the storefront section can't be spammed.
 create table if not exists reviews (
   id         uuid primary key default gen_random_uuid(),
-  user_id    uuid not null references users (id) on delete cascade,
+  user_id    uuid references users (id) on delete cascade,   -- null: written without an account
   rating     smallint not null check (rating between 1 and 5),
   body       text not null default '',
   city       text,                                    -- shown under the name; optional
@@ -338,9 +338,20 @@ create table if not exists reviews (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
--- one per customer: POST /api/reviews upserts on this
-create unique index if not exists reviews_user_key on reviews (user_id);
+-- One per ACCOUNT: POST /api/reviews upserts on this. Partial, because a review
+-- written without signing in has no user_id — several of those must be allowed, and
+-- each is a one-shot row (a guest has no identity to edit it with later).
+drop index if exists reviews_user_key;
+create unique index if not exists reviews_user_key on reviews (user_id) where user_id is not null;
 -- the storefront's read: approved only, newest first
 create index if not exists reviews_approved_idx on reviews (created_at desc) where status = 'approved';
 -- the manager's moderation queue
 create index if not exists reviews_status_idx on reviews (status, created_at desc);
+-- optional photo the customer attached. Stored as files like product images (see
+-- media.py); the card loads the thumbnail, the full one opens on click.
+alter table reviews add column if not exists image_url text;
+alter table reviews add column if not exists thumb_url text;
+-- the display name a guest reviewer typed; signed-in reviews use users.full_name
+alter table reviews add column if not exists author_name text;
+-- databases created before guest reviews had user_id NOT NULL
+alter table reviews alter column user_id drop not null;

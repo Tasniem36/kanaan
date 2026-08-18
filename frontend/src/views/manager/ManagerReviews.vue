@@ -19,10 +19,14 @@
           <span class="a-muted when">{{ fmt(r.created_at) }}</span>
         </header>
         <p class="body">{{ r.body }}</p>
+        <!-- the attached photo is published with the review, so it needs eyes on it too -->
+        <a v-if="r.thumb_url || r.image_url" class="shot" :href="r.image_url || r.thumb_url" target="_blank" rel="noopener">
+          <img :src="r.thumb_url || r.image_url" :alt="t('reviews.photoLabel')" loading="lazy">
+        </a>
         <footer>
           <div class="who">
             <b>{{ r.author || t('reviews.anonymous') }}</b>
-            <span class="a-muted" dir="ltr">{{ r.author_email }}<template v-if="r.city"> · {{ r.city }}</template></span>
+            <span class="a-muted" dir="ltr">{{ r.author_email || t('manager.revGuest') }}<template v-if="r.city"> · {{ r.city }}</template></span>
           </div>
           <div class="acts">
             <button v-if="r.status !== 'approved'" class="a-btn" :disabled="busy === r.id" @click="setStatus(r, 'approved')">{{ t('manager.revApprove') }}</button>
@@ -117,6 +121,8 @@ h1 { font-family: 'Amiri', serif; color: var(--green); font-size: 1.9rem; margin
   display: flex; align-items: flex-end; justify-content: space-between; gap: .8rem; flex-wrap: wrap;
   border-top: 1px solid rgba(60,74,39,.1); padding-top: .6rem;
 }
+.shot { display: block; max-width: 240px; border-radius: 12px; overflow: hidden; border: 1px solid rgba(60,74,39,.14); }
+.shot img { width: 100%; max-height: 160px; object-fit: cover; display: block; }
 .who b { display: block; color: var(--green); font-size: .92rem; }
 .who span { font-size: .78rem; }
 .acts { display: flex; gap: .4rem; flex-wrap: wrap; }

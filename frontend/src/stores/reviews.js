@@ -83,9 +83,15 @@ export const useReviewsStore = defineStore('reviews', {
     },
     // Submitting always sends the review (back) to the moderation queue, so it
     // leaves the public list until a manager approves it again.
-    async submit({ rating, body, city }) {
-      const { review } = await api('/reviews', { method: 'POST', body: { rating, body, city } })
-      this.mine = review
+    // `name` is only used when nobody is signed in — a guest review has no account to
+    // take a display name from. `image` is an optional uploaded data-URL.
+    async submit({ rating, body, city, name, image }) {
+      const { review } = await api('/reviews', {
+        method: 'POST',
+        body: { rating, body, city, name, image },
+      })
+      // a guest has no identity to come back with, so there's no "my review" to keep
+      if (useAuthStore().isAuthenticated) this.mine = review
       if (this.list.some((r) => r.id === review.id)) {
         this.list = this.list.filter((r) => r.id !== review.id)
         await this.refreshSummary()

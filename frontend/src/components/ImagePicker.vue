@@ -38,6 +38,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { encodeImageFile } from '../composables/useImageFile'
 
 const { t } = useI18n()
 const props = defineProps({ modelValue: { type: Array, default: () => [] } })
@@ -78,50 +79,12 @@ function makePrimary(i) {
   commit(next)
 }
 
-// Downscale each picked file to max 1400px and encode it as a compact data URL.
-// WebP is ~35% smaller than JPEG at the same visual quality, which is the whole
-// upload payload — so a multi-photo product saves noticeably faster on mobile.
-// Browsers that can't encode WebP silently hand back a PNG (much *larger*), so
-// the result is checked and JPEG used instead.
-const MAX_DIM = 1400
-
-function encode(canvas) {
-  const webp = canvas.toDataURL('image/webp', 0.85)
-  return webp.startsWith('data:image/webp') ? webp : canvas.toDataURL('image/jpeg', 0.82)
-}
-
-function processFile(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      const img = new Image()
-      img.onload = () => {
-        let { width, height } = img
-        if (width > MAX_DIM || height > MAX_DIM) {
-          const s = MAX_DIM / Math.max(width, height)
-          width = Math.round(width * s)
-          height = Math.round(height * s)
-        }
-        const canvas = document.createElement('canvas')
-        canvas.width = width
-        canvas.height = height
-        canvas.getContext('2d').drawImage(img, 0, 0, width, height)
-        resolve(encode(canvas))
-      }
-      img.onerror = reject
-      img.src = reader.result
-    }
-    reader.onerror = reject
-    reader.readAsDataURL(file)
-  })
-}
-
 async function onFiles(e) {
   const files = Array.from(e.target.files || [])
   if (!files.length) return
   busy.value = true
   try {
-    const encoded = await Promise.all(files.map(processFile))
+    const encoded = await Promise.all(files.map((f) => encodeImageFile(f)))
     commit([...list.value, ...encoded])
   } catch {
     /* skip files that fail to decode */

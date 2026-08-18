@@ -1,8 +1,12 @@
 """General shop reviews (not per-product).
 
-One review per customer — re-submitting edits theirs rather than adding a second.
-Nothing reaches the storefront until a manager approves it, so the homepage
-section can't be spammed by a fresh account.
+Anyone may write one — no account needed, since writing a review is the sort of
+thing a shopper does once and won't sign up for. A signed-in customer gets one
+review they can edit by submitting again; a guest supplies a display name and their
+row is one-shot, having no identity to edit it with later.
+
+Nothing reaches the storefront until a manager approves it, so neither route can put
+text or a photo in front of shoppers on its own.
 """
 import re
 import uuid
@@ -11,23 +15,30 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, Res
 
 from audit import log_action
 from db import fetch_all, fetch_one
+from media import is_data_url, make_thumb, save_image
 from notifications import notify_managers, notify_users
 from ratelimit import rate_limit
-from security import current_user, require_manager
+from security import current_user, optional_user, require_manager
 
 router = APIRouter()
 
 BODY_MAX = 600
 BODY_MIN = 3
 CITY_MAX = 60
+NAME_MIN = 2
+NAME_MAX = 60
+# A 1400px WebP from the browser lands well under this; the cap is here so a
+# hand-rolled request can't stream megabytes into the JSON body.
+IMAGE_MAX_CHARS = 8 * 1024 * 1024
 STATUSES = ("pending", "approved", "rejected")
 
 # What the storefront card needs — never the reviewer's id or email. `author` is
 # null when the account has no name; the frontend shows its own placeholder so the
 # wording follows the reader's language.
-_PUBLIC_COLS = "r.id, r.rating, r.body, r.city, r.created_at, nullif(btrim(u.full_name), '') as author"
+_PUBLIC_COLS = ("r.id, r.rating, r.body, r.city, r.image_url, r.thumb_url, r.created_at, "
+                "coalesce(nullif(btrim(u.full_name), ''), nullif(btrim(r.author_name), '')) as author")
 # What the customer sees of their own review (status included — it may be pending)
-_OWN_COLS = "id, rating, body, city, status, created_at"
+_OWN_COLS = "id, rating, body, city, image_url, thumb_url, status, created_at"
 
 
 def _as_uuid(rid: str) -> str:
@@ -60,6 +71,36 @@ def _clean(payload: dict):
     return rating, body, city
 
 
+def _clean_image(src):
+    """The reviewer's optional photo, as an uploaded data-URL.
+
+    Only a data-URL is accepted: a plain URL would let a review point at any remote
+    image, which the shop can neither vouch for nor keep alive. Returns
+    (image_url, thumb_url), or (None, None) for no photo — which is also how an
+    existing photo is removed, since submitting replaces the whole review.
+    """
+    if not src:
+        return None, None
+    if not is_data_url(src):
+        raise HTTPException(400, "Unsupported image")
+    if len(src) > IMAGE_MAX_CHARS:
+        raise HTTPException(400, "That image is too large")
+    stored = save_image(src, subdir="reviews")
+    if not stored or is_data_url(stored):
+        # media.py hands back its input when it can't decode the bytes, and a base64
+        # blob must never end up in the row
+        raise HTTPException(400, "Could not read that image")
+    return stored, make_thumb(stored)
+
+
+def _clean_name(raw):
+    """A guest's display name — the card has nothing else to put above the city."""
+    name = " ".join(str(raw or "").split())[:NAME_MAX]
+    if len(name) < NAME_MIN:
+        raise HTTPException(400, "Please enter your name")
+    return name
+
+
 # GET /api/reviews — public: the approved reviews the storefront shows. Best-rated
 # first (newest breaking ties), so the default page is the three best ones; every
 # page shares that order, which keeps offset paging stable as "show all" walks it.
@@ -72,7 +113,7 @@ def list_reviews(limit: int = Query(3, ge=1, le=50), offset: int = Query(0, ge=0
         f"""select {_PUBLIC_COLS},
                    count(*) over ()::int as total_count,
                    round(avg(r.rating) over (), 1)::float as avg_rating
-              from reviews r join users u on u.id = r.user_id
+              from reviews r left join users u on u.id = r.user_id
              where r.status = 'approved'
              order by r.rating desc, r.created_at desc
              limit %s offset %s""",
@@ -91,21 +132,38 @@ def my_review(user=Depends(current_user)):
     return {"review": fetch_one(f"select {_OWN_COLS} from reviews where user_id = %s", [user["id"]])}
 
 
-# POST /api/reviews — write (or rewrite) the caller's review; always back to pending
+# POST /api/reviews — write a review, with or without an account. Either way it lands
+# as 'pending': the manager is the only route to the storefront.
 @router.post("")
-def submit_review(request: Request, response: Response, user=Depends(current_user), payload: dict = Body(default={})):
-    rate_limit(request, bucket="review", limit=6, window=60)
+def submit_review(request: Request, response: Response, user=Depends(optional_user), payload: dict = Body(default={})):
     rating, body, city = _clean(payload)
-    row = fetch_one(
-        f"""insert into reviews (user_id, rating, body, city)
-                 values (%s, %s, %s, %s)
-            on conflict (user_id) do update
-               set rating = excluded.rating, body = excluded.body, city = excluded.city,
-                   status = 'pending', updated_at = now()
-            returning {_OWN_COLS}""",
-        [user["id"], rating, body, city],
-    )
-    log_action(user_id=user["id"], action="review_submitted", detail={"rating": rating}, request=request)
+    image_url, thumb_url = _clean_image(payload.get("image"))
+
+    if user:
+        rate_limit(request, bucket="review", limit=6, window=60)
+        # one review per account: submitting again rewrites theirs and re-queues it
+        row = fetch_one(
+            f"""insert into reviews (user_id, rating, body, city, image_url, thumb_url)
+                     values (%s, %s, %s, %s, %s, %s)
+                on conflict (user_id) do update
+                   set rating = excluded.rating, body = excluded.body, city = excluded.city,
+                       image_url = excluded.image_url, thumb_url = excluded.thumb_url,
+                       status = 'pending', updated_at = now()
+                returning {_OWN_COLS}""",
+            [user["id"], rating, body, city, image_url, thumb_url],
+        )
+    else:
+        # No account: tighter limit, since there's no signup standing between a bot
+        # and the moderation queue. The name is what the card shows above the city.
+        rate_limit(request, bucket="guest_review", limit=3, window=120)
+        row = fetch_one(
+            f"""insert into reviews (author_name, rating, body, city, image_url, thumb_url)
+                     values (%s, %s, %s, %s, %s, %s) returning {_OWN_COLS}""",
+            [_clean_name(payload.get("name")), rating, body, city, image_url, thumb_url],
+        )
+
+    log_action(user_id=(user or {}).get("id"), action="review_submitted",
+               detail={"rating": rating, "guest": not user, "photo": bool(image_url)}, request=request)
     notify_managers(type="new_review", title="رأيٌ جديد بانتظار المراجعة",
                     body=f"{'★' * rating} {body[:80]}")
     response.status_code = 201
@@ -147,7 +205,7 @@ def list_all(_m=Depends(require_manager), status: str = "",
     rows = fetch_all(
         f"""select {_PUBLIC_COLS}, r.status, r.updated_at, u.email as author_email,
                    count(*) over ()::int as total_count
-              from reviews r join users u on u.id = r.user_id
+              from reviews r left join users u on u.id = r.user_id
               {where}
              order by (r.status = 'pending') desc, r.created_at desc
              limit %s offset %s""",

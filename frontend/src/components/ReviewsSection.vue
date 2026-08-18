@@ -21,6 +21,10 @@
         <article class="rv-card reveal" v-for="r in reviews.list" :key="r.id">
           <Stars :value="r.rating" />
           <blockquote>“{{ r.body }}”</blockquote>
+          <!-- the customer's photo, if they attached one; opens full size in a tab -->
+          <a v-if="r.thumb_url || r.image_url" class="rv-shot" :href="r.image_url || r.thumb_url" target="_blank" rel="noopener">
+            <img :src="r.thumb_url || r.image_url" :alt="t('reviews.photoOf', { name: r.author || t('reviews.anonymous') })" loading="lazy">
+          </a>
           <footer>
             <!-- the reference design puts a round portrait here; we hold no photo
                  or country for a reviewer, so it's their initial on a gold disc -->
@@ -63,7 +67,7 @@
       <div class="co">
         <button class="rv-close" @click="formOpen = false" :aria-label="t('common.close')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
         <h3 class="display rv-form-title">{{ t('reviews.formTitle') }}</h3>
-        <p class="a-muted" style="text-align:center">{{ t('reviews.formDesc') }}</p>
+        <p class="a-muted" style="text-align:center">{{ auth.isAuthenticated ? t('reviews.formDesc') : t('reviews.guestHint') }}</p>
 
         <label class="co-l">{{ t('reviews.ratingLabel') }} *</label>
         <div class="rv-pick" role="radiogroup" :aria-label="t('reviews.ratingLabel')">
@@ -91,8 +95,29 @@
         ></textarea>
         <p class="a-muted rv-count">{{ t('reviews.remaining', { n: BODY_MAX - form.body.length }) }}</p>
 
+        <!-- a guest has no account to take a display name from -->
+        <template v-if="!auth.isAuthenticated">
+          <label class="co-l" for="rv-name">{{ t('reviews.nameLabel') }} *</label>
+          <input id="rv-name" class="a-input" v-model.trim="form.name" :placeholder="t('reviews.namePlaceholder')" :maxlength="NAME_MAX">
+        </template>
+
         <label class="co-l" for="rv-city">{{ t('reviews.cityLabel') }}</label>
         <input id="rv-city" class="a-input" v-model.trim="form.city" :placeholder="t('reviews.cityPlaceholder')" :maxlength="CITY_MAX">
+
+        <label class="co-l">{{ t('reviews.photoLabel') }}</label>
+        <div class="rv-photo">
+          <div v-if="form.image" class="rv-photo-has">
+            <img :src="form.image" :alt="t('reviews.photoLabel')">
+            <button type="button" class="rv-photo-x" @click="form.image = ''" :aria-label="t('image.remove')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+            </button>
+          </div>
+          <button v-else type="button" class="rv-photo-add" :disabled="picking" @click="photoInput?.click()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-5 4 4 3-3 6 6"/><circle cx="8.5" cy="7.5" r="1.8"/><rect x="3" y="3" width="18" height="18" rx="3"/></svg>
+            <small>{{ picking ? t('image.processing') : t('image.addPhoto') }}</small>
+          </button>
+          <input ref="photoInput" type="file" accept="image/*" style="display:none" @change="onPhoto">
+        </div>
 
         <p v-if="formErr" class="rv-err">{{ formErr }}</p>
         <button class="btn btn-green rv-submit" :disabled="sending" @click="submit">
@@ -113,6 +138,7 @@ import { useReviewsStore } from '../stores/reviews'
 import { useToastStore } from '../stores/toast'
 import { useConfirmStore } from '../stores/confirm'
 import { useAddressesStore } from '../stores/addresses'
+import { encodeImageFile } from '../composables/useImageFile'
 import Loader from './Loader.vue'
 import Stars from './Stars.vue'
 
@@ -120,6 +146,7 @@ import Stars from './Stars.vue'
 // has the final say, this only keeps the textarea from overrunning it
 const BODY_MAX = 600
 const CITY_MAX = 60
+const NAME_MAX = 60
 
 const { t, locale } = useI18n()
 const router = useRouter()
@@ -133,7 +160,26 @@ const addresses = useAddressesStore()
 const formOpen = ref(false)
 const sending = ref(false)
 const formErr = ref('')
-const form = reactive({ rating: 0, body: '', city: '' })
+const form = reactive({ rating: 0, body: '', city: '', name: '', image: '' })
+const photoInput = ref(null)
+const picking = ref(false)
+
+// Downscaled and encoded in the browser (shared with the manager's picker), so the
+// upload is a few hundred KB rather than a raw phone photo. The server re-encodes
+// and caps it again, and stores it as a file.
+async function onPhoto(e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  picking.value = true
+  try {
+    form.image = await encodeImageFile(file)
+  } catch {
+    formErr.value = t('reviews.photoFailed')
+  } finally {
+    picking.value = false
+    if (photoInput.value) photoInput.value.value = '' // let the same file be re-picked
+  }
+}
 
 // Just the count — "3 آراء". The stars beside it already show the rating, and
 // naming the average in words invited more confusion than it cleared up.
@@ -172,20 +218,17 @@ function shortDate(iso) {
   }
 }
 
-// Writing needs an account (the card carries the customer's name). Send guests to
-// login and back to '/?review=1', which reopens this form — same trick checkout uses.
+// Open to everyone: a guest types a display name instead of signing in. A signed-in
+// customer's existing review prefills the fields, since submitting rewrites it.
 async function openForm() {
-  if (!auth.isAuthenticated) {
-    router.push({ name: 'login', query: { redirect: '/?review=1' } })
-    return
-  }
   formErr.value = ''
-  // returning from login, "mine" may still be in flight — wait, so an existing
-  // review prefills the fields instead of opening a blank form over it
-  if (!reviews.mineLoaded) await reviews.fetchMine()
-  form.rating = reviews.mine?.rating || 0
-  form.body = reviews.mine?.body || ''
-  form.city = reviews.mine?.city || addresses.default?.city || ''
+  if (auth.isAuthenticated && !reviews.mineLoaded) await reviews.fetchMine()
+  const mine = auth.isAuthenticated ? reviews.mine : null
+  form.rating = mine?.rating || 0
+  form.body = mine?.body || ''
+  form.city = mine?.city || addresses.default?.city || ''
+  form.image = mine?.image_url || ''
+  form.name = ''
   formOpen.value = true
 }
 defineExpose({ openForm })
@@ -194,9 +237,17 @@ async function submit() {
   formErr.value = ''
   if (!form.rating) { formErr.value = t('reviews.errRating'); return }
   if (form.body.trim().length < 3) { formErr.value = t('reviews.errBody'); return }
+  if (!auth.isAuthenticated && form.name.trim().length < 2) { formErr.value = t('reviews.errName'); return }
   sending.value = true
   try {
-    await reviews.submit({ rating: form.rating, body: form.body.trim(), city: form.city })
+    await reviews.submit({
+      rating: form.rating,
+      body: form.body.trim(),
+      city: form.city,
+      name: auth.isAuthenticated ? undefined : form.name.trim(),
+      // an emptied picker clears the photo, since a submit replaces the whole review
+      image: form.image || null,
+    })
     formOpen.value = false
     toast.show(t('reviews.thanks'), 4000)
   } catch (e) {
@@ -277,6 +328,31 @@ watch(() => auth.isAuthenticated, (signedIn) => {
 .rv-who span { font-size: .8rem; color: var(--muted); }
 .rv-card time { margin-inline-start: auto; font-size: .74rem; color: var(--muted); white-space: nowrap; }
 .rv-empty { text-align: center; padding: .6rem 0 0; }
+.rv-shot { display: block; border-radius: 14px; overflow: hidden; border: 1px solid rgba(60,74,39,.12); }
+.rv-shot img { width: 100%; max-height: 190px; object-fit: cover; transition: transform .4s; }
+.rv-shot:hover img { transform: scale(1.04); }
+
+/* photo picker in the form */
+.rv-photo { margin-top: .1rem; }
+.rv-photo-add {
+  display: flex; align-items: center; gap: .5rem;
+  width: 100%; padding: .7rem .9rem;
+  border: 2px dashed rgba(60,74,39,.3); border-radius: 12px;
+  color: var(--green); background: transparent;
+}
+.rv-photo-add:hover:not(:disabled) { border-color: var(--green); background: rgba(60,74,39,.04); }
+.rv-photo-add:disabled { opacity: .6; }
+.rv-photo-add svg { width: 20px; height: 20px; }
+.rv-photo-add small { font-size: .82rem; font-weight: 700; }
+.rv-photo-has { position: relative; border-radius: 12px; overflow: hidden; }
+.rv-photo-has img { width: 100%; max-height: 180px; object-fit: cover; display: block; }
+.rv-photo-x {
+  position: absolute; top: .4rem; inset-inline-end: .4rem;
+  width: 28px; height: 28px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: rgba(0,0,0,.55); color: #fff;
+}
+.rv-photo-x svg { width: 14px; height: 14px; }
 
 .rv-actions { display: flex; gap: .8rem; justify-content: center; flex-wrap: wrap; margin-top: 2.2rem; }
 /* Identical box for both, so the pair reads as a set.
