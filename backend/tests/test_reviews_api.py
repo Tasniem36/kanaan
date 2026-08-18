@@ -56,6 +56,15 @@ def test_public_list_never_exposes_the_reviewer_identity(client, spy):
     assert "total_count" not in card and "avg_rating" not in card
 
 
+def test_public_list_leads_with_the_best_rated(client, spy):
+    """The storefront shows three cards by default — they should be the best ones,
+    and every page must share that order or offset paging would repeat rows."""
+    client.get("/api/reviews")
+    sql, params = spy[-1]
+    assert "order by r.rating desc, r.created_at desc" in sql
+    assert params == [3, 0], "three by default"
+
+
 def test_public_list_paginates_within_bounds(client, spy):
     client.get("/api/reviews?limit=3&offset=6")
     _, params = spy[-1]

@@ -2,7 +2,8 @@ import { defineStore } from 'pinia'
 import { api } from '../services/api'
 import { useAuthStore } from './auth'
 
-const PAGE = 6 // reviews per "show more" step on the storefront
+const PAGE = 3      // the storefront shows the best three, then "show all"
+const BATCH_MAX = 50 // the endpoint's per-request cap
 
 // General shop reviews (not per-product). The storefront only ever sees approved
 // ones; `mine` is the signed-in customer's own, which may still be pending.
@@ -45,12 +46,15 @@ export const useReviewsStore = defineStore('reviews', {
         this.loading = false
       }
     },
+    // "show all": pull everything that's left in one request. Past the endpoint's
+    // cap the button simply stays for another click, rather than firing 20 requests.
     async loadMore() {
       if (this.loading || !this.hasMore) return
       this.loading = true
       try {
+        const want = Math.min(Math.max(this.total - this.list.length, 1), BATCH_MAX)
         const { reviews, total, average } = await api(
-          `/reviews?limit=${PAGE}&offset=${this.list.length}`, { auth: false })
+          `/reviews?limit=${want}&offset=${this.list.length}`, { auth: false })
         // de-duplicate: a review approved between two pages would otherwise shift
         // rows down and repeat one across the boundary
         const seen = new Set(this.list.map((r) => r.id))

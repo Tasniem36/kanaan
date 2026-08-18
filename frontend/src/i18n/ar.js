@@ -86,7 +86,6 @@ export default {
     starsAria: 'تقييم {n} من ٥',
     write: 'اكتب رأيك',
     editMine: 'عدّل رأيك',
-    showMore: 'آراءٌ أكثر',
     anonymous: 'عميل دكّان كنعان',
     formTitle: 'شاركنا رأيك',
     formDesc: 'رأيك يفيد عملاءَ آخرين، ويُنشر بعد مراجعةٍ سريعة من فريقنا.',

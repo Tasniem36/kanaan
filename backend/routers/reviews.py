@@ -41,8 +41,10 @@ def _as_uuid(rid: str) -> str:
 def _clean(payload: dict):
     """Validate and normalize a submitted review, or raise 400."""
     try:
-        rating = int(payload.get("rating"))
-    except (TypeError, ValueError):
+        # via float so a JSON 5.0 is accepted; str() first so None/objects raise
+        # ValueError here rather than TypeError
+        rating = int(float(str(payload.get("rating")).strip()))
+    except ValueError:
         raise HTTPException(400, "Rating must be a whole number from 1 to 5")
     if not 1 <= rating <= 5:
         raise HTTPException(400, "Rating must be a whole number from 1 to 5")
@@ -58,9 +60,11 @@ def _clean(payload: dict):
     return rating, body, city
 
 
-# GET /api/reviews — public: the approved reviews the storefront shows
+# GET /api/reviews — public: the approved reviews the storefront shows. Best-rated
+# first (newest breaking ties), so the default page is the three best ones; every
+# page shares that order, which keeps offset paging stable as "show all" walks it.
 @router.get("")
-def list_reviews(limit: int = Query(6, ge=1, le=50), offset: int = Query(0, ge=0)):
+def list_reviews(limit: int = Query(3, ge=1, le=50), offset: int = Query(0, ge=0)):
     # count(*)/avg() as window functions ride along on the same scan — they're
     # applied before LIMIT, so they describe every approved review, not just this
     # page. One round-trip for the page, the total and the average rating.
@@ -70,7 +74,7 @@ def list_reviews(limit: int = Query(6, ge=1, le=50), offset: int = Query(0, ge=0
                    round(avg(r.rating) over (), 1)::float as avg_rating
               from reviews r join users u on u.id = r.user_id
              where r.status = 'approved'
-             order by r.created_at desc
+             order by r.rating desc, r.created_at desc
              limit %s offset %s""",
         [limit, offset],
     )

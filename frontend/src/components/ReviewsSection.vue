@@ -33,7 +33,9 @@
 
       <div class="rv-actions">
         <button v-if="reviews.hasMore" class="btn btn-gold" :disabled="reviews.loading" @click="reviews.loadMore()">
-          {{ reviews.loading ? t('common.loading') : t('reviews.showMore') }}
+          <!-- same label as the pantry/pottery sections' button, and short enough
+               to never outgrow the fixed button width -->
+          {{ reviews.loading ? t('common.loading') : t('home.showAll') }}
         </button>
         <button class="btn btn-green" @click="openForm">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
@@ -249,8 +251,10 @@ watch(() => auth.isAuthenticated, (signedIn) => {
 .rv-card time { font-size: .76rem; color: var(--muted); white-space: nowrap; }
 .rv-empty { text-align: center; padding: .6rem 0 0; }
 .rv-actions { display: flex; gap: .8rem; justify-content: center; flex-wrap: wrap; margin-top: 2rem; }
-/* both buttons share one width, so the pair reads as a set however long the labels are */
-.rv-actions .btn { min-width: 13.5rem; justify-content: center; }
+/* Identical fixed width for both, so the pair reads as a set. A flex-basis (not
+   min-width) is what actually equalises them — with min-width, the longer label
+   still wins and they end up different sizes. */
+.rv-actions .btn { flex: 0 0 13.5rem; justify-content: center; }
 .rv-mine {
   margin: 1rem auto 0; max-width: 46ch; text-align: center;
   font-size: .86rem; color: var(--green);
@@ -284,6 +288,7 @@ watch(() => auth.isAuthenticated, (signedIn) => {
 .rv-submit { width: 100%; justify-content: center; margin-top: 1rem; }
 @media (max-width: 560px) {
   .rv-grid { grid-template-columns: 1fr; }
-  .rv-actions .btn { width: 100%; justify-content: center; }
+  /* full width on a phone — overrides the flex-basis above, which `width` alone can't */
+  .rv-actions .btn { flex-basis: 100%; }
 }
 </style>

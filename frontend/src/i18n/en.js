@@ -86,7 +86,6 @@ export default {
     starsAria: 'Rated {n} out of 5',
     write: 'Write a review',
     editMine: 'Edit your review',
-    showMore: 'More reviews',
     anonymous: 'Dukkan Kanaan customer',
     formTitle: 'Share your review',
     formDesc: 'Your review helps other customers. It goes live after a quick check by our team.',
