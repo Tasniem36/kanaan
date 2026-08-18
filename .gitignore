@@ -11,3 +11,7 @@ __pycache__/
 .venv/
 backups/
 *.sql.gz
+
+# Uploaded images live in a volume (MEDIA_DIR), not in the repo — a local dev run
+# writes product and review photos here.
+backend/media/

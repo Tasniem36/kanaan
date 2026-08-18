@@ -26,7 +26,7 @@
         <footer>
           <div class="who">
             <b>{{ r.author || t('reviews.anonymous') }}</b>
-            <span class="a-muted" dir="ltr">{{ r.author_email || t('manager.revGuest') }}<template v-if="r.city"> · {{ r.city }}</template></span>
+            <span class="a-muted" dir="ltr">{{ r.author_email }}<template v-if="r.city"> · {{ r.city }}</template></span>
           </div>
           <div class="acts">
             <button v-if="r.status !== 'approved'" class="a-btn" :disabled="busy === r.id" @click="setStatus(r, 'approved')">{{ t('manager.revApprove') }}</button>

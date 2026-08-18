@@ -33,7 +33,6 @@
               <b>{{ r.author || t('reviews.anonymous') }}</b>
               <span v-if="r.city">{{ r.city }}</span>
             </div>
-            <time :datetime="r.created_at">{{ shortDate(r.created_at) }}</time>
           </footer>
         </article>
       </div>
@@ -67,7 +66,7 @@
       <div class="co">
         <button class="rv-close" @click="formOpen = false" :aria-label="t('common.close')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
         <h3 class="display rv-form-title">{{ t('reviews.formTitle') }}</h3>
-        <p class="a-muted" style="text-align:center">{{ auth.isAuthenticated ? t('reviews.formDesc') : t('reviews.guestHint') }}</p>
+        <p class="a-muted" style="text-align:center">{{ t('reviews.formDesc') }}</p>
 
         <label class="co-l">{{ t('reviews.ratingLabel') }} *</label>
         <div class="rv-pick" role="radiogroup" :aria-label="t('reviews.ratingLabel')">
@@ -94,12 +93,6 @@
           v-model="form.body"
         ></textarea>
         <p class="a-muted rv-count">{{ t('reviews.remaining', { n: BODY_MAX - form.body.length }) }}</p>
-
-        <!-- a guest has no account to take a display name from -->
-        <template v-if="!auth.isAuthenticated">
-          <label class="co-l" for="rv-name">{{ t('reviews.nameLabel') }} *</label>
-          <input id="rv-name" class="a-input" v-model.trim="form.name" :placeholder="t('reviews.namePlaceholder')" :maxlength="NAME_MAX">
-        </template>
 
         <label class="co-l" for="rv-city">{{ t('reviews.cityLabel') }}</label>
         <input id="rv-city" class="a-input" v-model.trim="form.city" :placeholder="t('reviews.cityPlaceholder')" :maxlength="CITY_MAX">
@@ -146,7 +139,6 @@ import Stars from './Stars.vue'
 // has the final say, this only keeps the textarea from overrunning it
 const BODY_MAX = 600
 const CITY_MAX = 60
-const NAME_MAX = 60
 
 const { t, locale } = useI18n()
 const router = useRouter()
@@ -160,7 +152,7 @@ const addresses = useAddressesStore()
 const formOpen = ref(false)
 const sending = ref(false)
 const formErr = ref('')
-const form = reactive({ rating: 0, body: '', city: '', name: '', image: '' })
+const form = reactive({ rating: 0, body: '', city: '', image: '' })
 const photoInput = ref(null)
 const picking = ref(false)
 
@@ -209,26 +201,22 @@ const mineNote = computed(() => {
 
 const initial = (name) => (name || t('reviews.anonymous')).trim().charAt(0)
 
-function shortDate(iso) {
-  try {
-    return new Date(iso).toLocaleDateString(locale.value === 'ar' ? 'ar-AE' : 'en-GB',
-      { year: 'numeric', month: 'short' })
-  } catch {
-    return ''
-  }
-}
-
-// Open to everyone: a guest types a display name instead of signing in. A signed-in
-// customer's existing review prefills the fields, since submitting rewrites it.
+// Anyone may READ the reviews; writing one needs an account, so the card always
+// carries a real customer's name. Guests go to login and come back to '/?review=1',
+// which reopens this form — the same trick checkout uses.
 async function openForm() {
+  if (!auth.isAuthenticated) {
+    router.push({ name: 'login', query: { redirect: '/?review=1' } })
+    return
+  }
   formErr.value = ''
-  if (auth.isAuthenticated && !reviews.mineLoaded) await reviews.fetchMine()
-  const mine = auth.isAuthenticated ? reviews.mine : null
-  form.rating = mine?.rating || 0
-  form.body = mine?.body || ''
-  form.city = mine?.city || addresses.default?.city || ''
-  form.image = mine?.image_url || ''
-  form.name = ''
+  // returning from login, "mine" may still be in flight — wait, so an existing
+  // review prefills the fields instead of opening a blank form over it
+  if (!reviews.mineLoaded) await reviews.fetchMine()
+  form.rating = reviews.mine?.rating || 0
+  form.body = reviews.mine?.body || ''
+  form.city = reviews.mine?.city || addresses.default?.city || ''
+  form.image = reviews.mine?.image_url || ''
   formOpen.value = true
 }
 defineExpose({ openForm })
@@ -237,14 +225,12 @@ async function submit() {
   formErr.value = ''
   if (!form.rating) { formErr.value = t('reviews.errRating'); return }
   if (form.body.trim().length < 3) { formErr.value = t('reviews.errBody'); return }
-  if (!auth.isAuthenticated && form.name.trim().length < 2) { formErr.value = t('reviews.errName'); return }
   sending.value = true
   try {
     await reviews.submit({
       rating: form.rating,
       body: form.body.trim(),
       city: form.city,
-      name: auth.isAuthenticated ? undefined : form.name.trim(),
       // an emptied picker clears the photo, since a submit replaces the whole review
       image: form.image || null,
     })
@@ -326,7 +312,6 @@ watch(() => auth.isAuthenticated, (signedIn) => {
 }
 .rv-who b { display: block; color: var(--green); font-size: .95rem; }
 .rv-who span { font-size: .8rem; color: var(--muted); }
-.rv-card time { margin-inline-start: auto; font-size: .74rem; color: var(--muted); white-space: nowrap; }
 .rv-empty { text-align: center; padding: .6rem 0 0; }
 .rv-shot { display: block; border-radius: 14px; overflow: hidden; border: 1px solid rgba(60,74,39,.12); }
 .rv-shot img { width: 100%; max-height: 190px; object-fit: cover; transition: transform .4s; }
