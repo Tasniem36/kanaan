@@ -51,11 +51,9 @@
         </button>
       </div>
 
-      <!-- where the customer's own review stands (only they see this) -->
-      <p v-if="mineNote" class="rv-mine" :class="reviews.mine.status">
-        {{ mineNote }}
-        <button class="rv-del" @click="removeMine">{{ t('reviews.deleteMine') }}</button>
-      </p>
+      <!-- where the customer's own review stands (only they see this). Deleting it
+           lives inside the edit form, next to the other things they can change. -->
+      <p v-if="mineNote" class="rv-mine" :class="reviews.mine.status">{{ mineNote }}</p>
     </div>
   </section>
 
@@ -115,6 +113,10 @@
         <p v-if="formErr" class="rv-err">{{ formErr }}</p>
         <button class="btn btn-green rv-submit" :disabled="sending" @click="submit">
           {{ sending ? t('reviews.sending') : t('reviews.submit') }}
+        </button>
+        <!-- removing the review belongs with editing it, not out on the page -->
+        <button v-if="reviews.mine" type="button" class="rv-del" :disabled="sending" @click="removeMine">
+          {{ t('reviews.deleteMine') }}
         </button>
       </div>
     </div>
@@ -248,6 +250,7 @@ async function removeMine() {
   if (!ok) return
   try {
     await reviews.remove(reviews.mine.id)
+    formOpen.value = false
     toast.show(t('reviews.deleted'))
   } catch (e) {
     toast.show(e.message)
@@ -353,11 +356,14 @@ watch(() => auth.isAuthenticated, (signedIn) => {
   background: rgba(60,74,39,.07); border-radius: 14px; padding: .65rem .9rem;
 }
 .rv-mine.rejected { color: var(--red); background: rgba(156,43,43,.08); }
+/* inside the form, below the submit button — deliberately quiet, since it's the
+   destructive option sharing a dialog with the ordinary one */
 .rv-del {
-  display: block; margin: .3rem auto 0;
-  font-size: .78rem; color: var(--muted); text-decoration: underline;
+  display: block; margin: .7rem auto 0;
+  font-size: .82rem; color: var(--muted); text-decoration: underline;
 }
-.rv-del:hover { color: var(--red); }
+.rv-del:hover:not(:disabled) { color: var(--red); }
+.rv-del:disabled { opacity: .5; }
 
 /* form modal */
 .rv-close {
