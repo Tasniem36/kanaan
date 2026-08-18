@@ -140,7 +140,7 @@ def submit_review(request: Request, response: Response, user=Depends(current_use
     )
     log_action(user_id=user["id"], action="review_submitted",
                detail={"rating": rating, "photo": bool(image_url)}, request=request)
-    notify_managers(type="new_review", title="رأيٌ جديد بانتظار المراجعة",
+    notify_managers(type="new_review", title="تقييمٌ جديد بانتظار المراجعة",
                     body=f"{'★' * rating} {body[:80]}")
     response.status_code = 201
     return {"review": row}
@@ -210,7 +210,7 @@ def set_status(rid: str, request: Request, m=Depends(require_manager), payload: 
     # Tell the customer their review went live. A rejection stays silent — no value
     # in a "we turned yours down" notification.
     if status == "approved":
-        notify_users([row["user_id"]], type="review_status", title="تمّ نشر رأيك — شكرًا لك!",
+        notify_users([row["user_id"]], type="review_status", title="تمّ نشر تقييمك — شكرًا لك!",
                      body=row["body"][:80])
     del row["user_id"]
     return {"review": row}

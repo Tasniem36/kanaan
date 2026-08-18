@@ -78,7 +78,6 @@ export default {
     v4: { t: 'Fast delivery', d: 'Arrives fresh at your door', more: 'We ship within 24–48 hours inside the UAE, with free shipping on every order above 250 dirham.', linkLabel: 'Contact us' },
   },
   reviews: {
-    eyebrow: 'Customer reviews',
     title: 'What our customers say',
     desc: 'Real experiences from customers who ordered our mouneh and ceramics — in their own words.',
     reviewCount: 'no reviews | 1 review | {n} reviews',
@@ -484,7 +483,6 @@ export default {
     secReviews: 'Customer reviews section',
     secCards: 'Value cards',
     secHint: 'Clear any field to remove that line from the page — e.g. clear the description and keep the title. “Restore original text” brings the built-in wording back.',
-    secEyebrow: 'Eyebrow',
     secSaved: 'Section text saved',
     secReset: 'Restore original text',
     secResetMsg: 'Restore every field in this section to the original text?',
@@ -564,7 +562,6 @@ export default {
     orderNumber: 'Order number',
     contact: 'Phone number or e-mail',
     findOrder: 'Track your order',
-    eyebrow: 'Order tracking',
     title: 'Your order #{id}',
     deliverTo: 'Delivering to',
     wrongDetails: 'Something wrong with the address or phone number? Message us and we will fix it before it ships.',

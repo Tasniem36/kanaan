@@ -5,7 +5,6 @@
     <div class="wrap">
       <div class="sec-head reveal">
         <!-- each line is optional: emptying it in the dashboard removes it -->
-        <span v-if="copy.eyebrow" class="eyebrow">{{ copy.eyebrow }}</span>
         <h2 v-if="copy.title" class="display">{{ copy.title }}</h2>
         <p v-if="copy.desc">{{ copy.desc }}</p>
         <div v-if="reviews.total" class="rv-summary">
@@ -188,7 +187,7 @@ const countLabel = computed(() =>
 // إرجاع النصّ الأصليّ in /manager/content puts the defaults back.
 const copy = computed(() => {
   if (!content.sectionSaved('reviews')) {
-    return { eyebrow: t('reviews.eyebrow'), title: t('reviews.title'), desc: t('reviews.desc') }
+    return { title: t('reviews.title'), desc: t('reviews.desc') }
   }
   return content.sectionCopy('reviews', locale.value)
 })
@@ -278,7 +277,13 @@ watch(() => auth.isAuthenticated, (signedIn) => {
    round initial disc beside the name and city. The palette stays the storefront's
    own cream and green: the section sits between the value cards and the pantry, so
    a dark block there would cut the page in half. */
-.reviews { background: linear-gradient(180deg, var(--paper), var(--cream)); }
+.reviews {
+  background: linear-gradient(180deg, var(--paper), var(--cream));
+  /* Other sections end on a grid of cards, so the shared 4.6rem bottom padding
+     balances. This one ends on a button, which floats in that much space — and it
+     now sits last, right above the footer. */
+  padding-block-end: 2.4rem;
+}
 .rv-summary {
   display: inline-flex; align-items: center; gap: .6rem; flex-wrap: wrap;
   justify-content: center; margin-top: .8rem;
@@ -386,6 +391,7 @@ watch(() => auth.isAuthenticated, (signedIn) => {
 .rv-submit { width: 100%; justify-content: center; margin-top: 1rem; }
 
 @media (max-width: 560px) {
+  .reviews { padding-block-end: 1.6rem; }
   .rv-grid { grid-template-columns: 1fr; }
   /* full width on a phone — overrides the flex-basis above, which `width` alone can't */
   .rv-actions .btn { flex-basis: 100%; }

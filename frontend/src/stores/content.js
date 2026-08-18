@@ -11,7 +11,7 @@ export const useContentStore = defineStore('content', {
     sectionCopy: (s) => (key, locale) => {
       const row = s.sections[key] || {}
       const pick = (f) => (row[`${f}_${locale === 'ar' ? 'ar' : 'en'}`] || '').trim()
-      return { eyebrow: pick('eyebrow'), title: pick('title'), desc: pick('desc') }
+      return { title: pick('title'), desc: pick('desc') }
     },
     // the manager's switch in /manager/content — off by default, i.e. sections show
     sectionHidden: (s) => (key) => !!s.sections[key]?.hidden,

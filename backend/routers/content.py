@@ -16,8 +16,7 @@ _EDITABLE = [
 # settings with junk. A blank field means "use the bundled translation".
 _SECTION_KEYS = ("reviews",)
 _SECTION_FIELDS = {
-    "eyebrow_ar": 120, "eyebrow_en": 120,   # field -> max length
-    "title_ar": 160, "title_en": 160,
+    "title_ar": 160, "title_en": 160,       # field -> max length
     "desc_ar": 600, "desc_en": 600,
 }
 

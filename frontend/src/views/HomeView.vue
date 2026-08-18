@@ -1,7 +1,7 @@
 <template>
   <PortalBar :scrolled="scrolled" search>
     <nav class="tabs store-nav" aria-label="nav">
-      <a href="#home" :class="{ active: activeSection === 'home' }">{{ t('nav.home') }}</a><a v-if="reviews.visible" href="#reviews" :class="{ active: activeSection === 'reviews' }">{{ t('nav.reviews') }}</a><a href="#pantry" :class="{ active: activeSection === 'pantry' }">{{ t('nav.pantry') }}</a><a href="#pottery" :class="{ active: activeSection === 'pottery' }">{{ t('nav.pottery') }}</a><a href="#story" :class="{ active: activeSection === 'story' }">{{ t('nav.story') }}</a><a href="#contact" :class="{ active: activeSection === 'contact' }">{{ t('nav.contact') }}</a>
+      <a href="#home" :class="{ active: activeSection === 'home' }">{{ t('nav.home') }}</a><a href="#pantry" :class="{ active: activeSection === 'pantry' }">{{ t('nav.pantry') }}</a><a href="#pottery" :class="{ active: activeSection === 'pottery' }">{{ t('nav.pottery') }}</a><a href="#story" :class="{ active: activeSection === 'story' }">{{ t('nav.story') }}</a><a v-if="reviews.visible" href="#reviews" :class="{ active: activeSection === 'reviews' }">{{ t('nav.reviews') }}</a><a href="#contact" :class="{ active: activeSection === 'contact' }">{{ t('nav.contact') }}</a>
     </nav>
     <template #actions>
       <button class="cart-btn" @click="openCart = true" aria-label="cart">
@@ -20,10 +20,10 @@
     </div>
     <nav class="mm-links">
       <a href="#home" :class="{ active: activeSection === 'home' }" @click="mobileMenu = false">{{ t('nav.home') }}</a>
-      <a v-if="reviews.visible" href="#reviews" :class="{ active: activeSection === 'reviews' }" @click="mobileMenu = false">{{ t('nav.reviews') }}</a>
       <a href="#pantry" :class="{ active: activeSection === 'pantry' }" @click="mobileMenu = false">{{ t('nav.pantry') }}</a>
       <a href="#pottery" :class="{ active: activeSection === 'pottery' }" @click="mobileMenu = false">{{ t('nav.pottery') }}</a>
       <a href="#story" :class="{ active: activeSection === 'story' }" @click="mobileMenu = false">{{ t('nav.story') }}</a>
+      <a v-if="reviews.visible" href="#reviews" :class="{ active: activeSection === 'reviews' }" @click="mobileMenu = false">{{ t('nav.reviews') }}</a>
       <a href="#contact" :class="{ active: activeSection === 'contact' }" @click="mobileMenu = false">{{ t('nav.contact') }}</a>
       <RouterLink v-if="auth.isAuthenticated" to="/account" @click="mobileMenu = false">{{ t('nav.account') }}</RouterLink>
       <RouterLink v-else to="/login" @click="mobileMenu = false">{{ t('auth.loginTitle') }}</RouterLink>
@@ -72,9 +72,6 @@
     <Loader v-if="!content.loaded" class="values-loading" />
   </div></div>
 
-  <!-- what customers say about the shop (general reviews, not per product) -->
-  <ReviewsSection ref="reviewsSection" />
-
   <!-- pantry -->
   <section id="pantry">
     <div class="wrap">
@@ -104,6 +101,10 @@
       <div class="pic reveal"><img src="/images/tatreez.jpg" alt="قبة الصخرة"></div>
     </div>
   </section>
+
+  <!-- what customers say about the shop (general reviews, not per product) — last
+       thing on the page, after the story -->
+  <ReviewsSection ref="reviewsSection" />
 
   <footer class="site" id="contact">
     <div class="band" aria-hidden="true"></div>
@@ -643,7 +644,7 @@ onMounted(() => {
   }
   nextTick(updateNavH)
   addEventListener('resize', updateNavH, { passive: true })
-  const navSections = ['home', 'reviews', 'pantry', 'pottery', 'story', 'contact']
+  const navSections = ['home', 'pantry', 'pottery', 'story', 'reviews', 'contact']
   function updateActiveSection() {
     const line = scrollY + innerHeight * 0.3 // a bit below the sticky header
     let current = navSections[0]

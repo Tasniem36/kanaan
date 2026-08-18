@@ -12,10 +12,6 @@
         <span><b>{{ t('manager.secShow') }}</b><br><span class="a-muted">{{ t('manager.secShowHint') }}</span></span>
       </label>
       <div class="grid2">
-        <div><label class="co-l">{{ t('manager.secEyebrow') }} (ع)</label><input class="a-input" v-model.trim="sec.eyebrow_ar"></div>
-        <div><label class="co-l">{{ t('manager.secEyebrow') }} (EN)</label><input class="a-input" dir="ltr" v-model.trim="sec.eyebrow_en"></div>
-      </div>
-      <div class="grid2">
         <div><label class="co-l">{{ t('manager.vcTitle') }} (ع)</label><input class="a-input" v-model.trim="sec.title_ar"></div>
         <div><label class="co-l">{{ t('manager.vcTitle') }} (EN)</label><input class="a-input" dir="ltr" v-model.trim="sec.title_en"></div>
       </div>
@@ -71,7 +67,7 @@ import ImagePicker from '../../components/ImagePicker.vue'
 import Loader from '../../components/Loader.vue'
 
 const SECTION = 'reviews'
-const SECTION_FIELDS = ['eyebrow_ar', 'eyebrow_en', 'title_ar', 'title_en', 'desc_ar', 'desc_en']
+const SECTION_FIELDS = ['title_ar', 'title_en', 'desc_ar', 'desc_en']
 
 const { t } = useI18n()
 const content = useContentStore()
