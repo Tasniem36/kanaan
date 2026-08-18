@@ -738,6 +738,10 @@ onMounted(() => {
 .search-go:hover { background: var(--gold); }
 @media (max-width: 560px) { .search-bar { padding: .5rem 1rem; } }
 .sec-more { text-align: center; margin-top: 1.6rem; }
+/* same width as the reviews section's buttons, so the storefront's section CTAs
+   all read as one control rather than three sizes */
+.sec-more .btn { min-width: var(--cta-w); justify-content: center; }
+@media (max-width: 560px) { .sec-more .btn { width: 100%; } }
 .value { position: relative; }
 /* the values loader spans the whole row (grid is repeat(3,1fr)) and centers */
 .values-loading { grid-column: 1 / -1; }

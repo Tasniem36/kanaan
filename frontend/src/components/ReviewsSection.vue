@@ -283,7 +283,7 @@ watch(() => auth.isAuthenticated, (signedIn) => {
    Width: a flex-basis, not a min-width — with min-width the longer label still wins.
    Height: .btn-gold carries a 2px border and .btn-green carries none, which left the
    outlined button 4px taller; a matching transparent border evens them up. */
-.rv-actions .btn { flex: 0 0 13.5rem; justify-content: center; }
+.rv-actions .btn { flex: 0 0 var(--cta-w); justify-content: center; }
 .rv-actions .btn-green { border: 2px solid transparent; }
 
 .rv-mine {

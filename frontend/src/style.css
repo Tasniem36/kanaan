@@ -13,6 +13,10 @@
     --red:#9c2b2b;
     --ink:#272a1d;
     --muted:#8a7f64;
+    /* Width shared by every section's call-to-action — the "عرض الكل" links under
+       the product feeds and the reviews section's buttons. Defined once so the
+       two can't drift apart. */
+    --cta-w:13.5rem;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html{scroll-behavior:smooth}
