@@ -9,10 +9,9 @@
         <h2 v-if="copy.title" class="display">{{ copy.title }}</h2>
         <p v-if="copy.desc">{{ copy.desc }}</p>
         <div v-if="reviews.total" class="rv-summary">
-          <!-- the exact average, not a rounded one: the number beside it says 4.6,
-               so the stars must not show five -->
+          <!-- the exact average, filled fractionally: 4.6 must not draw as five -->
           <Stars :value="reviews.average || 0" />
-          <span>{{ summary }}</span>
+          <span>{{ countLabel }}</span>
         </div>
       </div>
 
@@ -136,15 +135,11 @@ const sending = ref(false)
 const formErr = ref('')
 const form = reactive({ rating: 0, body: '', city: '' })
 
-// "4.5 out of 5 · 12 reviews" — the count is pluralized separately so the average
-// clause isn't repeated once per Arabic plural form.
-//
-// With a single review there is no average to speak of, so that wording drops out:
-// "متوسّط 5 من 5 · رأيٌ واحد" claims a statistic that doesn't exist yet.
-const summary = computed(() => t(reviews.total === 1 ? 'reviews.summaryOne' : 'reviews.summary', {
-  avg: reviews.average,
-  count: t('reviews.reviewCount', { n: reviews.total }, reviews.total),
-}))
+// Just the count — "3 آراء". The stars beside it already show the rating, and
+// naming the average in words invited more confusion than it cleared up.
+// Pluralized through the locale's own rule (six forms in Arabic).
+const countLabel = computed(() =>
+  t('reviews.reviewCount', { n: reviews.total }, reviews.total))
 
 // Heading copy. Until the manager has saved this section even once, it's the
 // bundled translation. After that their version is used verbatim — including a

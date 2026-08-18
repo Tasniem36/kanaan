@@ -81,9 +81,6 @@ export default {
     eyebrow: 'Customer reviews',
     title: 'What our customers say',
     desc: 'Real experiences from customers who ordered our mouneh and ceramics — in their own words.',
-    summary: '{avg} average out of 5 · {count}',
-    // one review has no average — say the rating plainly instead
-    summaryOne: 'rated {avg} out of 5 · {count}',
     reviewCount: 'no reviews | 1 review | {n} reviews',
     empty: 'No reviews published yet — be the first to share your experience.',
     starsAria: 'Rated {n} out of 5',

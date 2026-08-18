@@ -81,11 +81,7 @@ export default {
     eyebrow: 'آراء العملاء',
     title: 'ماذا يقول عملاؤنا',
     desc: 'تجاربُ حقيقيّة من عملاءَ طلبوا مونتنا وخزفنا — بأصواتهم كما كتبوها.',
-    // NOT 'متوسّط': that also names a quality tier (ممتاز/جيّد/متوسّط/سيّئ), so it
     // reads as "mediocre" next to a high score. 'معدّل التقييم' only means the mean.
-    summary: 'معدّل التقييم {avg} من 5 · {count}',
-    // one review has no average — say the rating plainly instead
-    summaryOne: 'تقييم {avg} من 5 · {count}',
     // counted the way Arabic actually counts — see arabicPlural in i18n/index.js
     reviewCount: 'لا آراء | رأيٌ واحد | رأيان | {n} آراء | {n} رأيًا | {n} رأي',
     empty: 'لا آراء منشورة بعد — كن أوّل من يشارك تجربته معنا.',
