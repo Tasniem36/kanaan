@@ -239,92 +239,69 @@ watch(() => auth.isAuthenticated, (signedIn) => {
 </script>
 
 <style scoped>
-/* Dark section, per the reference design: near-black ground, gold accents, and
-   quote cards that sit slightly lighter than the background. Deliberately the
-   only dark block on the cream storefront, so the reviews read as a break. */
-.reviews {
-  --rv-ink: #12120f;      /* section ground */
-  --rv-card: #1c1c17;     /* card ground, a touch lighter */
-  --rv-line: rgba(255,255,255,.09);
-  --rv-text: #f6f2e8;
-  --rv-mut: rgba(246,242,232,.6);
-  background: var(--rv-ink);
-  color: var(--rv-text);
-}
-/* the global .sec-head is written for the cream sections — repaint it here */
-.reviews .sec-head h2 { color: var(--rv-text); }
-.reviews .sec-head p { color: var(--rv-mut); }
-/* eyebrow becomes a pill; the global rule draws flanking rules we don't want */
-.reviews .eyebrow {
-  background: rgba(205,169,79,.14);
-  color: var(--gold-2);
-  padding: .3rem .95rem;
-  border-radius: 999px;
-}
-.reviews .eyebrow::before, .reviews .eyebrow::after { display: none; }
+/* The card SHAPE follows the reference design — stars on top, the quote, then a
+   round initial disc beside the name and city. The palette stays the storefront's
+   own cream and green: the section sits between the value cards and the pantry, so
+   a dark block there would cut the page in half. */
+.reviews { background: linear-gradient(180deg, var(--paper), var(--cream)); }
 .rv-summary {
   display: inline-flex; align-items: center; gap: .6rem; flex-wrap: wrap;
-  justify-content: center; margin-top: .9rem;
-  font-size: .92rem; font-weight: 700; color: var(--gold-2);
+  justify-content: center; margin-top: .8rem;
+  font-size: .92rem; font-weight: 700; color: var(--green);
 }
 
 .rv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 1.3rem; }
 .rv-card {
-  display: flex; flex-direction: column; gap: .9rem;
-  background: var(--rv-card); border: 1px solid var(--rv-line); border-radius: 20px;
+  display: flex; flex-direction: column; gap: .8rem;
+  background: var(--paper); border: 1px solid rgba(60,74,39,.12); border-radius: 20px;
   padding: 1.4rem 1.5rem;
   transition: transform .28s, box-shadow .28s, border-color .28s;
 }
 .rv-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 30px 50px -30px #000;
-  border-color: rgba(205,169,79,.45);
+  box-shadow: 0 30px 50px -34px rgba(44,55,25,.55);
+  border-color: rgba(184,144,47,.5);
 }
 .rv-card blockquote {
-  font-family: 'Amiri', serif; font-size: 1.14rem; line-height: 1.75; color: var(--rv-text);
+  font-family: 'Amiri', serif; font-size: 1.14rem; line-height: 1.75; color: var(--ink);
   flex: 1; white-space: pre-line; overflow-wrap: anywhere;
 }
 .rv-card footer {
   display: flex; align-items: center; gap: .7rem;
-  border-top: 1px solid var(--rv-line); padding-top: .8rem;
+  border-top: 1px solid rgba(60,74,39,.1); padding-top: .8rem;
 }
+/* the reference puts a round portrait here; we hold no photo, so it's the
+   reviewer's initial on a gold disc */
 .rv-av {
   flex: 0 0 auto; width: 42px; height: 42px; border-radius: 50%;
   display: grid; place-items: center;
-  background: linear-gradient(150deg, var(--gold), #8a6a1f); color: #12120f;
+  background: linear-gradient(150deg, var(--gold-2), var(--gold)); color: #fff;
   font-family: 'Amiri', serif; font-size: 1.2rem; font-weight: 700; line-height: 1;
 }
-.rv-who b { display: block; color: var(--rv-text); font-size: .95rem; }
-.rv-who span { font-size: .8rem; color: var(--rv-mut); }
-.rv-card time { margin-inline-start: auto; font-size: .74rem; color: var(--rv-mut); white-space: nowrap; }
-.rv-empty { text-align: center; padding: .6rem 0 0; color: var(--rv-mut); }
+.rv-who b { display: block; color: var(--green); font-size: .95rem; }
+.rv-who span { font-size: .8rem; color: var(--muted); }
+.rv-card time { margin-inline-start: auto; font-size: .74rem; color: var(--muted); white-space: nowrap; }
+.rv-empty { text-align: center; padding: .6rem 0 0; }
 
 .rv-actions { display: flex; gap: .8rem; justify-content: center; flex-wrap: wrap; margin-top: 2.2rem; }
 /* Identical fixed width for both, so the pair reads as a set. A flex-basis (not
    min-width) is what actually equalises them — with min-width, the longer label
    still wins and they end up different sizes. */
 .rv-actions .btn { flex: 0 0 13.5rem; justify-content: center; }
-/* the cream-section button colours have too little contrast here: gold fill for
-   the primary action, gold outline for the secondary */
-.rv-actions .btn-green { background: var(--gold); color: #12120f; box-shadow: 0 16px 30px -18px #000; }
-.rv-actions .btn-green:hover { background: var(--gold-2); }
-.rv-actions .btn-gold { border-color: rgba(205,169,79,.5); color: var(--gold-2); }
-.rv-actions .btn-gold:hover { background: var(--gold-2); color: #12120f; }
 
 .rv-mine {
   margin: 1.1rem auto 0; max-width: 46ch; text-align: center;
-  font-size: .86rem; color: var(--rv-text);
-  background: rgba(255,255,255,.06); border-radius: 14px; padding: .65rem .9rem;
+  font-size: .86rem; color: var(--green);
+  background: rgba(60,74,39,.07); border-radius: 14px; padding: .65rem .9rem;
 }
-.rv-mine.rejected { color: #e79a9a; background: rgba(231,154,154,.1); }
+.rv-mine.rejected { color: var(--red); background: rgba(156,43,43,.08); }
 .rv-del {
   display: block; margin: .3rem auto 0;
-  font-size: .78rem; color: var(--rv-mut); text-decoration: underline;
+  font-size: .78rem; color: var(--muted); text-decoration: underline;
 }
-.rv-del:hover { color: #e79a9a; }
+.rv-del:hover { color: var(--red); }
 
-/* form modal — a root-level sibling, so it keeps the cream styling of every other
-   dialog on the site rather than the dark section's */
+/* form modal */
 .rv-close {
   position: absolute; top: .8rem; inset-inline-start: .8rem;
   width: 34px; height: 34px; border-radius: 10px;

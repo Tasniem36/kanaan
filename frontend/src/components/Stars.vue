@@ -28,9 +28,10 @@ const rounded = computed(() => Math.round(clamped.value * 10) / 10)
   position: relative; display: inline-block;
   font-size: 1rem; line-height: 1; letter-spacing: .04em;
 }
-/* the empty row borrows the surrounding text colour, so it reads as "unfilled" on
-   the cream dashboard and on the dark reviews section alike */
-.row { display: block; white-space: nowrap; opacity: .22; }
+/* The empty row borrows the surrounding text colour, so it reads as "unfilled" on
+   any background. Kept dark enough to actually count: too faint and a 4-star card
+   is mistaken for a 5-star one, which makes the average look wrong. */
+.row { display: block; white-space: nowrap; opacity: .34; }
 .fill {
   position: absolute; inset-block-start: 0; inset-inline-start: 0;
   overflow: hidden; color: var(--gold); opacity: 1;
