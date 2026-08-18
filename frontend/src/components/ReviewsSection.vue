@@ -284,10 +284,12 @@ watch(() => auth.isAuthenticated, (signedIn) => {
 .rv-empty { text-align: center; padding: .6rem 0 0; }
 
 .rv-actions { display: flex; gap: .8rem; justify-content: center; flex-wrap: wrap; margin-top: 2.2rem; }
-/* Identical fixed width for both, so the pair reads as a set. A flex-basis (not
-   min-width) is what actually equalises them — with min-width, the longer label
-   still wins and they end up different sizes. */
+/* Identical box for both, so the pair reads as a set.
+   Width: a flex-basis, not a min-width — with min-width the longer label still wins.
+   Height: .btn-gold carries a 2px border and .btn-green carries none, which left the
+   outlined button 4px taller; a matching transparent border evens them up. */
 .rv-actions .btn { flex: 0 0 13.5rem; justify-content: center; }
+.rv-actions .btn-green { border: 2px solid transparent; }
 
 .rv-mine {
   margin: 1.1rem auto 0; max-width: 46ch; text-align: center;
