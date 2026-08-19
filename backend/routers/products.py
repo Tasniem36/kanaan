@@ -3,7 +3,7 @@ from psycopg.types.json import Json
 
 from db import execute, fetch_all, fetch_one
 from security import current_user, optional_user, require_manager
-from audit import log_action
+from audit import log_action, traffic_source
 from media import save_image, make_thumb
 from notifications import notify_users
 
@@ -117,10 +117,13 @@ def list_products(request: Request):
     total = rows[0]["total_count"] if rows else 0
     for r in rows:
         del r["total_count"]   # internal to the count-in-one-query trick above
-    # "opened the storefront" signal — shoppers only, once per feed (first page)
+    # "opened the storefront" signal — shoppers only, once per feed (first page).
+    # The campaign tags on the landing URL ride along: it's the only place the shop
+    # learns which ad or post actually brings shoppers in.
     if not is_manager and first_page:
         log_action(user_id=(user or {}).get("id"), action="visit",
-                   detail={"ua": request.headers.get("user-agent")}, request=request)
+                   detail={"ua": request.headers.get("user-agent"),
+                           "from": traffic_source(request)}, request=request)
     return {"products": rows, "total": total}
 
 

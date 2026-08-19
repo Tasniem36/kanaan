@@ -31,7 +31,7 @@
     <p v-else-if="!visibleLogs.length" class="a-muted">{{ t('manager.noAudit') }}</p>
     <div v-else class="table-wrap">
       <table class="a-table">
-        <thead><tr><th>{{ t('manager.colWhen') }}</th><th>{{ t('manager.colWho') }}</th><th>{{ t('manager.colEmail') }}</th><th>{{ t('manager.colRole') }}</th><th>{{ t('manager.colAction') }}</th><th>{{ t('manager.colDetail') }}</th><th>{{ t('manager.colPage') }}</th><th>{{ t('manager.colLocation') }}</th><th>IP</th></tr></thead>
+        <thead><tr><th>{{ t('manager.colWhen') }}</th><th>{{ t('manager.colWho') }}</th><th>{{ t('manager.colEmail') }}</th><th>{{ t('manager.colRole') }}</th><th>{{ t('manager.colAction') }}</th><th>{{ t('manager.colDetail') }}</th><th>{{ t('manager.colApi') }}</th><th>{{ t('manager.colLocation') }}</th><th>IP</th></tr></thead>
         <tbody>
           <tr v-for="a in pagedLogs" :key="a.id">
             <td class="a-muted" style="white-space:nowrap">{{ fmtDateTime(a.created_at) }}</td>
@@ -40,8 +40,10 @@
             <td><span class="a-pill" :class="roleClass(a)">{{ roleLabel(a) }}</span></td>
             <td><span class="a-pill" :class="pillClass(a.action)">{{ actionLabel(a.action) }}</span></td>
             <td class="a-muted" style="font-size:.85rem">{{ detailText(a) }}</td>
+            <!-- the endpoint the action went through; the page it came from is on
+                 hover, since that's context rather than the action itself -->
             <td class="page-cell">
-              <a v-if="pageHref(a)" :href="pageHref(a)" target="_blank" rel="noopener" class="page-link" dir="ltr" :title="pageHref(a)">{{ pageLabel(a) }}</a>
+              <code v-if="a.api" class="api" dir="ltr" :title="a.page || ''">{{ a.api }}</code>
               <span v-else class="a-muted">—</span>
             </td>
             <td class="a-muted" style="font-size:.82rem">{{ geo[a.ip] || '—' }}</td>
@@ -121,15 +123,6 @@ watch(visibleLogs, () => { if (page.value > pageCount.value) page.value = pageCo
 // A product_view row links straight to the product it recorded; everything else
 // links to the page the action came from. Opens in a new tab so the manager
 // never loses their place in the log.
-function pageHref(a) {
-  const pid = a.detail?.product_id
-  if (a.action === 'product_view' && pid) return `/product/${pid}`
-  return a.page || ''
-}
-function pageLabel(a) {
-  if (a.action === 'product_view' && a.detail?.name) return a.detail.name
-  return a.page || pageHref(a)
-}
 
 const fmtDateTime = (d) =>
   new Date(d).toLocaleString(locale.value, { dateStyle: 'medium', timeStyle: 'short' })
@@ -235,8 +228,14 @@ h1 { font-family: 'Amiri', serif; color: var(--green); font-size: 1.9rem; margin
 .top-name:hover { color: var(--gold); }
 .top-count { color: var(--muted); font-size: .85rem; white-space: nowrap; }
 
-/* keep the page column compact: one line, truncated with … (full path on hover) */
-.page-cell { max-width: 200px; }
+/* keep the endpoint column compact: one line, truncated with … */
+.page-cell { max-width: 210px; }
+.api {
+  display: inline-block; max-width: 210px; vertical-align: bottom;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-size: .76rem; color: var(--green-2);
+  background: rgba(60,74,39,.07); border-radius: 6px; padding: .1rem .4rem;
+}
 .page-link {
   display: inline-block; max-width: 200px; vertical-align: bottom;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;

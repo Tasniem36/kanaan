@@ -349,6 +349,7 @@ export default {
     colWho: 'العميل',
     colAction: 'الإجراء',
     colDetail: 'التفاصيل',
+    colApi: 'الطلب (API)',
     colPage: 'الصفحة',
     colLocation: 'الموقع',
     guestVisitor: 'زائر',

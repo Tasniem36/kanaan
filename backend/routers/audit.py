@@ -30,7 +30,8 @@ def list_audit(request: Request, _m=Depends(require_manager)):
         limit = min(int(q.get("limit", 200)), 500)
     except ValueError:
         limit = 200
-    # this is the *customer* activity log — never show the manager's own actions.
+    # This is the *customer* activity log. log_action() no longer writes staff rows
+    # at all, but rows from before that still exist, so the filter stays.
     # (u.role is null for guests, so `is distinct from` keeps guest visits.)
     conds, params = ["u.role is distinct from 'manager'"], []
     if q.get("action"):
@@ -47,7 +48,7 @@ def list_audit(request: Request, _m=Depends(require_manager)):
         params.append(q["to"])
     where = ("where " + " and ".join(conds)) if conds else ""
     rows = fetch_all(
-        f"""select a.id, a.action, a.detail, a.ip, a.page, a.created_at, u.email, u.full_name, u.role
+        f"""select a.id, a.action, a.detail, a.ip, a.page, a.api, a.created_at, u.email, u.full_name, u.role
             from audit_logs a left join users u on u.id = a.user_id
             {where} order by a.created_at desc limit %s""",
         params + [limit],

@@ -347,6 +347,7 @@ export default {
     colWho: 'Customer',
     colAction: 'Action',
     colDetail: 'Details',
+    colApi: 'Request (API)',
     colPage: 'Page',
     colLocation: 'Location',
     guestVisitor: 'Guest',

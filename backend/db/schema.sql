@@ -160,6 +160,9 @@ create index if not exists audit_logs_created_idx on audit_logs (created_at desc
 create index if not exists audit_logs_user_idx on audit_logs (user_id);
 -- the storefront page the action came from (derived from the request Referer)
 alter table audit_logs add column if not exists page text;
+-- the API call that recorded it ("POST /api/orders"), which is the action the
+-- customer actually took — the page is only where they were standing at the time
+alter table audit_logs add column if not exists api text;
 
 -- ---------- signup_verifications (pending signups awaiting email+phone codes)
 create table if not exists signup_verifications (
