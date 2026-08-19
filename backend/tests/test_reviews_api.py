@@ -88,14 +88,75 @@ def test_writing_requires_a_session(client, method, path):
     assert getattr(client, method)(path).status_code == 401
 
 
-def test_submitting_stores_the_callers_own_id_and_starts_pending(client, as_user, spy):
+def test_submitting_stores_the_callers_own_id(client, as_user, spy):
     as_user({"id": "me", "role": "customer"})
     res = client.post("/api/reviews", json={"rating": 5, "body": "ممتاز جدًا", "city": "دبي"})
     assert res.status_code == 201
     sql, params = spy[-1]
     assert params[0] == "me", "the author is the token's user, never a client-supplied id"
-    assert "status = 'pending'" in sql, "an edited review must go back through moderation"
-    assert "on conflict (user_id)" in sql, "one review per customer — the second edits the first"
+    assert "insert into reviews" in sql and "on conflict" not in sql, \
+        "a customer may write several — each POST adds one"
+    # 'pending' is the column default, so the insert must not name a status at all
+    assert "status" not in sql.split("returning")[0]
+
+
+def test_a_customer_may_write_more_than_one(client, as_user, spy):
+    as_user({"id": "me", "role": "customer"})
+    for i in range(3):
+        assert client.post("/api/reviews", json={"rating": 5, "body": f"تقييم رقم {i}"}).status_code == 201
+    inserts = [c for c in spy if "insert into reviews" in c[0]]
+    assert len(inserts) == 3, "each one is its own row"
+
+
+def test_mine_lists_every_review_the_caller_wrote(client, as_user, spy):
+    as_user({"id": "me", "role": "customer"})
+    assert client.get("/api/reviews/mine").status_code == 200
+    sql, params = spy[-1]
+    assert "where user_id = %s" in sql and params == ["me"]
+    assert "order by created_at desc" in sql, "newest first, so the latest is easy to find"
+
+
+# --- editing one of your own ---------------------------------------------------
+RID = "6f1d4e0e-0000-4000-8000-000000000000"
+
+
+def test_the_author_can_rewrite_their_own_review(client, as_user, spy):
+    as_user({"id": "me", "role": "customer"})
+    res = client.put(f"/api/reviews/{RID}", json={"rating": 4, "body": "نصٌّ مُعدَّل"})
+    assert res.status_code == 200, res.text
+    sql, params = spy[-1]
+    assert "update reviews" in sql
+    assert "where id = %s and user_id = %s" in sql, "scoped to the caller's own row"
+    assert params[-2:] == [RID, "me"]
+    assert "status = 'pending'" in sql, "edited text has to be looked at again"
+
+
+def test_editing_someone_elses_review_is_a_404(client, as_user, monkeypatch):
+    """Scoped by the UPDATE itself; a miss must not reveal that the row exists."""
+    monkeypatch.setattr(rv, "fetch_one", lambda sql, params=None: None)
+    monkeypatch.setattr(rv, "log_action", lambda **k: None)
+    as_user({"id": "attacker", "role": "customer"})
+    assert client.put(f"/api/reviews/{RID}", json={"rating": 1, "body": "تخريب"}).status_code == 404
+
+
+def test_editing_requires_a_session(client):
+    assert client.put(f"/api/reviews/{RID}", json={"rating": 5, "body": "نصٌّ كافٍ"}).status_code == 401
+
+
+def test_editing_validates_like_writing(client, as_user, spy):
+    as_user({"id": "me", "role": "customer"})
+    for payload in [{"rating": 9, "body": "نصٌّ كافٍ"}, {"rating": 4, "body": " "},
+                    {"rating": 4, "body": "x" * 601}, {"rating": 4, "body": "ok", "image": "https://x/y.jpg"}]:
+        assert client.put(f"/api/reviews/{RID}", json=payload).status_code == 400
+
+
+def test_a_manager_still_moderates_through_patch(client, spy):
+    """PUT is the author's edit, PATCH is moderation — different methods, so neither
+    screen can reach the other by accident."""
+    from conftest import token_for
+    headers = {"Authorization": f"Bearer {token_for('boss', 'manager')}"}
+    assert client.patch(f"/api/reviews/{RID}", json={"status": "approved"}, headers=headers).status_code == 200
+    assert "update reviews set status" in spy[-1][0]
 
 
 @pytest.mark.parametrize("payload", [

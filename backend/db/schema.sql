@@ -338,9 +338,11 @@ create table if not exists reviews (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
--- one per customer: POST /api/reviews upserts on this
+-- A customer may write as many as they like — each row stands on its own and is
+-- edited through PUT /api/reviews/<id>. (There used to be a unique index here
+-- enforcing one per account; dropped, and dropped on existing databases too.)
 drop index if exists reviews_user_key;
-create unique index if not exists reviews_user_key on reviews (user_id);
+create index if not exists reviews_user_idx on reviews (user_id, created_at desc);
 -- the storefront's read: approved only, newest first
 create index if not exists reviews_approved_idx on reviews (created_at desc) where status = 'approved';
 -- the manager's moderation queue

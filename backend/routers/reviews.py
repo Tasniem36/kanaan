@@ -1,8 +1,8 @@
 """General shop reviews (not per-product).
 
 Reading is open to everyone; writing needs an account, so every review is tied to a
-real customer. One review per account — re-submitting edits theirs rather than adding
-a second, and sends it back through moderation.
+real customer. A customer may write as many as they like, and edit or delete each one
+afterwards (PUT/DELETE /api/reviews/<id>) — editing sends it back through moderation.
 
 Nothing reaches the storefront until a manager approves it, so neither the text nor
 an attached photo can reach shoppers on its own.
@@ -116,13 +116,17 @@ def list_reviews(limit: int = Query(3, ge=1, le=50), offset: int = Query(0, ge=0
     return {"reviews": rows, "total": total, "average": average}
 
 
-# GET /api/reviews/mine — the caller's own review, whatever its status
+# GET /api/reviews/mine — every review the caller wrote, whatever its status. The
+# storefront uses it to mark their own cards as editable, and to show them their own
+# pending ones (which are invisible to everybody else).
 @router.get("/mine")
-def my_review(user=Depends(current_user)):
-    return {"review": fetch_one(f"select {_OWN_COLS} from reviews where user_id = %s", [user["id"]])}
+def my_reviews(user=Depends(current_user)):
+    return {"reviews": fetch_all(
+        f"select {_OWN_COLS} from reviews where user_id = %s order by created_at desc",
+        [user["id"]])}
 
 
-# POST /api/reviews — write (or rewrite) the caller's review; always back to pending
+# POST /api/reviews — add a review. Always lands as 'pending'.
 @router.post("")
 def submit_review(request: Request, response: Response, user=Depends(current_user), payload: dict = Body(default={})):
     rate_limit(request, bucket="review", limit=6, window=60)
@@ -130,12 +134,7 @@ def submit_review(request: Request, response: Response, user=Depends(current_use
     image_url, thumb_url = _clean_image(payload.get("image"))
     row = fetch_one(
         f"""insert into reviews (user_id, rating, body, city, image_url, thumb_url)
-                 values (%s, %s, %s, %s, %s, %s)
-            on conflict (user_id) do update
-               set rating = excluded.rating, body = excluded.body, city = excluded.city,
-                   image_url = excluded.image_url, thumb_url = excluded.thumb_url,
-                   status = 'pending', updated_at = now()
-            returning {_OWN_COLS}""",
+                 values (%s, %s, %s, %s, %s, %s) returning {_OWN_COLS}""",
         [user["id"], rating, body, city, image_url, thumb_url],
     )
     log_action(user_id=user["id"], action="review_submitted",
@@ -143,6 +142,34 @@ def submit_review(request: Request, response: Response, user=Depends(current_use
     notify_managers(type="new_review", title="تقييمٌ جديد بانتظار المراجعة",
                     body=f"{'★' * rating} {body[:80]}")
     response.status_code = 201
+    return {"review": row}
+
+
+# PUT /api/reviews/{rid} — the author rewrites one of their own reviews. A manager
+# moderates through PATCH on the same path; keeping the two on different methods
+# means neither can be reached by accident from the other's screen.
+@router.put("/{rid}")
+def update_own_review(rid: str, request: Request, user=Depends(current_user), payload: dict = Body(default={})):
+    rid = _as_uuid(rid)
+    rate_limit(request, bucket="review", limit=6, window=60)
+    rating, body, city = _clean(payload)
+    image_url, thumb_url = _clean_image(payload.get("image"))
+    # scoped to the caller: editing someone else's review 404s rather than 403s, so
+    # ids can't be probed. Back to 'pending' — edited text needs looking at again.
+    row = fetch_one(
+        f"""update reviews
+               set rating = %s, body = %s, city = %s, image_url = %s, thumb_url = %s,
+                   status = 'pending', updated_at = now()
+             where id = %s and user_id = %s
+         returning {_OWN_COLS}""",
+        [rating, body, city, image_url, thumb_url, rid, user["id"]],
+    )
+    if not row:
+        raise HTTPException(404, "Review not found")
+    log_action(user_id=user["id"], action="review_edited",
+               detail={"id": rid, "rating": rating}, request=request)
+    notify_managers(type="new_review", title="تقييمٌ مُعدَّل بانتظار المراجعة",
+                    body=f"{'★' * rating} {body[:80]}")
     return {"review": row}
 
 

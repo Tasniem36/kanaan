@@ -15,7 +15,7 @@ export const useReviewsStore = defineStore('reviews', {
     average: null,     // average rating across all approved ones
     loading: false,
     loaded: false,
-    mine: null,        // the caller's own review (any status), or null
+    mine: [],          // every review the caller wrote, any status
     mineLoaded: false,
     queue: [],         // manager: the moderation list
     queueLoading: false,
@@ -23,6 +23,16 @@ export const useReviewsStore = defineStore('reviews', {
   }),
   getters: {
     hasMore: (s) => s.list.length < s.total,
+    // ids of the caller's own reviews — the card shows a pencil for these
+    mineIds: (s) => new Set(s.mine.map((r) => r.id)),
+    // What the section renders: the approved reviews everyone sees, plus the
+    // caller's own not-yet-approved ones, which nobody else can see. Without them
+    // a customer would have nowhere to click to edit what they just wrote.
+    cards: (s) => {
+      const shown = new Set(s.list.map((r) => r.id))
+      const ownUnpublished = s.mine.filter((r) => !shown.has(r.id) && r.status !== 'approved')
+      return [...ownUnpublished, ...s.list]
+    },
     // Two gates on the homepage section:
     //  1. the manager's switch in /manager/content wins outright — off means off;
     //  2. otherwise it stays hidden until something is approved, because an empty
@@ -71,24 +81,30 @@ export const useReviewsStore = defineStore('reviews', {
     },
     async fetchMine() {
       const auth = useAuthStore()
-      if (!auth.isAuthenticated) { this.mine = null; this.mineLoaded = true; return }
+      if (!auth.isAuthenticated) { this.mine = []; this.mineLoaded = true; return }
       try {
-        const { review } = await api('/reviews/mine')
-        this.mine = review
+        const { reviews } = await api('/reviews/mine')
+        this.mine = reviews || []
       } catch {
         /* leave it unknown — the form still opens, submitting is what matters */
       } finally {
         this.mineLoaded = true
       }
     },
-    // Submitting always sends the review (back) to the moderation queue, so it
-    // leaves the public list until a manager approves it again.
-    // `image` is an optional uploaded data-URL; null clears an existing photo.
+    // Add a review. It starts out pending, so it shows only to its author until a
+    // manager approves it. `image` is an optional uploaded data-URL.
     async submit({ rating, body, city, image }) {
       const { review } = await api('/reviews', { method: 'POST', body: { rating, body, city, image } })
-      this.mine = review
-      if (this.list.some((r) => r.id === review.id)) {
-        this.list = this.list.filter((r) => r.id !== review.id)
+      this.mine = [review, ...this.mine]
+      return review
+    },
+    // Edit one of the caller's own. Editing re-queues it, so a published review
+    // leaves the public list until it's approved again.
+    async update(id, { rating, body, city, image }) {
+      const { review } = await api(`/reviews/${id}`, { method: 'PUT', body: { rating, body, city, image } })
+      this.mine = this.mine.map((r) => (r.id === id ? review : r))
+      if (this.list.some((r) => r.id === id)) {
+        this.list = this.list.filter((r) => r.id !== id)
         await this.refreshSummary()
       }
       return review
@@ -96,7 +112,7 @@ export const useReviewsStore = defineStore('reviews', {
     async remove(id) {
       const queued = this.queue.find((r) => r.id === id)
       await api(`/reviews/${id}`, { method: 'DELETE' })
-      if (this.mine?.id === id) this.mine = null
+      this.mine = this.mine.filter((r) => r.id !== id)
       if (this.list.some((r) => r.id === id)) {
         this.list = this.list.filter((r) => r.id !== id)
         await this.refreshSummary()
@@ -119,7 +135,7 @@ export const useReviewsStore = defineStore('reviews', {
       }
     },
     clearMine() {
-      this.mine = null
+      this.mine = []
       this.mineLoaded = false
     },
 

@@ -16,8 +16,18 @@
 
       <Loader v-if="reviews.loading && !reviews.list.length" />
 
-      <div v-else-if="reviews.list.length" class="rv-grid">
-        <article class="rv-card reveal" v-for="r in reviews.list" :key="r.id">
+      <div v-else-if="reviews.cards.length" class="rv-grid">
+        <article class="rv-card reveal" v-for="r in reviews.cards" :key="r.id">
+          <!-- their own review: a pencil to edit this one, and its status while it
+               waits — nobody else can see an unapproved card at all -->
+          <template v-if="reviews.mineIds.has(r.id)">
+            <button class="rv-edit" :title="t('reviews.editThis')" :aria-label="t('reviews.editThis')" @click="openForm(r)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+            </button>
+            <span v-if="r.status && r.status !== 'approved'" class="rv-pill" :class="r.status">
+              {{ r.status === 'rejected' ? t('reviews.statusRejected') : t('reviews.statusPending') }}
+            </span>
+          </template>
           <Stars :value="r.rating" />
           <blockquote>{{ r.body }}</blockquote>
           <!-- the customer's photo, if they attached one; opens full size in a tab -->
@@ -44,15 +54,12 @@
                to never outgrow the fixed button width -->
           {{ reviews.loading ? t('common.loading') : t('home.showAll') }}
         </button>
-        <button class="btn btn-green" @click="openForm">
+        <button class="btn btn-green" @click="openForm()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-          {{ reviews.mine ? t('reviews.editMine') : t('reviews.write') }}
+          {{ t('reviews.write') }}
         </button>
       </div>
 
-      <!-- where the customer's own review stands (only they see this). Deleting it
-           lives inside the edit form, next to the other things they can change. -->
-      <p v-if="mineNote" class="rv-mine" :class="reviews.mine.status">{{ mineNote }}</p>
     </div>
   </section>
 
@@ -62,7 +69,7 @@
     <div class="modal-overlay" v-if="formOpen" @click.self="formOpen = false">
       <div class="co">
         <button class="rv-close" @click="formOpen = false" :aria-label="t('common.close')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
-        <h3 class="display rv-form-title">{{ t('reviews.formTitle') }}</h3>
+        <h3 class="display rv-form-title">{{ editing ? t('reviews.editTitle') : t('reviews.formTitle') }}</h3>
         <p class="a-muted" style="text-align:center">{{ t('reviews.formDesc') }}</p>
 
         <label class="co-l">{{ t('reviews.ratingLabel') }} *</label>
@@ -114,7 +121,7 @@
           {{ sending ? t('reviews.sending') : t('reviews.submit') }}
         </button>
         <!-- removing the review belongs with editing it, not out on the page -->
-        <button v-if="reviews.mine" type="button" class="rv-del" :disabled="sending" @click="removeMine">
+        <button v-if="editing" type="button" class="rv-del" :disabled="sending" @click="removeMine">
           {{ t('reviews.deleteMine') }}
         </button>
       </div>
@@ -151,6 +158,8 @@ const confirm = useConfirmStore()
 const addresses = useAddressesStore()
 
 const formOpen = ref(false)
+// id of the review being edited; '' means the form is adding a new one
+const editing = ref('')
 const sending = ref(false)
 const formErr = ref('')
 const form = reactive({ rating: 0, body: '', city: '', image: '' })
@@ -192,32 +201,27 @@ const copy = computed(() => {
   return content.sectionCopy('reviews', locale.value)
 })
 
-const mineNote = computed(() => {
-  const s = reviews.mine?.status
-  if (!s) return ''
-  return s === 'approved' ? t('reviews.mineApproved')
-    : s === 'rejected' ? t('reviews.mineRejected')
-      : t('reviews.minePending')
-})
 
 const initial = (name) => (name || t('reviews.anonymous')).trim().charAt(0)
 
-// Anyone may READ the reviews; writing one needs an account, so the card always
-// carries a real customer's name. Guests go to login and come back to '/?review=1',
-// which reopens this form — the same trick checkout uses.
-async function openForm() {
+// Anyone may READ the reviews; writing one needs an account, so every card carries a
+// real customer's name. Guests go to login and come back to '/?review=1', which
+// reopens this form — the same trick checkout uses.
+//
+// Called with a review (the pencil on one of their own cards) it edits that one;
+// called with nothing (the section button) it adds another.
+async function openForm(review = null) {
   if (!auth.isAuthenticated) {
     router.push({ name: 'login', query: { redirect: '/?review=1' } })
     return
   }
   formErr.value = ''
-  // returning from login, "mine" may still be in flight — wait, so an existing
-  // review prefills the fields instead of opening a blank form over it
   if (!reviews.mineLoaded) await reviews.fetchMine()
-  form.rating = reviews.mine?.rating || 0
-  form.body = reviews.mine?.body || ''
-  form.city = reviews.mine?.city || addresses.default?.city || ''
-  form.image = reviews.mine?.image_url || ''
+  editing.value = review?.id || ''
+  form.rating = review?.rating || 0
+  form.body = review?.body || ''
+  form.city = review?.city || addresses.default?.city || ''
+  form.image = review?.image_url || ''
   formOpen.value = true
 }
 defineExpose({ openForm })
@@ -228,15 +232,17 @@ async function submit() {
   if (form.body.trim().length < 3) { formErr.value = t('reviews.errBody'); return }
   sending.value = true
   try {
-    await reviews.submit({
+    const payload = {
       rating: form.rating,
       body: form.body.trim(),
       city: form.city,
-      // an emptied picker clears the photo, since a submit replaces the whole review
+      // an emptied picker clears the photo, since a save replaces the whole review
       image: form.image || null,
-    })
+    }
+    if (editing.value) await reviews.update(editing.value, payload)
+    else await reviews.submit(payload)
     formOpen.value = false
-    toast.show(t('reviews.thanks'), 4000)
+    toast.show(t(editing.value ? 'reviews.savedEdit' : 'reviews.thanks'), 4000)
   } catch (e) {
     formErr.value = e.message
   } finally {
@@ -245,10 +251,11 @@ async function submit() {
 }
 
 async function removeMine() {
+  if (!editing.value) return
   const ok = await confirm.ask({ message: t('reviews.deleteMineMsg'), danger: true })
   if (!ok) return
   try {
-    await reviews.remove(reviews.mine.id)
+    await reviews.remove(editing.value)
     formOpen.value = false
     toast.show(t('reviews.deleted'))
   } catch (e) {
@@ -292,11 +299,26 @@ watch(() => auth.isAuthenticated, (signedIn) => {
 
 .rv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 1.3rem; }
 .rv-card {
+  position: relative;   /* anchors the owner's pencil and status pill */
   display: flex; flex-direction: column; gap: .8rem;
   background: var(--paper); border: 1px solid rgba(60,74,39,.12); border-radius: 20px;
   padding: 1.4rem 1.5rem;
   transition: transform .28s, box-shadow .28s, border-color .28s;
 }
+.rv-edit {
+  position: absolute; top: .6rem; inset-inline-end: .6rem;
+  width: 26px; height: 26px; display: grid; place-items: center;
+  border-radius: 8px; color: var(--gold); background: rgba(184,144,47,.16);
+  transition: background .15s, color .15s;
+}
+.rv-edit:hover { background: var(--gold); color: #fff; }
+.rv-edit svg { width: 14px; height: 14px; }
+.rv-pill {
+  position: absolute; top: .6rem; inset-inline-start: .6rem;
+  font-size: .68rem; font-weight: 700; padding: .12rem .5rem; border-radius: 999px;
+  background: rgba(184,144,47,.18); color: var(--gold);
+}
+.rv-pill.rejected { background: rgba(156,43,43,.12); color: var(--red); }
 .rv-card:hover {
   transform: translateY(-4px);
   box-shadow: 0 30px 50px -34px rgba(44,55,25,.55);
