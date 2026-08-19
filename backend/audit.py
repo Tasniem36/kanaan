@@ -10,7 +10,9 @@ This is a trail of what CUSTOMERS did, not a request log:
   * anything a page polls in the background is never logged at all;
   * repeat-heavy actions are collapsed (see _COLLAPSE), so one shopper browsing
     doesn't bury the interesting rows."""
+import hashlib
 import json
+import secrets
 import threading
 import time
 from urllib.parse import parse_qsl, urlencode, urlparse
@@ -86,12 +88,38 @@ def _is_staff(user_id) -> bool:
     return staff
 
 
+# A visitor label derived from the request, so nothing is stored on anyone's device —
+# no cookie, no localStorage, nothing to consent to.
+#
+# It is a hash of (today's random salt + address + browser), which separates the
+# people behind one wifi far better than the address alone. The salt is fresh each
+# day and never written down, so yesterday's label can't be matched to today's: the
+# same person counts again tomorrow. That's the trade we chose — this exists to keep
+# the log readable, not to follow anyone.
+_salt = {"day": None, "value": None}
+_salt_lock = threading.Lock()
+
+
+def _todays_salt() -> str:
+    day = time.strftime("%Y-%m-%d", time.gmtime())
+    with _salt_lock:
+        if _salt["day"] != day:
+            _salt.update(day=day, value=secrets.token_hex(16))
+        return _salt["value"]
+
+
 def _visitor(request):
-    """The browser's anonymous id, set by the middleware in main.py. Falls back to
-    None, in which case callers use the IP as before."""
     if request is None:
         return None
-    return getattr(getattr(request, "state", None), "visitor", None)
+    ip = _client_ip(request) or ""
+    ua = ""
+    try:
+        ua = request.headers.get("user-agent") or ""
+    except Exception:  # noqa: BLE001 — a stub request in a test
+        pass
+    if not ip and not ua:
+        return None
+    return hashlib.sha256(f"{_todays_salt()}|{ip}|{ua}".encode()).hexdigest()[:16]
 
 
 def _api(request):

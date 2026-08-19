@@ -2,7 +2,6 @@ import datetime
 import decimal
 import json
 import os
-import secrets
 import uuid
 
 from fastapi import FastAPI, Request
@@ -62,35 +61,6 @@ app = FastAPI(
 # to none rather than "*" so a missing env var can't open the API to any site.
 _origins = [o.strip() for o in os.getenv("CORS_ORIGIN", "").split(",") if o.strip()]
 app.add_middleware(CORSMiddleware, allow_origins=_origins, allow_methods=["*"], allow_headers=["*"])
-
-
-# An anonymous id per browser, used only to tell visitors apart in the activity log
-# and the dashboard's counts. First-party, no third party ever sees it, and it holds
-# nothing about the person — a random 32 hex characters. Guests were counted by IP
-# before, which made everyone behind one wifi look like a single visitor.
-VISITOR_COOKIE = "vid"
-_VISITOR_MAX_AGE = 60 * 60 * 24 * 365
-
-
-def _valid_vid(v):
-    return isinstance(v, str) and len(v) == 32 and all(c in "0123456789abcdef" for c in v)
-
-
-@app.middleware("http")
-async def visitor_cookie(request: Request, call_next):
-    existing = request.cookies.get(VISITOR_COOKIE)
-    issued = None if _valid_vid(existing) else secrets.token_hex(16)
-    # audit.py reads this off the request; it never trusts the raw cookie value
-    request.state.visitor = existing if issued is None else issued
-    response = await call_next(request)
-    if issued:
-        response.set_cookie(
-            VISITOR_COOKIE, issued, max_age=_VISITOR_MAX_AGE, path="/",
-            httponly=True,          # only the server reads it; no script needs it
-            samesite="lax",
-            secure=_IS_PROD,
-        )
-    return response
 
 
 # never let the browser cache API responses/redirects (avoids stale 308s etc.)

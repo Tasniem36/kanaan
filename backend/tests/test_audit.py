@@ -145,25 +145,49 @@ def test_a_direct_visit_has_no_source():
 
 # --- telling visitors apart --------------------------------------------------
 def test_two_browsers_behind_one_address_are_two_visitors(monkeypatch):
-    """Counting guests by IP made a household or an office look like one person."""
+    """Counting guests by address alone made a household or an office look like one
+    person. The label separates them without storing anything on their devices."""
     rows = []
     monkeypatch.setattr(audit, "execute", lambda sql, params=None: rows.append(params))
     monkeypatch.setattr(audit.threading, "Thread",
                         lambda target, daemon=None: type("T", (), {"start": staticmethod(target)})())
     audit._recent.clear()
 
-    def visitor(vid):
+    def req(ua):
         return type("R", (), {
             "method": "GET", "url": type("U", (), {"path": "/api/products"})(),
-            "headers": {}, "client": type("C", (), {"host": "9.9.9.9"})(),
-            "state": type("S", (), {"visitor": vid})(),
+            "headers": {"user-agent": ua},
+            "client": type("C", (), {"host": "9.9.9.9"})(),
         })()
 
-    audit.log_action(action="visit", request=visitor("a" * 32))
-    audit.log_action(action="visit", request=visitor("b" * 32))   # same wifi, other browser
-    audit.log_action(action="visit", request=visitor("a" * 32))   # the first one again
+    audit.log_action(action="visit", request=req("Safari/iPhone"))
+    audit.log_action(action="visit", request=req("Chrome/Mac"))    # same wifi, other device
+    audit.log_action(action="visit", request=req("Safari/iPhone"))  # the first one again
     assert len(rows) == 2, "each browser counts once; the repeat still collapses"
-    assert [r[-1] for r in rows] == ["a" * 32, "b" * 32], "the id is stored on the row"
+    labels = [r[-1] for r in rows]
+    assert len(set(labels)) == 2 and all(len(x) == 16 for x in labels)
+
+
+def test_nothing_is_stored_on_the_visitors_device(client):
+    """No cookie, no localStorage — the label is derived from the request, so there is
+    nothing to consent to and nothing to clear."""
+    res = client.get("/api/health")
+    assert "set-cookie" not in {k.lower() for k in res.headers}
+
+
+def test_the_label_cannot_be_matched_across_days(monkeypatch):
+    """The salt is fresh daily and never written down, so the same person counts again
+    tomorrow rather than being followed."""
+    def req():
+        return type("R", (), {
+            "method": "GET", "url": type("U", (), {"path": "/api/products"})(),
+            "headers": {"user-agent": "Safari/iPhone"},
+            "client": type("C", (), {"host": "9.9.9.9"})(),
+        })()
+
+    today = audit._visitor(req())
+    audit._salt.update(day="1999-01-01", value="a-different-day")   # simulate the rollover
+    assert audit._visitor(req()) != today
 
 
 def test_the_address_is_still_the_fallback(monkeypatch):
@@ -175,28 +199,3 @@ def test_the_address_is_still_the_fallback(monkeypatch):
     audit._recent.clear()
     audit.log_action(action="visit", request=None)
     assert len(rows) == 1 and rows[0][-1] is None
-
-
-def test_the_cookie_is_first_party_and_carries_nothing(app, client):
-    """A random id, http-only, same-site — no third party sees it and no script
-    needs it. It must not be readable as anything about the person."""
-    res = client.get("/api/health")
-    cookie = res.headers.get("set-cookie", "")
-    assert "vid=" in cookie
-    value = cookie.split("vid=")[1].split(";")[0]
-    assert len(value) == 32 and all(c in "0123456789abcdef" for c in value)
-    assert "httponly" in cookie.lower() and "samesite=lax" in cookie.lower().replace(" ", "")
-
-
-def test_an_existing_id_is_reused_not_replaced(client):
-    first = client.get("/api/health").headers.get("set-cookie", "")
-    value = first.split("vid=")[1].split(";")[0]
-    again = client.get("/api/health", cookies={"vid": value})
-    assert "vid=" not in again.headers.get("set-cookie", ""), "a returning browser keeps its id"
-
-
-def test_a_forged_id_is_replaced(client):
-    """The value is only ever used to group rows, so anything malformed is rejected
-    rather than stored."""
-    res = client.get("/api/health", cookies={"vid": "../../etc/passwd"})
-    assert "vid=" in res.headers.get("set-cookie", ""), "a bad value gets a fresh id"
