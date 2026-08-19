@@ -353,3 +353,45 @@ def test_order_numbers_avoid_ambiguous_characters():
         assert len(ref) == 7
         seen.update(ref)
     assert not (seen & set("01IO")), f"ambiguous characters in use: {seen & set('01IO')}"
+
+
+def test_a_transient_failure_keeps_the_pending_signup(client, monkeypatch):
+    """If account creation fails for an unexpected reason, the customer must be able
+    to submit the same code again rather than start the whole signup over."""
+    from datetime import datetime, timedelta, timezone
+    deleted = []
+    pending = {
+        "id": "v-1", "email": "x@example.com", "phone": "+971500000000", "full_name": "n",
+        "password_hash": "h", "email_code": "111111", "phone_code": "222222",
+        "email_ok": True, "phone_ok": True, "attempts": 0,
+        "expires_at": datetime.now(timezone.utc) + timedelta(minutes=5),
+    }
+    monkeypatch.setattr(auth, "fetch_one", lambda sql, params=None: dict(pending))
+    monkeypatch.setattr(auth, "execute",
+                        lambda sql, params=None: deleted.append(params) if "delete" in sql else None)
+    monkeypatch.setattr(auth, "_create_user",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("database blinked")))
+    with pytest.raises(RuntimeError):
+        client.post("/api/auth/register/verify",
+                    json={"verification_id": "v-1", "email_code": "111111", "phone_code": "222222"})
+    assert deleted == [], "the pending signup must survive so the code still works"
+
+
+def test_a_taken_email_does_discard_the_pending_signup(client, monkeypatch):
+    """That one can never complete, and the row holds a password hash."""
+    from datetime import datetime, timedelta, timezone
+    from fastapi import HTTPException
+    deleted = []
+    monkeypatch.setattr(auth, "fetch_one", lambda sql, params=None: {
+        "id": "v-1", "email": "taken@example.com", "phone": "+971500000000", "full_name": "n",
+        "password_hash": "h", "email_code": "111111", "phone_code": "222222",
+        "email_ok": True, "phone_ok": True, "attempts": 0,
+        "expires_at": datetime.now(timezone.utc) + timedelta(minutes=5)})
+    monkeypatch.setattr(auth, "execute",
+                        lambda sql, params=None: deleted.append(params) if "delete" in sql else None)
+    monkeypatch.setattr(auth, "_create_user",
+                        lambda *a, **k: (_ for _ in ()).throw(HTTPException(409, "This email is already registered")))
+    assert client.post("/api/auth/register/verify",
+                       json={"verification_id": "v-1", "email_code": "111111",
+                             "phone_code": "222222"}).status_code == 409
+    assert deleted == [["v-1"]]

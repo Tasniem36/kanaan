@@ -170,10 +170,17 @@ def register_verify(request: Request, payload: dict = Body(default={})):
 
     # One creation path for both flows (this one and the no-verification-channel
     # shortcut in register_start), so claiming a guest account works in both.
+    #
+    # The pending row is only discarded once it can serve no further purpose: the
+    # account now exists, or the e-mail already has one. If creation fails for any
+    # other reason — the database blinking, say — the row stays, so the customer can
+    # submit the same code again instead of starting the whole signup over.
     try:
         result = _create_user(v["email"], v["password_hash"], v["full_name"], v["phone"], request)
-    finally:
+    except HTTPException:
         execute("delete from signup_verifications where id = %s", [vid])
+        raise
+    execute("delete from signup_verifications where id = %s", [vid])
     return result
 
 
