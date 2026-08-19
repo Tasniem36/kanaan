@@ -121,7 +121,9 @@ def visit_sources(request: Request, _m=Depends(require_manager)):
                    a.detail->'from'->>'medium'   as medium,
                    a.detail->'from'->>'campaign' as campaign,
                    count(*)::int as visits,
-                   count(distinct coalesce(a.user_id::text, a.ip)) as visitors
+                   -- one browser is one visitor; the address is only a fallback for
+                   -- rows written before the vid cookie existed
+                   count(distinct coalesce(a.user_id::text, a.visitor, a.ip)) as visitors
             from audit_logs a {where}
             group by 1, 2, 3
             order by visits desc
@@ -159,7 +161,7 @@ def struggling(request: Request, _m=Depends(require_manager)):
         hours = 24
     rows = fetch_all(
         """with recent as (
-               select coalesce(a.user_id::text, 'ip:' || a.ip) as who,
+               select coalesce(a.user_id::text, 'v:' || a.visitor, 'ip:' || a.ip) as who,
                       a.user_id, a.action, a.detail, a.created_at
                  from audit_logs a
                 where a.created_at > now() - (%s || ' hours')::interval

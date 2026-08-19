@@ -35,12 +35,12 @@ _recent: dict[str, float] = {}
 _recent_lock = threading.Lock()
 
 
-def _is_repeat(action, user_id, ip) -> bool:
+def _is_repeat(action, who) -> bool:
     """True when this visitor already logged `action` inside its collapse window."""
     window = _COLLAPSE.get(action)
     if not window:
         return False
-    key = f"{action}:{user_id or ip or 'anon'}"
+    key = f"{action}:{who or 'anon'}"
     now = time.monotonic()
     with _recent_lock:
         last = _recent.get(key)
@@ -84,6 +84,14 @@ def _is_staff(user_id) -> bool:
     with _roles_lock:
         _roles[key] = (staff, now)
     return staff
+
+
+def _visitor(request):
+    """The browser's anonymous id, set by the middleware in main.py. Falls back to
+    None, in which case callers use the IP as before."""
+    if request is None:
+        return None
+    return getattr(getattr(request, "state", None), "visitor", None)
 
 
 def _api(request):
@@ -156,7 +164,10 @@ def traffic_source(request):
 
 def log_action(*, user_id=None, action, detail=None, request=None):
     ip = _client_ip(request)
-    if _is_repeat(action, user_id, ip):
+    visitor = _visitor(request)
+    # one browser is one visitor; the address is only a fallback, since a household
+    # or an office all share one
+    if _is_repeat(action, user_id or visitor or ip):
         return
     page = _page(request)
     api = _api(request)
@@ -167,9 +178,9 @@ def log_action(*, user_id=None, action, detail=None, request=None):
             if _is_staff(user_id):
                 return   # the shop's own actions are not customer activity
             execute(
-                """insert into audit_logs (user_id, action, detail, ip, page, api)
-                   values (%s, %s, %s::jsonb, %s, %s, %s)""",
-                [user_id, action, payload, ip, page, api],
+                """insert into audit_logs (user_id, action, detail, ip, page, api, visitor)
+                   values (%s, %s, %s::jsonb, %s, %s, %s, %s)""",
+                [user_id, action, payload, ip, page, api, visitor],
             )
         except Exception as e:  # never let auditing break a request
             print("[audit]", e)

@@ -163,6 +163,10 @@ alter table audit_logs add column if not exists page text;
 -- the API call that recorded it ("POST /api/orders"), which is the action the
 -- customer actually took — the page is only where they were standing at the time
 alter table audit_logs add column if not exists api text;
+-- An anonymous per-browser id (see the vid cookie in main.py). Counting guests by IP
+-- made a household or an office look like one person; this separates them, and keeps
+-- one person on a phone and a laptop as the two visits they are.
+alter table audit_logs add column if not exists visitor text;
 
 -- ---------- signup_verifications (pending signups awaiting email+phone codes)
 create table if not exists signup_verifications (

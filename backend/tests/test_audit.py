@@ -142,3 +142,61 @@ def test_a_bare_click_id_still_names_the_network():
 def test_a_direct_visit_has_no_source():
     assert audit.traffic_source(_req("/")) is None
     assert audit.traffic_source(None) is None
+
+# --- telling visitors apart --------------------------------------------------
+def test_two_browsers_behind_one_address_are_two_visitors(monkeypatch):
+    """Counting guests by IP made a household or an office look like one person."""
+    rows = []
+    monkeypatch.setattr(audit, "execute", lambda sql, params=None: rows.append(params))
+    monkeypatch.setattr(audit.threading, "Thread",
+                        lambda target, daemon=None: type("T", (), {"start": staticmethod(target)})())
+    audit._recent.clear()
+
+    def visitor(vid):
+        return type("R", (), {
+            "method": "GET", "url": type("U", (), {"path": "/api/products"})(),
+            "headers": {}, "client": type("C", (), {"host": "9.9.9.9"})(),
+            "state": type("S", (), {"visitor": vid})(),
+        })()
+
+    audit.log_action(action="visit", request=visitor("a" * 32))
+    audit.log_action(action="visit", request=visitor("b" * 32))   # same wifi, other browser
+    audit.log_action(action="visit", request=visitor("a" * 32))   # the first one again
+    assert len(rows) == 2, "each browser counts once; the repeat still collapses"
+    assert [r[-1] for r in rows] == ["a" * 32, "b" * 32], "the id is stored on the row"
+
+
+def test_the_address_is_still_the_fallback(monkeypatch):
+    """Requests without the cookie (or from before it existed) keep working."""
+    rows = []
+    monkeypatch.setattr(audit, "execute", lambda sql, params=None: rows.append(params))
+    monkeypatch.setattr(audit.threading, "Thread",
+                        lambda target, daemon=None: type("T", (), {"start": staticmethod(target)})())
+    audit._recent.clear()
+    audit.log_action(action="visit", request=None)
+    assert len(rows) == 1 and rows[0][-1] is None
+
+
+def test_the_cookie_is_first_party_and_carries_nothing(app, client):
+    """A random id, http-only, same-site — no third party sees it and no script
+    needs it. It must not be readable as anything about the person."""
+    res = client.get("/api/health")
+    cookie = res.headers.get("set-cookie", "")
+    assert "vid=" in cookie
+    value = cookie.split("vid=")[1].split(";")[0]
+    assert len(value) == 32 and all(c in "0123456789abcdef" for c in value)
+    assert "httponly" in cookie.lower() and "samesite=lax" in cookie.lower().replace(" ", "")
+
+
+def test_an_existing_id_is_reused_not_replaced(client):
+    first = client.get("/api/health").headers.get("set-cookie", "")
+    value = first.split("vid=")[1].split(";")[0]
+    again = client.get("/api/health", cookies={"vid": value})
+    assert "vid=" not in again.headers.get("set-cookie", ""), "a returning browser keeps its id"
+
+
+def test_a_forged_id_is_replaced(client):
+    """The value is only ever used to group rows, so anything malformed is rejected
+    rather than stored."""
+    res = client.get("/api/health", cookies={"vid": "../../etc/passwd"})
+    assert "vid=" in res.headers.get("set-cookie", ""), "a bad value gets a fresh id"
