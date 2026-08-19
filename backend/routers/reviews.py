@@ -129,7 +129,7 @@ def my_reviews(user=Depends(current_user)):
 # POST /api/reviews — add a review. Always lands as 'pending'.
 @router.post("")
 def submit_review(request: Request, response: Response, user=Depends(current_user), payload: dict = Body(default={})):
-    rate_limit(request, bucket="review", limit=6, window=60)
+    rate_limit(request, bucket="review", limit=20, window=60, key=user["id"])
     rating, body, city = _clean(payload)
     image_url, thumb_url = _clean_image(payload.get("image"))
     row = fetch_one(
@@ -151,7 +151,7 @@ def submit_review(request: Request, response: Response, user=Depends(current_use
 @router.put("/{rid}")
 def update_own_review(rid: str, request: Request, user=Depends(current_user), payload: dict = Body(default={})):
     rid = _as_uuid(rid)
-    rate_limit(request, bucket="review", limit=6, window=60)
+    rate_limit(request, bucket="review", limit=20, window=60, key=user["id"])
     rating, body, city = _clean(payload)
     image_url, thumb_url = _clean_image(payload.get("image"))
     # scoped to the caller: editing someone else's review 404s rather than 403s, so

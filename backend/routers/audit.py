@@ -138,7 +138,7 @@ def client_event(request: Request, user=Depends(optional_user), payload: dict = 
     event = str((payload or {}).get("event") or "")
     if event not in CLIENT_EVENTS:
         return {"ok": False}
-    rate_limit(request, bucket="audit_event", limit=30, window=60)
+    rate_limit(request, bucket="audit_event", limit=30, window=60, key=(user or {}).get("id"))
     detail = payload.get("detail") if isinstance(payload.get("detail"), dict) else None
     log_action(user_id=(user or {}).get("id"), action=event,
                detail={k: v for k, v in (detail or {}).items()
