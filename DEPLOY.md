@@ -64,6 +64,19 @@ crontab -e                              # then add:
 # 0 3 * * * cd /root/app && ./scripts/backup.sh
 ```
 
+## 8b. Housekeeping (optional)
+Two tables grow forever: the customer activity log, and abandoned signups (which hold
+the password hash the person typed). `python migrate.py` prunes both on every deploy,
+so this is only needed if you deploy rarely:
+```bash
+crontab -e                              # then add, after the backup line:
+# 30 3 * * * cd /root/app && docker compose -f docker-compose.prod.yml exec -T api python maintenance.py
+```
+Activity is kept 90 days by default. To change it, set `AUDIT_RETENTION_DAYS` in
+`.env` (minimum 7 — a typo can shorten the window, never empty the table). Note the
+dashboard's "most opened products" and "where visitors come from" panels read those
+same rows, so they can only look back as far as the window.
+
 ## Push to GitHub (from your Mac, one time)
 1. Create a token: GitHub → Settings → Developer settings → **Fine-grained tokens**
    → Generate → repo access: only **kanaan** → Permissions: **Contents = Read and write**.

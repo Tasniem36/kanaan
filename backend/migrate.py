@@ -12,6 +12,7 @@ from psycopg.types.json import Json
 from db import pool
 from security import hash_password
 from media import save_image, make_thumb, is_data_url
+from maintenance import prune
 from routers.orders import new_ref
 
 
@@ -88,6 +89,12 @@ def main():
                 [email.lower().strip(), hash_password(password)],
             )
             print(f"✓ manager account ready: {email}")
+
+    # Housekeeping last, on its own connection: the tables that grow forever get
+    # trimmed on every deploy even if nobody sets up the nightly cron.
+    for table, removed in prune().items():
+        if removed:
+            print(f"✓ pruned {removed} row(s) from {table}")
     print("Migration complete.")
 
 
