@@ -92,7 +92,7 @@ def main():
 
     # Housekeeping last, on its own connection: the tables that grow forever get
     # trimmed on every deploy even if nobody sets up the nightly cron.
-    for table, removed in prune().items():
+    for table, removed in prune(apply=True).items():
         if removed:
             print(f"✓ pruned {removed} row(s) from {table}")
     print("Migration complete.")

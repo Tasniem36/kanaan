@@ -65,13 +65,14 @@ crontab -e                              # then add:
 ```
 
 ## 8b. Housekeeping (optional)
-Two tables grow forever: the customer activity log, and abandoned signups (which hold
-the password hash the person typed). `python migrate.py` prunes both on every deploy,
+The customer activity log grows forever. `python migrate.py` trims it on every deploy,
 so this is only needed if you deploy rarely:
 ```bash
 crontab -e                              # then add, after the backup line:
-# 30 3 * * * cd /root/app && docker compose -f docker-compose.prod.yml exec -T api python maintenance.py
+# 30 3 * * * cd /root/app && docker compose -f docker-compose.prod.yml exec -T api python maintenance.py --apply
 ```
+Without `--apply` it only reports what it would remove, which is the safe way to check
+it. It never touches any other table.
 Activity is kept 90 days by default. To change it, set `AUDIT_RETENTION_DAYS` in
 `.env` (minimum 7 — a typo can shorten the window, never empty the table). Note the
 dashboard's "most opened products" and "where visitors come from" panels read those
