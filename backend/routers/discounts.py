@@ -1,9 +1,10 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Response
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response
 from psycopg import errors as pg_errors
 
 from db import fetch_all, fetch_one
+from audit import log_action
 from security import current_user, require_manager
 
 router = APIRouter()
@@ -30,10 +31,14 @@ def evaluate_code(run, code, user_id, subtotal):
 
 
 @router.post("/validate")
-def validate(user=Depends(current_user), payload: dict = Body(default={})):
+def validate(request: Request, user=Depends(current_user), payload: dict = Body(default={})):
     r = evaluate_code(lambda sql, p: fetch_all(sql, p), payload.get("code"),
                       user["id"], float(payload.get("subtotal") or 0))
     if r.get("error"):
+        # a code that doesn't work is a customer at the checkout expecting a discount
+        log_action(user_id=user["id"], action="promo_invalid",
+                   detail={"code": str(payload.get("code") or "")[:40], "reason": r["error"]},
+                   request=request)
         raise HTTPException(400, r["error"])
     return {"valid": True, "percent": r["percent"], "discount": r["discount"], "code": r["dc"]["code"]}
 

@@ -145,6 +145,16 @@ async function send() {
   finally { sending.value = false }
 }
 
+// a manager asking (from the follow-up list) to talk to one customer
+watch(() => inbox.openThreadSignal, async () => {
+  const who = inbox.openThreadFor
+  if (!who?.user_id) return
+  open.value = true
+  tab.value = 'msg'
+  await inbox.fetchThreads()
+  await openThread(inbox.threads.find((t) => t.user_id === who.user_id) || who)
+})
+
 async function openThread(th) {
   const { messages } = await inbox.fetchThread(th.user_id)
   threadMsgs.value = messages

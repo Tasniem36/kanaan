@@ -294,6 +294,7 @@ export default { name: 'HomeView' }
 import { ref, reactive, computed, watch, onMounted, onActivated, nextTick } from 'vue'
 import { RouterLink, useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { api } from '../services/api'
 import { useCartStore } from '../stores/cart'
 import { useAuthStore } from '../stores/auth'
 import { useOrdersStore } from '../stores/orders'
@@ -482,6 +483,16 @@ function toTop() {
   scrollTo({ top: 0, behavior: 'smooth' })
 }
 
+// Tells the dashboard the checkout form was opened. Against the orders actually
+// placed, that's the drop-off rate — the one part of the funnel the server can't see
+// on its own. Fire-and-forget: this must never delay or break checkout.
+function reportCheckoutOpened() {
+  api('/audit/event', {
+    method: 'POST',
+    body: { event: 'checkout_opened', detail: { items: cart.count, total: finalTotal.value } },
+  }).catch(() => {})
+}
+
 async function openCheckout() {
   if (!cart.list.length) return
   openCart.value = false
@@ -503,10 +514,12 @@ async function openCheckout() {
     }
     // they type the same delivery details plus an e-mail, and get a tracking link
     // instead of an order history. No saved addresses, so go straight to the form.
+    reportCheckoutOpened()
     newAddress.value = true
     checkoutOpen.value = true
     return
   }
+  reportCheckoutOpened()
   co.name = co.name || auth.user.full_name || ''
   co.phone = co.phone || auth.user.phone || ''
   await addresses.fetch().catch(() => {})

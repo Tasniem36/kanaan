@@ -152,6 +152,7 @@ def register_verify(request: Request, payload: dict = Body(default={})):
         raise HTTPException(400, "The codes have expired — please resend")
     if v["attempts"] >= 8:
         execute("delete from signup_verifications where id = %s", [vid])
+        log_action(action="verify_failed", detail={"email": v["email"], "reason": "too_many"}, request=request)
         raise HTTPException(429, "Too many attempts — please start again")
     execute("update signup_verifications set attempts = attempts + 1 where id = %s", [vid])
 
@@ -160,6 +161,11 @@ def register_verify(request: Request, payload: dict = Body(default={})):
     execute("update signup_verifications set email_ok = %s, phone_ok = %s where id = %s",
             [email_ok, phone_ok, vid])
     if not (email_ok and phone_ok):
+        # A signup stalls here more than anywhere else — a code that never arrived,
+        # or the wrong one typed. Which channel failed is the useful part.
+        log_action(action="verify_failed",
+                   detail={"email": v["email"], "email_ok": email_ok, "phone_ok": phone_ok,
+                           "attempt": v["attempts"] + 1}, request=request)
         return {"verified": False, "email_ok": email_ok, "phone_ok": phone_ok}
 
     # One creation path for both flows (this one and the no-verification-channel
@@ -200,6 +206,10 @@ def login(request: Request, payload: dict = Body(default={})):
         raise HTTPException(400, "Email and password are required")
     user = fetch_one("select * from users where email = %s", [email])
     if not user or not verify_password(password, user["password_hash"]):
+        # Recorded so the dashboard can show who is locked out. `known` separates a
+        # customer mistyping their own password from an address with no account.
+        log_action(user_id=(user or {}).get("id"), action="login_failed",
+                   detail={"email": email, "known": bool(user)}, request=request)
         raise HTTPException(401, "Invalid login credentials")
     log_action(user_id=user["id"], action="login", request=request)
     return {"token": sign_token(user), "user": public_user(user)}

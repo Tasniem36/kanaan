@@ -16,6 +16,47 @@
       <button class="a-btn ghost" @click="clearFilter">{{ t('manager.clearFilter') }}</button>
     </div>
 
+    <!-- Customers worth chasing: repeated failures, or a checkout they walked away
+         from. The message button opens their thread in the bell, so reaching them is
+         one tap from seeing them. -->
+    <div v-if="struggling.length || funnel.opened" class="panel warn">
+      <h2>
+        {{ t('manager.stuckTitle') }}
+        <span v-if="funnel.opened" class="a-muted drop">{{ t('manager.dropOff', dropOff) }}</span>
+      </h2>
+      <p v-if="!struggling.length" class="a-muted">{{ t('manager.stuckNone') }}</p>
+      <ul v-else class="stuck-list">
+        <li v-for="c in struggling" :key="c.who">
+          <div class="stuck-who">
+            <b>{{ c.full_name || c.email || t('manager.guestVisitor') }}</b>
+            <span v-if="c.email" class="a-muted" dir="ltr">{{ c.email }}</span>
+          </div>
+          <div class="stuck-why">
+            <span v-for="k in c.kinds" :key="k" class="a-pill pill-bad">{{ actionLabel(k) }}</span>
+            <span v-if="c.abandoned" class="a-pill pill-warn">{{ t('manager.abandonedCheckout') }}</span>
+          </div>
+          <div class="stuck-acts">
+            <button v-if="c.user_id" class="a-btn" @click="message(c)">{{ t('manager.messageThem') }}</button>
+            <a v-if="c.phone" class="a-btn ghost" :href="`https://wa.me/${c.phone.replace(/\D/g, '')}`" target="_blank" rel="noopener">{{ t('footer.whatsapp') }}</a>
+          </div>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Where visitors came from, off the campaign tags on the landing URL -->
+    <div v-if="sources.length" class="panel">
+      <h2>{{ t('manager.sourcesTitle') }}</h2>
+      <ul class="src-list">
+        <li v-for="(r, i) in sources" :key="i">
+          <span class="src-name">
+            {{ r.source ? sourceLabel(r) : t('manager.sourceDirect') }}
+            <small v-if="r.campaign" class="a-muted" dir="ltr">{{ r.campaign }}</small>
+          </span>
+          <span class="src-count">{{ t('manager.visitsCount', { n: r.visits, v: r.visitors }) }}</span>
+        </li>
+      </ul>
+    </div>
+
     <!-- Most-opened products (from the product_view trail; honours the date range) -->
     <div v-if="topProducts.length" class="top-products">
       <h2>{{ t('manager.topProducts') }}</h2>
@@ -70,11 +111,29 @@ import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '../../services/api'
 import { EMIRATES } from '../../utils/delivery'
+import { useInboxStore } from '../../stores/inbox'
 import Loader from '../../components/Loader.vue'
 
 const { t, te, locale } = useI18n()
 const logs = ref([])
 const topProducts = ref([])
+const struggling = ref([])
+const sources = ref([])
+const funnel = ref({ opened: 0, ordered: 0 })
+
+// share of opened checkouts that never became an order
+const dropOff = computed(() => {
+  const { opened, ordered } = funnel.value
+  const lost = Math.max(0, opened - ordered)
+  return { n: lost, pct: opened ? Math.round((lost / opened) * 100) : 0 }
+})
+
+const sourceLabel = (r) => [r.source, r.medium].filter(Boolean).join(' · ')
+
+// open this customer's thread in the notification bell
+function message(c) {
+  inbox.requestThread({ user_id: c.user_id, full_name: c.full_name, email: c.email })
+}
 const geo = ref({})   // ip → "City, Country" (filled in after the rows load)
 const loading = ref(false)
 const filters = reactive({ email: '', action: '', from: '', to: '', location: '' })
@@ -138,10 +197,13 @@ function roleClass(a) {
   return a.role === 'manager' ? 'pill-warn' : 'pill-ok'
 }
 
+const FAILURES = ['login_failed', 'verify_failed', 'promo_invalid', 'checkout_failed', 'out_of_stock']
+
 function pillClass(action) {
+  if (FAILURES.includes(action)) return 'pill-bad'   // something the customer hit a wall on
   if (action === 'payment_confirmed') return 'pill-ok'
   if (action === 'order_placed') return 'pill-warn'
-  if (action === 'visit' || action === 'product_view') return ''
+  if (action === 'visit' || action === 'product_view' || action === 'checkout_opened') return ''
   return 'pill-ok'
 }
 
@@ -152,6 +214,14 @@ function detailText(a) {
   if (a.action === 'payment_confirmed') return `#${String(d.order_id || '').slice(0, 8)} · ${d.total}`
   if (a.action === 'product_view') return d.name || ''
   if (a.action === 'address_added') return d.city || ''
+  if (a.action === 'visit' && d.from) return [d.from.source, d.from.medium].filter(Boolean).join(' · ')
+  if (a.action === 'checkout_opened') return d.total ? `${d.items || ''} · ${d.total}` : ''
+  if (a.action === 'login_failed') return d.known ? t('manager.failWrongPassword') : t('manager.failNoAccount')
+  if (a.action === 'verify_failed') return d.reason === 'too_many' ? t('manager.failTooMany')
+    : [d.email_ok ? null : t('checkout.email'), d.phone_ok ? null : t('checkout.phone')].filter(Boolean).join(' · ')
+  if (a.action === 'promo_invalid') return `${d.code || ''} — ${d.reason || ''}`
+  if (a.action === 'out_of_stock') return `${d.name || ''} · ${t('manager.wantedLeft', { w: d.wanted, l: d.left })}`
+  if (a.action === 'checkout_failed') return t(`manager.fail_${d.reason || 'other'}`)
   return ''
 }
 
@@ -181,6 +251,12 @@ async function loadTopProducts() {
   try {
     const { products } = await api('/audit/top-products' + (qs.toString() ? `?${qs}` : ''))
     topProducts.value = products || []
+    const { sources: src } = await api('/audit/sources' + (qs.toString() ? `?${qs}` : ''))
+    sources.value = src || []
+    // follow-ups are about right now, so they ignore the date filter
+    const { customers, funnel: f } = await api('/audit/struggling')
+    struggling.value = customers || []
+    funnel.value = f || { opened: 0, ordered: 0 }
   } catch { topProducts.value = [] }
 }
 
@@ -228,6 +304,30 @@ h1 { font-family: 'Amiri', serif; color: var(--green); font-size: 1.9rem; margin
 .top-name:hover { color: var(--gold); }
 .top-count { color: var(--muted); font-size: .85rem; white-space: nowrap; }
 
+.panel {
+  background: var(--paper); border: 1px solid rgba(60,74,39,.14);
+  border-radius: 16px; padding: 1rem 1.1rem; margin-bottom: 1.1rem;
+}
+.panel.warn { border-color: rgba(184,144,47,.5); background: rgba(184,144,47,.05); }
+.panel h2 { font-size: 1rem; color: var(--green); margin-bottom: .6rem; display: flex; gap: .6rem; align-items: baseline; flex-wrap: wrap; }
+.panel .drop { font-size: .8rem; font-weight: 500; }
+.stuck-list, .src-list { list-style: none; display: grid; gap: .5rem; }
+.stuck-list li {
+  display: flex; gap: .7rem; align-items: center; flex-wrap: wrap;
+  padding: .5rem .6rem; background: var(--paper); border-radius: 12px;
+  border: 1px solid rgba(60,74,39,.1);
+}
+.stuck-who { min-width: 12rem; }
+.stuck-who b { display: block; color: var(--green); font-size: .9rem; }
+.stuck-who span { font-size: .76rem; }
+.stuck-why { display: flex; gap: .3rem; flex-wrap: wrap; flex: 1; }
+.stuck-acts { display: flex; gap: .4rem; }
+.stuck-acts .a-btn { font-size: .8rem; padding: .35rem .7rem; }
+.src-list li { display: flex; justify-content: space-between; gap: .8rem; font-size: .88rem; padding: .2rem 0; }
+.src-name { color: var(--green); font-weight: 700; }
+.src-name small { font-weight: 500; margin-inline-start: .4rem; font-size: .74rem; }
+.src-count { color: var(--muted); font-size: .82rem; white-space: nowrap; }
+.a-pill.pill-bad { background: rgba(156,43,43,.12); color: var(--red); }
 /* keep the endpoint column compact: one line, truncated with … */
 .page-cell { max-width: 210px; }
 .api {

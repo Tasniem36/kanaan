@@ -11,11 +11,20 @@ export const useInboxStore = defineStore('inbox', {
     messages: [],   // the signed-in customer's own thread
     threads: [],    // manager: list of customer threads
     openChatSignal: 0,  // bumped to ask the bell to open straight to the chat tab
+    // manager: ask the bell to open one customer's thread (from the follow-up list)
+    openThreadFor: null,
+    openThreadSignal: 0,
     _timer: null,
   }),
   actions: {
     // ask the NotificationBell to open on the messages/chat tab (e.g. from "Contact us")
     requestChat() { this.openChatSignal++ },
+    // ask it to open straight into this customer's thread — the follow-up list in the
+    // audit page uses this, so reaching a stuck customer is one tap from seeing them
+    requestThread(customer) {
+      this.openThreadFor = customer
+      this.openThreadSignal++
+    },
     async fetchNotifications() {
       try {
         const { notifications, unread } = await api('/notifications')

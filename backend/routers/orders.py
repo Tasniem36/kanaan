@@ -109,6 +109,13 @@ def _send_order_email(order, email, request):
         print("[order-email]", e)
 
 
+def _checkout_failed(request, user, reason, **extra):
+    """Record a checkout that didn't go through. These are the moments a customer
+    gives up, and they're invisible unless written down."""
+    log_action(user_id=(user or {}).get("id"), action="checkout_failed",
+               detail={"reason": reason, **extra}, request=request)
+
+
 def _guest_account(run, email, full_name, phone, request):
     """The account a guest order hangs off.
 
@@ -142,9 +149,11 @@ def create_order(request: Request, user=Depends(optional_user), payload: dict = 
     city, street, house = payload.get("city"), payload.get("street"), payload.get("house")
     payment_method = "ziina" if payload.get("payment_method") == "ziina" else "cod"
     if not customer_name or not payload.get("phone") or not city or not street or not house:
+        _checkout_failed(request, user, "missing_fields")
         raise HTTPException(400, "Please complete the required fields")
     phone_norm = normalize_uae_phone(payload.get("phone"))
     if not phone_norm:
+        _checkout_failed(request, user, "bad_phone")
         raise HTTPException(400, "Invalid UAE phone number")
     guest_email = None
     if not user:
@@ -152,11 +161,13 @@ def create_order(request: Request, user=Depends(optional_user), payload: dict = 
         # settings). This is the backstop: the storefront also checks the flag before
         # it opens the form, and sends the shopper to sign in instead.
         if not get_checkout_config()["guest_allowed"]:
+            _checkout_failed(request, user, "sign_in_required")
             raise HTTPException(401, "Please sign in to place your order")
         # The e-mail is the second way to reach them and the key their order history
         # hangs off, so it has to be real-looking.
         guest_email = (payload.get("email") or "").strip().lower()
         if not is_email(guest_email):
+            _checkout_failed(request, user, "bad_email")
             raise HTTPException(400, "A valid e-mail address is required")
         # ordering reserves stock, so throttle it now that no login stands in the way
         rate_limit(request, bucket="guest_order", limit=6, window=60)
@@ -203,6 +214,10 @@ def create_order(request: Request, user=Depends(optional_user), payload: dict = 
             if not p:
                 raise HTTPException(400, "Product not found")
             if p["stock"] < qty:
+                # its own action: a sale lost to the shop's stock, not to the customer
+                log_action(user_id=(user or {}).get("id"), action="out_of_stock",
+                           detail={"product_id": str(p["id"]), "name": p["name"],
+                                   "wanted": qty, "left": p["stock"]}, request=request)
                 raise HTTPException(409, f"Not enough stock for “{p['name']}”")
             total += float(p["price"]) * qty
             lines.append({"product_id": str(p["id"]), "name": p["name"], "price": float(p["price"]), "qty": qty})
@@ -211,6 +226,9 @@ def create_order(request: Request, user=Depends(optional_user), payload: dict = 
         if payload.get("code"):
             r = evaluate_code(run, payload["code"], user_id, total)
             if r.get("error"):
+                log_action(user_id=user_id, action="promo_invalid",
+                           detail={"code": str(payload["code"])[:40], "reason": r["error"],
+                                   "at": "checkout"}, request=request)
                 raise HTTPException(400, r["error"])
             discount, discount_code = r["discount"], r["dc"]["code"]
         # delivery fee (recomputed server-side from the delivery city + subtotal)
