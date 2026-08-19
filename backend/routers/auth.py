@@ -109,7 +109,15 @@ def register_start(request: Request, payload: dict = Body(default={})):
         return _create_user(email, pw_hash, payload.get("full_name"), phone_norm, request)
 
     ec, pc = _code(), _code()
-    execute("delete from signup_verifications where lower(email) = %s", [email])
+    # A signup already under way for this address is LEFT ALONE: whoever started
+    # first keeps a working code. Verification is looked up by row id, so several
+    # attempts can be live at once, and whichever code gets entered decides which
+    # attempt — and so which password — wins.
+    #
+    # Only attempts that have already expired are cleared, and only for this same
+    # address. That keeps the table from growing forever without any sweep that could
+    # reach a live signup.
+    execute("delete from signup_verifications where lower(email) = %s and expires_at < now()", [email])
     row = fetch_one(
         """insert into signup_verifications
              (email, phone, full_name, password_hash, email_code, phone_code, email_ok, phone_ok, expires_at)

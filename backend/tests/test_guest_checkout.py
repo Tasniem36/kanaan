@@ -395,3 +395,38 @@ def test_a_taken_email_does_discard_the_pending_signup(client, monkeypatch):
                        json={"verification_id": "v-1", "email_code": "111111",
                              "phone_code": "222222"}).status_code == 409
     assert deleted == [["v-1"]]
+
+
+# --- two people, one e-mail address -------------------------------------------
+def test_a_second_signup_does_not_break_the_first(client, monkeypatch):
+    """Whoever started first keeps a working code. Several attempts may be live at
+    once; verification is by row id, so the code entered decides which one wins."""
+    statements = []
+    monkeypatch.setattr(auth, "execute", lambda sql, params=None: statements.append(
+        (" ".join(sql.split()), list(params or []))))
+    monkeypatch.setattr(auth, "fetch_one", lambda sql, params=None:
+                        None if "from users" in sql else {"id": "v-2"})
+    monkeypatch.setattr(auth, "send_email", lambda *a, **k: True)
+    monkeypatch.setattr(auth, "send_sms", lambda *a, **k: True)
+    res = client.post("/api/auth/register", json={
+        "email": "shared@example.com", "password": "Abcdef12", "phone": "0501234567"})
+    assert res.status_code == 200
+    deletes = [(sql, p) for sql, p in statements if sql.startswith("delete")]
+    assert len(deletes) == 1
+    sql, params = deletes[0]
+    assert "expires_at < now()" in sql, "a live attempt must survive a second signup"
+    assert params == ["shared@example.com"], "and only this address is touched"
+
+
+def test_expired_attempts_for_that_address_are_cleared(client, monkeypatch):
+    """The flow tidies after itself, so the table can't grow forever."""
+    statements = []
+    monkeypatch.setattr(auth, "execute", lambda sql, params=None: statements.append(" ".join(sql.split())))
+    monkeypatch.setattr(auth, "fetch_one", lambda sql, params=None:
+                        None if "from users" in sql else {"id": "v-2"})
+    monkeypatch.setattr(auth, "send_email", lambda *a, **k: True)
+    monkeypatch.setattr(auth, "send_sms", lambda *a, **k: True)
+    client.post("/api/auth/register", json={
+        "email": "shared@example.com", "password": "Abcdef12", "phone": "0501234567"})
+    assert any("delete from signup_verifications where lower(email) = %s and expires_at < now()" in s
+               for s in statements)
