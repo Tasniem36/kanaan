@@ -115,6 +115,7 @@ import { useInboxStore } from '../../stores/inbox'
 import Loader from '../../components/Loader.vue'
 
 const { t, te, locale } = useI18n()
+const inbox = useInboxStore()
 const logs = ref([])
 const topProducts = ref([])
 const struggling = ref([])
