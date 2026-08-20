@@ -52,6 +52,18 @@ export const useAuthStore = defineStore('auth', {
       const { token, user } = await api('/auth/login', { method: 'POST', body: { email, password }, auth: false })
       this.setSession(token, user)
     },
+    // forgotten password, step 1 — ask for a code. Always resolves the same way
+    // whether or not the address has an account, so the UI can't leak that either.
+    async forgotPassword(email) {
+      return api('/auth/password/forgot', { method: 'POST', body: { email }, auth: false })
+    },
+    // step 2 — spend the code on a new password; a success signs them straight in
+    async resetPassword(email, code, password) {
+      const { token, user } = await api('/auth/password/reset', {
+        method: 'POST', auth: false, body: { email, code, password },
+      })
+      this.setSession(token, user)
+    },
     // update the signed-in customer's own name/phone (email is not editable)
     async updateProfile(patch) {
       const { user } = await api('/auth/me', { method: 'PATCH', body: patch })

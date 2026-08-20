@@ -15,6 +15,9 @@ router = APIRouter()
 
 _IS_PROD = os.getenv("ENV", "").lower() in ("prod", "production")
 VERIFY_TTL_MIN = 10
+# Longer than a signup code: the customer is not sitting on the page waiting for it,
+# they go looking through their inbox (and often their spam folder) for it.
+RESET_TTL_MIN = 20
 WEAK_PW_MSG = "Weak password: at least 8 characters with an uppercase letter, a lowercase letter, and a number"
 
 
@@ -227,6 +230,100 @@ def login(request: Request, payload: dict = Body(default={})):
                    detail={"email": email, "known": bool(user)}, request=request)
         raise HTTPException(401, "Invalid login credentials")
     log_action(user_id=user["id"], action="login", request=request)
+    return {"token": sign_token(user), "user": public_user(user)}
+
+
+# --- forgotten password -------------------------------------------------------
+# Verified by e-mail alone, deliberately. The address IS the login identity and it
+# was verified at signup, so control of it is the proof we need; also asking for the
+# SMS code would lock out anyone who has since changed their number — the customer
+# most likely to be here in the first place.
+
+# Step 1: send a code to the address, if it has an account.
+@router.post("/password/forgot")
+def password_forgot(request: Request, payload: dict = Body(default={})):
+    rate_limit(request, bucket="password_forgot", limit=5, window=60)
+    email = (payload.get("email") or "").strip().lower()
+    if not is_email(email):
+        raise HTTPException(400, "Invalid email address")
+    if _IS_PROD and not email_configured():
+        # No way to send anything. Better to say so than to promise a code that will
+        # never arrive and leave the customer waiting for it.
+        raise HTTPException(503, "Password reset is unavailable right now — please contact us")
+
+    # A guest-checkout row (empty password_hash) is included on purpose: proving the
+    # address lets that customer set a password and keep the orders already on it,
+    # the same claim /register makes — without having to guess that registering again
+    # is what does it.
+    user = fetch_one("select id from users where email = %s", [email])
+    # The answer is the same either way: whether an address has an account here is
+    # not something a stranger gets to ask.
+    resp = {"sent": True}
+    if user:
+        code = _code()
+        # One live code per address. The newest request is the one in the customer's
+        # inbox, so older rows for the same address can only cause confusion — and
+        # clearing them is what stops this table from growing.
+        execute("delete from password_resets where lower(email) = %s", [email])
+        execute("""insert into password_resets (email, code_hash, expires_at)
+                   values (%s, %s, now() + %s * interval '1 minute')""",
+                [email, hash_password(code), RESET_TTL_MIN])
+        sent = send_email(
+            email, "إعادة تعيين كلمة المرور — دكّان كنعان",
+            f"مرحباً،\n\nرمز إعادة تعيين كلمة المرور في دكّان كنعان هو: {code}\n"
+            f"الرمز صالحٌ لمدة {RESET_TTL_MIN} دقيقة.\n\n"
+            "إن لم تطلب إعادة التعيين فتجاهل هذه الرسالة — كلمة مرورك لم تتغيّر.")
+        if not _IS_PROD:  # never echo a real reset code into production logs
+            if not sent:
+                print(f"[reset] EMAIL code for {email}: {code}")
+            resp["dev_code"] = code   # local testing without a mail provider
+    return resp
+
+
+# Step 2: check the code, then set the new password and sign them in.
+@router.post("/password/reset")
+def password_reset(request: Request, payload: dict = Body(default={})):
+    rate_limit(request, bucket="password_reset", limit=10, window=60)
+    email = (payload.get("email") or "").strip().lower()
+    code = (payload.get("code") or "").strip()
+    password = payload.get("password") or ""
+    if not email or not code:
+        raise HTTPException(400, "Email and code are required")
+    if len(password) > 200:
+        raise HTTPException(400, "Password is too long")
+    # Checked before the code is, so a customer who picks a weak password doesn't
+    # spend one of their attempts on it — and so this answer tells a stranger nothing.
+    if not is_strong_password(password):
+        raise HTTPException(400, WEAK_PW_MSG)
+
+    row = fetch_one("select * from password_resets where lower(email) = %s and expires_at > now()", [email])
+    if not row:
+        raise HTTPException(400, "This reset request has expired — please start again")
+    if row["attempts"] >= 8:
+        execute("delete from password_resets where id = %s", [row["id"]])
+        log_action(action="password_reset_failed", detail={"email": email, "reason": "too_many"}, request=request)
+        raise HTTPException(429, "Too many attempts — please start again")
+    execute("update password_resets set attempts = attempts + 1 where id = %s", [row["id"]])
+    if not verify_password(code, row["code_hash"]):
+        # Worth recording: a customer who can't get past this is locked out of their
+        # own account, and the shop can only help if it knows.
+        log_action(action="password_reset_failed",
+                   detail={"email": email, "attempt": row["attempts"] + 1}, request=request)
+        raise HTTPException(400, "The code is incorrect")
+
+    user = fetch_one(
+        "update users set password_hash = %s where email = %s returning id, email, full_name, phone, role",
+        [hash_password(password), email],
+    )
+    # No row matched: the account was removed between the two steps, so there is
+    # nothing left for this code to reset and it goes with it. A database that fails
+    # outright raises instead, leaving the row — and the customer can submit the same
+    # code again rather than starting over.
+    if not user:
+        execute("delete from password_resets where id = %s", [row["id"]])
+        raise HTTPException(400, "This reset request has expired — please start again")
+    execute("delete from password_resets where id = %s", [row["id"]])
+    log_action(user_id=user["id"], action="password_reset", request=request)
     return {"token": sign_token(user), "user": public_user(user)}
 
 

@@ -137,7 +137,7 @@ function message(c) {
 const geo = ref({})   // ip → "City, Country" (filled in after the rows load)
 const loading = ref(false)
 const filters = reactive({ email: '', action: '', from: '', to: '', location: '' })
-const actionOptions = ['login', 'register', 'order_placed', 'payment_confirmed', 'address_added', 'address_removed', 'product_view', 'visit']
+const actionOptions = ['login', 'register', 'password_reset', 'order_placed', 'payment_confirmed', 'address_added', 'address_removed', 'product_view', 'visit']
 
 const PAGE_SIZE = 30
 const page = ref(1)
@@ -197,7 +197,8 @@ function roleClass(a) {
   return a.role === 'manager' ? 'pill-warn' : 'pill-ok'
 }
 
-const FAILURES = ['login_failed', 'verify_failed', 'promo_invalid', 'checkout_failed', 'out_of_stock']
+const FAILURES = ['login_failed', 'verify_failed', 'password_reset_failed', 'promo_invalid',
+  'checkout_failed', 'out_of_stock']
 
 function pillClass(action) {
   if (FAILURES.includes(action)) return 'pill-bad'   // something the customer hit a wall on
@@ -219,6 +220,7 @@ function detailText(a) {
   if (a.action === 'login_failed') return d.known ? t('manager.failWrongPassword') : t('manager.failNoAccount')
   if (a.action === 'verify_failed') return d.reason === 'too_many' ? t('manager.failTooMany')
     : [d.email_ok ? null : t('checkout.email'), d.phone_ok ? null : t('checkout.phone')].filter(Boolean).join(' · ')
+  if (a.action === 'password_reset_failed') return d.reason === 'too_many' ? t('manager.failTooMany') : ''
   if (a.action === 'promo_invalid') return `${d.code || ''} — ${d.reason || ''}`
   if (a.action === 'out_of_stock') return `${d.name || ''} · ${t('manager.wantedLeft', { w: d.wanted, l: d.left })}`
   if (a.action === 'checkout_failed') return t(`manager.fail_${d.reason || 'other'}`)

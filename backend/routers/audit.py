@@ -16,8 +16,8 @@ CLIENT_EVENTS = {"checkout_opened"}
 
 # The failures that mean a customer is stuck. Kept in one place: the dashboard's
 # follow-up list and the drop-off figure both read from it.
-STRUGGLE_ACTIONS = ("login_failed", "verify_failed", "promo_invalid",
-                    "checkout_failed", "out_of_stock")
+STRUGGLE_ACTIONS = ("login_failed", "verify_failed", "password_reset_failed",
+                    "promo_invalid", "checkout_failed", "out_of_stock")
 
 router = APIRouter()
 

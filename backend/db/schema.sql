@@ -186,6 +186,22 @@ create table if not exists signup_verifications (
 );
 create index if not exists signup_verifications_email_idx on signup_verifications (lower(email));
 
+-- ---------- password_resets (a live code for a forgotten password) ----------
+-- The code is stored bcrypt-hashed rather than in the clear. A pending signup row
+-- above only finishes a signup somebody already started with a password they chose;
+-- this one is a key to an account that already exists, so a leaked table must not
+-- hand over working codes. At most one live row per address (see routers/auth.py),
+-- which is also what keeps this table from growing.
+create table if not exists password_resets (
+  id         uuid primary key default gen_random_uuid(),
+  email      text not null,
+  code_hash  text not null,
+  attempts   integer not null default 0,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists password_resets_email_idx on password_resets (lower(email));
+
 -- ---------- carts (server-side basket so it follows a customer across devices)
 create table if not exists carts (
   user_id    uuid primary key references users (id) on delete cascade,

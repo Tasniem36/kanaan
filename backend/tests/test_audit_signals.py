@@ -123,4 +123,5 @@ def test_the_follow_up_window_is_bounded(client, monkeypatch):
 def test_the_struggle_actions_are_defined_in_one_place():
     """The list drives both the follow-up query and the dashboard's red pills."""
     assert set(A.STRUGGLE_ACTIONS) == {
-        "login_failed", "verify_failed", "promo_invalid", "checkout_failed", "out_of_stock"}
+        "login_failed", "verify_failed", "password_reset_failed", "promo_invalid",
+        "checkout_failed", "out_of_stock"}

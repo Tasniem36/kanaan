@@ -320,6 +320,60 @@ def test_wishlist_is_scoped_per_customer(live_db):
     assert w.list_wishlist_ids(user={"id": U_MGR})["ids"] == [], "must not see another account's saves"
 
 
+# --- forgotten password -----------------------------------------------------
+@pytest.fixture
+def auth_mod(monkeypatch):
+    """routers.auth with the audit trail silenced.
+
+    log_action writes from a background thread, which would still be in flight when
+    the next test's `truncate ... cascade` asks for its lock — a deadlock, and one
+    that surfaces in whichever test came next rather than this one. The trail itself
+    is covered in test_audit_signals.py.
+    """
+    import routers.auth as auth
+    monkeypatch.setattr(auth, "log_action", lambda **k: None)
+    return auth
+
+
+def test_a_forgotten_password_round_trip(live_db, auth_mod):
+    """Every statement in the flow against real SQL: the code is written with a live
+    expiry, found again, spent, and the password on the account genuinely changes."""
+    auth = auth_mod
+    from db import fetch_all, fetch_one
+
+    code = auth.password_forgot(Req(), payload={"email": "c@x.com"})["dev_code"]
+    row = fetch_one("select * from password_resets where lower(email) = 'c@x.com'")
+    assert row["expires_at"] > datetime.datetime.now(datetime.timezone.utc)
+
+    out = auth.password_reset(Req(), payload={"email": "c@x.com", "code": code, "password": "NewPass12"})
+    assert out["user"]["email"] == "c@x.com" and out["token"]
+    stored = fetch_one("select password_hash from users where email = 'c@x.com'")["password_hash"]
+    assert auth.verify_password("NewPass12", stored), "the new password must actually work"
+    assert fetch_all("select 1 from password_resets") == [], "and the code is spent"
+
+
+def test_an_address_with_no_account_leaves_no_trace(live_db, auth_mod):
+    auth = auth_mod
+    from db import fetch_all
+
+    assert auth.password_forgot(Req(), payload={"email": "nobody@x.com"}) == {"sent": True}
+    assert fetch_all("select 1 from password_resets") == []
+
+
+def test_only_the_newest_reset_code_survives(live_db, auth_mod):
+    """Asking twice leaves one row, holding the code from the second e-mail."""
+    auth = auth_mod
+    from db import fetch_all, fetch_one
+
+    auth.password_forgot(Req(), payload={"email": "c@x.com"})
+    fresh = auth.password_forgot(Req(), payload={"email": "c@x.com"})["dev_code"]
+
+    assert len(fetch_all("select 1 from password_resets")) == 1
+    row = fetch_one("select code_hash from password_resets where lower(email) = 'c@x.com'")
+    assert auth.verify_password(fresh, row["code_hash"])
+    auth.password_reset(Req(), payload={"email": "c@x.com", "code": fresh, "password": "NewPass12"})
+
+
 # --- sitemap ----------------------------------------------------------------
 def test_sitemap_renders_from_the_live_catalogue(live_db):
     import routers.seo as seo

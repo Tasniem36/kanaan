@@ -10,6 +10,8 @@ vs. customers are enforced in middleware (`lib/auth.js`).
 | GET  | `/api/health` | public | health check |
 | POST | `/api/auth/register` | public | create customer account → `{ token, user }` |
 | POST | `/api/auth/login` | public | log in → `{ token, user }` |
+| POST | `/api/auth/password/forgot` | public | e-mail a reset code → `{ sent: true }`, the same answer whether or not the address has an account |
+| POST | `/api/auth/password/reset` | public | spend the code on a new password → `{ token, user }` |
 | GET  | `/api/auth/me` | auth | current user |
 | GET  | `/api/products` | public | list products (managers see inactive too) |
 | POST | `/api/products` | manager | create product |

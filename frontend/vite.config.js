@@ -10,7 +10,7 @@ export default defineConfig({
     // pages (/account, /manager/*) must never prerender — they read localStorage at
     // setup time and have no SEO value; dynamic pages (/product/:id, /category/:cat)
     // are data-driven with base64 images, so we don't bake them either.
-    includedRoutes: () => ['/', '/login', '/register'],
+    includedRoutes: () => ['/', '/login', '/register', '/forgot-password'],
     formatting: 'minify',
   },
   server: {

@@ -10,6 +10,9 @@
         <input class="a-input" type="email" v-model.trim="email" dir="ltr" required autocomplete="email">
         <label class="co-l">{{ t('auth.password') }}</label>
         <PasswordInput v-model="password" required autocomplete="current-password" />
+        <RouterLink class="auth-forgot" :to="{ name: 'forgot-password', query: $route.query }">
+          {{ t('auth.forgotPw') }}
+        </RouterLink>
         <p v-if="error" class="auth-err">{{ error }}</p>
         <button class="btn btn-green" style="width:100%;justify-content:center;margin-top:1rem" :disabled="busy">
           {{ busy ? '…' : t('auth.login') }}
@@ -64,6 +67,7 @@ async function submit() {
 .auth-card .a-muted { margin-bottom: .8rem; }
 .auth-card form { display: flex; flex-direction: column; }
 .auth-card .co-l { display: block; font-size: .85rem; font-weight: 600; color: var(--green); margin: 1rem 0 .4rem; }
+.auth-forgot { align-self: flex-end; margin-top: .5rem; font-size: .82rem; color: var(--green); text-decoration: underline; }
 .auth-err { color: var(--red, #9c2b2b); font-size: .85rem; margin-top: .7rem; }
 .auth-alt { text-align: center; margin-top: 1.6rem; font-size: .9rem; color: var(--ink); }
 .auth-alt a { color: var(--green); font-weight: 700; text-decoration: underline; }
