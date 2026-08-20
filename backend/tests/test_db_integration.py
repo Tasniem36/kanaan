@@ -374,6 +374,37 @@ def test_only_the_newest_reset_code_survives(live_db, auth_mod):
     auth.password_reset(Req(), payload={"email": "c@x.com", "code": fresh, "password": "NewPass12"})
 
 
+class Bearer:
+    """A request carrying nothing but a token, for the dependencies to resolve."""
+    def __init__(self, token):
+        self.headers = {"authorization": f"Bearer {token}"}
+
+
+def test_a_reset_retires_the_sessions_on_the_other_devices(live_db, auth_mod, monkeypatch):
+    """The whole guarantee against real SQL: the token from before a reset stops being
+    accepted, and the one the reset handed back goes on working."""
+    import security
+    import db as db_module
+
+    # conftest answers this read with "every account is current" so the rest of the
+    # suite needn't know about it; here the real column is the point.
+    monkeypatch.setattr(security, "fetch_one", db_module.fetch_one)
+
+    code = auth_mod.password_forgot(Req(), payload={"email": "c@x.com"})["dev_code"]
+    first = auth_mod.password_reset(
+        Req(), payload={"email": "c@x.com", "code": code, "password": "NewPass12"})["token"]
+    assert security.current_user(Bearer(first))["id"] == U_CUST
+
+    code = auth_mod.password_forgot(Req(), payload={"email": "c@x.com"})["dev_code"]
+    second = auth_mod.password_reset(
+        Req(), payload={"email": "c@x.com", "code": code, "password": "OtherPass34"})["token"]
+
+    with pytest.raises(security.HTTPException):
+        security.current_user(Bearer(first))
+    assert security.optional_user(Bearer(first)) is None, "nor as a guest-facing caller"
+    assert security.current_user(Bearer(second))["id"] == U_CUST
+
+
 # --- sitemap ----------------------------------------------------------------
 def test_sitemap_renders_from_the_live_catalogue(live_db):
     import routers.seo as seo

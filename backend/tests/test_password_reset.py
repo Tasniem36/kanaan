@@ -130,6 +130,22 @@ def test_the_right_code_sets_the_new_password_and_signs_them_in(client, db):
     assert auth.verify_password("NewPass12", update[0]), "the new password must actually work"
 
 
+def test_the_reset_signs_the_other_devices_out(client, db):
+    """The session the customer is resetting *because of* is the one that must die —
+    on a device they can't reach. The device doing the resetting stays signed in."""
+    import jwt
+    import security
+
+    db.rows = {"from password_resets": live_reset(),
+               "update users": {"id": "u1", "email": "her@example.com", "full_name": None,
+                                "phone": None, "role": "customer", "token_version": 7}}
+    token = _reset(client).json()["token"]
+
+    update = next(s for s in db.sql() if "update users set password_hash" in s)
+    assert "token_version = token_version + 1" in update
+    assert jwt.decode(token, security.SECRET, algorithms=["HS256"])["v"] == 7
+
+
 def test_a_spent_code_cannot_be_used_twice(client, db):
     db.rows = {"from password_resets": live_reset(),
                "update users": {"id": "u1", "email": "her@example.com", "full_name": None,

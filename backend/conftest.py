@@ -36,6 +36,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import main
+import security
 from security import current_user, optional_user, sign_token
 
 
@@ -62,6 +63,16 @@ def as_user(app):
         app.dependency_overrides[optional_user] = lambda: user
     yield _set
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(autouse=True)
+def _accounts_are_current(monkeypatch):
+    """Every Bearer token is checked against the account's token_version, which is a
+    real database read (see security._is_retired). These tests hand out tokens for
+    accounts that don't exist in any database, so the read is answered with "current"
+    by default. A test about retiring sessions patches it again with what it needs.
+    """
+    monkeypatch.setattr(security, "fetch_one", lambda sql, params=None: {"token_version": 0})
 
 
 @pytest.fixture(autouse=True)

@@ -33,6 +33,13 @@ create table if not exists users (
   created_at    timestamptz not null default now()
 );
 
+-- Which generation of sign-ins is still valid. Every token carries the number it
+-- was issued under; changing the password raises it, which retires the tokens on
+-- every other device at once (see security.py). Existing tokens predate the column
+-- and carry no number, so they match the 0 every account starts at — the deploy
+-- that adds this signs nobody out.
+alter table users add column if not exists token_version integer not null default 0;
+
 -- ---------- addresses (saved customer delivery locations) -------------------
 create table if not exists addresses (
   id         uuid primary key default gen_random_uuid(),

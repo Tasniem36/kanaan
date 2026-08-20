@@ -52,7 +52,7 @@ def _create_user(email, password_hash, full_name, phone, request):
                       full_name = coalesce(nullif(excluded.full_name, ''), users.full_name),
                       phone = coalesce(nullif(excluded.phone, ''), users.phone)
                 where coalesce(users.password_hash, '') = ''
-           returning id, email, full_name, phone, role""",
+           returning id, email, full_name, phone, role, token_version""",
         [email, password_hash, full_name, phone],
     )
     if not user:   # the row exists and already has a password — nothing to claim
@@ -311,8 +311,15 @@ def password_reset(request: Request, payload: dict = Body(default={})):
                    detail={"email": email, "attempt": row["attempts"] + 1}, request=request)
         raise HTTPException(400, "The code is incorrect")
 
+    # Raising token_version retires every token issued before now, so a password
+    # reset also signs out whoever else was already on this account — the thief the
+    # customer is resetting because of, on a device nobody can reach. The token
+    # returned below is stamped with the new number, so the one device doing the
+    # resetting stays signed in.
     user = fetch_one(
-        "update users set password_hash = %s where email = %s returning id, email, full_name, phone, role",
+        """update users set password_hash = %s, token_version = token_version + 1
+            where email = %s
+        returning id, email, full_name, phone, role, token_version""",
         [hash_password(password), email],
     )
     # No row matched: the account was removed between the two steps, so there is
