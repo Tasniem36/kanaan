@@ -17,6 +17,7 @@ import os
 import pathlib
 
 import pytest
+from fastapi import Response
 
 DSN = os.getenv("TEST_PG_DSN")
 SCRATCH = "dukkan_pytest"
@@ -118,8 +119,10 @@ def fresh_data(live_db):
     start failing in whatever order pytest happened to pick.
     """
     with live_db.connection() as conn:
-        # cascades clear order_items, events, wishlists, stock_alerts, notifications
-        conn.execute("truncate table users, products, orders, audit_logs cascade")
+        # cascades clear order_items, events, wishlists, stock_alerts, notifications.
+        # discount_codes hangs off nothing (an order keeps the code as text), so it has
+        # to be named here or a code created by one test is still there for the next.
+        conn.execute("truncate table users, products, orders, audit_logs, discount_codes cascade")
         conn.execute(SEED)
         conn.commit()
     yield
@@ -318,6 +321,48 @@ def test_wishlist_round_trip(live_db):
 def test_wishlist_is_scoped_per_customer(live_db):
     import routers.wishlist as w
     assert w.list_wishlist_ids(user={"id": U_MGR})["ids"] == [], "must not see another account's saves"
+
+
+# --- discount codes ---------------------------------------------------------
+def test_both_kinds_of_discount_code_round_trip(live_db):
+    """Percentage and fixed-amount codes both store and evaluate against real SQL."""
+    import routers.discounts as d
+    from db import fetch_all
+
+    d.create_code(Response(), payload={"code": "TEN", "percent": 10, "first_order_only": False})
+    d.create_code(Response(), payload={"code": "OFF30", "amount": 30, "first_order_only": False})
+
+    run = lambda sql, params=None: fetch_all(sql, params)
+    assert d.evaluate_code(run, "TEN", U_CUST, 200)["discount"] == 20.0
+    assert d.evaluate_code(run, "OFF30", U_CUST, 200)["discount"] == 30.0
+    too_small = d.evaluate_code(run, "OFF30", U_CUST, 20)
+    assert too_small["reason"] == "min_basket" and too_small["short"] == 10.0
+
+
+def test_the_database_refuses_a_code_carrying_two_discounts_or_none(live_db):
+    """The API validates this, but the constraint is what makes it true of the data."""
+    import psycopg
+    with live_db.connection() as conn:
+        for percent, amount in ((10, 30), (None, None)):
+            with pytest.raises(psycopg.errors.CheckViolation):
+                conn.execute("insert into discount_codes (code, percent, amount) values (%s, %s, %s)",
+                             [f"BAD{percent}{amount}", percent, amount])
+            conn.rollback()
+
+
+def test_a_fixed_amount_discount_survives_a_real_checkout(live_db, auth_mod):
+    """The order records the dirhams taken off and the total charged reflects them."""
+    import routers.discounts as d
+    import routers.orders as o
+
+    d.create_code(Response(), payload={"code": "OFF30", "amount": 30, "first_order_only": False})
+    order = o.create_order(Req(), user={"id": U_CUST, "role": "customer"}, payload={
+        "customer_name": "ندى", "phone": "0501234567", "city": "دبي", "street": "ش", "house": "1",
+        "items": [{"product_id": P_OIL, "qty": 2}], "code": "OFF30"})["order"]
+
+    assert float(order["discount_amount"]) == 30.0
+    # 2 × 55 = 110, less 30, plus whatever delivery costs for that city
+    assert float(order["total"]) == 110.0 - 30.0 + float(order["delivery_fee"])
 
 
 # --- forgotten password -----------------------------------------------------

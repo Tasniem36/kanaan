@@ -14,7 +14,7 @@ from ziina import create_payment_intent, get_payment_intent
 from notify import notify_new_order
 from notifications import notify_managers, notify_users
 from delivery import compute_fee as compute_delivery_fee
-from routers.discounts import evaluate_code
+from routers.discounts import error_body, evaluate_code
 from routers.settings import get_checkout_config
 
 router = APIRouter()
@@ -229,7 +229,9 @@ def create_order(request: Request, user=Depends(optional_user), payload: dict = 
                 log_action(user_id=user_id, action="promo_invalid",
                            detail={"code": str(payload["code"])[:40], "reason": r["error"],
                                    "at": "checkout"}, request=request)
-                raise HTTPException(400, r["error"])
+                # same shape as /discounts/validate — a basket that shrank after the
+                # code was applied lands here, and the page phrases it the same way
+                raise HTTPException(400, error_body(r))
             discount, discount_code = r["discount"], r["dc"]["code"]
         # delivery fee (recomputed server-side from the delivery city + subtotal)
         delivery_fee = compute_delivery_fee(city, total)

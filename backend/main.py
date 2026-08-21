@@ -75,6 +75,11 @@ async def no_store(request: Request, call_next):
 # match the Node error shape the frontend reads: { "error": "..." }
 @app.exception_handler(StarletteHTTPException)
 async def _http_error(_request, exc):
+    # A handler with more to say than a sentence raises a dict — it already carries its
+    # own "error" text, plus whatever the page needs to phrase the message itself (see
+    # routers/discounts.error_body). Anything else is a plain sentence.
+    if isinstance(exc.detail, dict):
+        return JSONResponse(status_code=exc.status_code, content=exc.detail)
     detail = exc.detail if exc.detail and exc.detail != "Not Found" else "Not found"
     return JSONResponse(status_code=exc.status_code, content={"error": detail})
 

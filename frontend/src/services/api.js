@@ -25,6 +25,10 @@ export async function api(path, { method = 'GET', body, auth = true } = {}) {
   if (!res.ok) {
     const err = new Error(data?.error || i18n.global.t('common.error'))
     err.status = res.status
+    // some errors carry more than a sentence (numbers a page needs to phrase its own
+    // message); `message` stays the server's text, so callers that ignore this are
+    // unaffected
+    err.data = data
     // We sent a token and it was refused: it expired, or a password change on another
     // device retired this session (see backend/security.py). Either way it is no use
     // to anyone, so drop it here rather than leaving the app half signed in until

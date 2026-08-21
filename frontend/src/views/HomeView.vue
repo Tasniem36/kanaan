@@ -252,7 +252,9 @@
         <button class="a-btn" style="white-space:nowrap" :disabled="promoBusy || !promoCode" @click="applyPromo">{{ t('checkout.apply') }}</button>
       </div>
       <p v-if="promoErr" style="color:var(--red);font-size:.82rem;margin-top:.3rem">{{ promoErr }}</p>
-      <p v-if="discount > 0" style="color:var(--green);font-size:.85rem;margin-top:.3rem">✓ {{ t('checkout.promoApplied', { p: appliedPercent, amount: ar(discount) }) }}</p>
+      <p v-if="discount > 0" style="color:var(--green);font-size:.85rem;margin-top:.3rem">✓ {{ appliedPercent
+        ? t('checkout.promoApplied', { p: appliedPercent, amount: ar(discount) })
+        : t('checkout.promoAppliedAmount', { amount: ar(discount) }) }}</p>
 
       <div style="margin-top:.7rem;font-size:.9rem;border-top:1px solid rgba(60,74,39,.12);padding-top:.6rem">
         <div class="a-row"><span class="a-muted">{{ t('checkout.subtotal') }}</span><span>{{ ar(cart.total) }} <span class='dh' role='img' aria-label='درهم'></span></span></div>
@@ -441,6 +443,16 @@ const deliveryCity = computed(() => {
 const deliveryFeeAmount = computed(() => deliveryFee(deliveryCity.value, cart.total, settings.delivery))
 const finalTotal = computed(() => Math.max(0, Math.round((cart.total - discount.value + deliveryFeeAmount.value) * 100) / 100))
 
+// A code worth more than the basket isn't a dead end — it's a reason to add something,
+// so say how much is missing instead of showing the server's English sentence. Used at
+// both places a code is checked: the promo box, and placing the order (where a basket
+// that shrank after the code was applied turns up).
+function promoMessage(e) {
+  return e.data?.reason === 'min_basket'
+    ? t('checkout.promoNeedsMore', { amount: ar(e.data.amount), short: ar(e.data.short) })
+    : e.message
+}
+
 async function applyPromo() {
   promoErr.value = ''
   promoBusy.value = true
@@ -450,7 +462,7 @@ async function applyPromo() {
     appliedPercent.value = r.percent
     appliedCode.value = r.code
   } catch (e) {
-    promoErr.value = e.message
+    promoErr.value = promoMessage(e)
     discount.value = 0
     appliedCode.value = null
   } finally {
@@ -581,7 +593,7 @@ async function placeOrder() {
     if (wasGuest) placed.value = { id: result.order.id, token: result.order.track_token }
     else showToast(t('checkout.received', { id: result.order.id.slice(0, 8) }))
   } catch (e) {
-    coErr.value = e.message
+    coErr.value = promoMessage(e)
   } finally {
     placing.value = false
   }

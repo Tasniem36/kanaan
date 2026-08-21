@@ -273,7 +273,7 @@ create index if not exists messages_user_idx on messages (user_id, created_at);
 create table if not exists discount_codes (
   id               uuid primary key default gen_random_uuid(),
   code             text not null unique,           -- stored uppercased
-  percent          integer not null check (percent between 1 and 100),
+  percent          integer check (percent between 1 and 100),
   first_order_only boolean not null default true,  -- only valid on a customer's first order
   active           boolean not null default true,
   max_uses         integer,                        -- null = unlimited
@@ -281,6 +281,22 @@ create table if not exists discount_codes (
   expires_at       timestamptz,                    -- null = no expiry
   created_at       timestamptz not null default now()
 );
+
+-- A code takes either a percentage off or a fixed number of dirhams off. The amount
+-- is the second kind; `percent` above lost its NOT NULL so a code can carry one or
+-- the other. Existing codes are all percentages, so they satisfy this untouched.
+alter table discount_codes add column if not exists amount numeric(10, 2);
+alter table discount_codes alter column percent drop not null;
+do $$ begin
+  alter table discount_codes add constraint discount_codes_amount_positive
+    check (amount is null or amount > 0);
+exception when duplicate_object then null; end $$;
+-- Exactly one of the two, never both and never neither: a code with no discount in
+-- it, or with two, has no single meaning at the checkout.
+do $$ begin
+  alter table discount_codes add constraint discount_codes_one_kind
+    check ((percent is null) <> (amount is null));
+exception when duplicate_object then null; end $$;
 
 -- ---------- order_items -----------------------------------------------------
 create table if not exists order_items (

@@ -9,11 +9,12 @@
       <Loader v-if="loading && !codes.length" :label="t('common.loading')" />
       <p v-else-if="!codes.length" class="a-muted">{{ t('manager.noCodes') }}</p>
       <table v-else class="a-table">
-        <thead><tr><th>{{ t('manager.codeLabel') }}</th><th>%</th><th>{{ t('manager.colFirstOrder') }}</th><th>{{ t('manager.codeUses') }}</th><th>{{ t('manager.colActive') }}</th><th></th></tr></thead>
+        <thead><tr><th>{{ t('manager.codeLabel') }}</th><th>{{ t('manager.codeValue') }}</th><th>{{ t('manager.colFirstOrder') }}</th><th>{{ t('manager.codeUses') }}</th><th>{{ t('manager.colActive') }}</th><th></th></tr></thead>
         <tbody>
           <tr v-for="c in codes" :key="c.id">
             <td style="font-family:monospace;font-weight:700;color:var(--green)">{{ c.code }}</td>
-            <td>{{ c.percent }}%</td>
+            <td v-if="c.percent">{{ c.percent }}%</td>
+            <td v-else style="white-space:nowrap">{{ money(c.amount) }} <span class="dh" role="img" aria-label="درهم"></span></td>
             <td>{{ c.first_order_only ? '✓' : '—' }}</td>
             <td>{{ c.used_count }}<span v-if="c.max_uses">/{{ c.max_uses }}</span></td>
             <td>
@@ -29,7 +30,20 @@
     <Dialog :open="showAdd" :title="t('manager.codeAddTitle')" max-width="460px" @close="showAdd = false">
           <div class="grid2">
             <div><label class="co-l">{{ t('manager.codeLabel') }} *</label><input class="a-input" v-model.trim="nc.code" dir="ltr" style="text-align:start;text-transform:uppercase"></div>
-            <div><label class="co-l">{{ t('manager.codePercent') }} *</label><input class="a-input" type="number" min="1" max="100" v-model="nc.percent"></div>
+            <div>
+              <!-- the label names whichever kind is selected, so the number in the
+                   box beside it is never ambiguous -->
+              <label class="co-l">{{ nc.kind === 'percent' ? t('manager.codePercent') : t('manager.codeAmount') }} *</label>
+              <div class="kind-row">
+                <div class="kind-pick">
+                  <button type="button" :class="{ on: nc.kind === 'percent' }" @click="nc.kind = 'percent'">%</button>
+                  <button type="button" :class="{ on: nc.kind === 'amount' }" @click="nc.kind = 'amount'"><span class="dh" role="img" aria-label="درهم"></span></button>
+                </div>
+                <input class="a-input" type="number" min="1" :max="nc.kind === 'percent' ? 100 : null"
+                       :step="nc.kind === 'percent' ? 1 : 0.5" v-model="nc.value" dir="ltr">
+              </div>
+              <small class="kind-hint">{{ nc.kind === 'percent' ? t('manager.codeHintPercent') : t('manager.codeHintAmount') }}</small>
+            </div>
           </div>
           <div class="grid2">
             <div><label class="co-l">{{ t('manager.codeMaxUses') }}</label><input class="a-input" type="number" min="1" v-model="nc.max_uses"></div>
@@ -58,14 +72,18 @@ const confirm = useConfirmStore()
 
 const codes = ref([])
 const showAdd = ref(false)
-const nc = reactive({ code: '', percent: '', max_uses: '', expires_at: '', first_order_only: true, active: true })
+// `kind` picks which sort of discount `value` is: a percentage off, or dirhams off
+const BLANK = { code: '', kind: 'percent', value: '', max_uses: '', expires_at: '', first_order_only: true, active: true }
+const nc = reactive({ ...BLANK })
 const err = ref('')
 const busy = ref(false)
 const loading = ref(false)
 
+const money = (n) => Math.round(Number(n) * 100) / 100
+
 function openAdd() {
   err.value = ''
-  Object.assign(nc, { code: '', percent: '', max_uses: '', expires_at: '', first_order_only: true, active: true })
+  Object.assign(nc, BLANK)
   showAdd.value = true
 }
 
@@ -80,11 +98,13 @@ async function load() {
 }
 async function addCode() {
   err.value = ''
-  if (!nc.code || !nc.percent) { err.value = t('manager.codeErr'); return }
+  if (!nc.code || !nc.value) { err.value = t('manager.codeErr'); return }
   busy.value = true
   try {
     await api('/discounts', { method: 'POST', body: {
-      code: nc.code, percent: Number(nc.percent),
+      code: nc.code,
+      // only the chosen one is sent — the server refuses a code carrying both
+      [nc.kind]: Number(nc.value),
       first_order_only: nc.first_order_only, active: nc.active,
       max_uses: nc.max_uses ? Number(nc.max_uses) : null,
       expires_at: nc.expires_at || null,
@@ -115,4 +135,11 @@ h1 { font-family: 'Amiri', serif; color: var(--green); font-size: 1.9rem; margin
 .rm-btn { font-size: .82rem; padding: .35rem .7rem; border-radius: 8px; background: rgba(156,43,43,.1); color: var(--red, #9c2b2b); cursor: pointer; }
 .auth-err { color: var(--red, #9c2b2b); font-size: .85rem; margin: .4rem 0; }
 .a-pill { cursor: pointer; border: none; }
+/* percentage-or-dirhams picker sitting beside the number it describes */
+.kind-row { display: flex; gap: .4rem; align-items: stretch; }
+.kind-row .a-input { flex: 1; min-width: 0; }
+.kind-pick { display: flex; flex: 0 0 auto; border: 1px solid rgba(60,74,39,.2); border-radius: 10px; overflow: hidden; }
+.kind-pick button { padding: 0 .6rem; background: var(--cream-2, rgba(60,74,39,.06)); color: var(--green); font-weight: 700; cursor: pointer; border: none; display: grid; place-items: center; }
+.kind-pick button.on { background: var(--green); color: #fff; }
+.kind-hint { display: block; color: var(--muted, #8a7f64); font-size: .74rem; margin-top: .3rem; }
 </style>
