@@ -1,5 +1,5 @@
 <template>
-  <AuthShell photo="/images/tatreez.jpg">
+  <AuthShell section="register" photo="/images/tatreez.jpg">
     <!-- STEP 1 — details -->
     <template v-if="step === 'details'">
       <h1>{{ t('auth.registerTitle') }}</h1>

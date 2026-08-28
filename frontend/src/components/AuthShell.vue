@@ -5,14 +5,11 @@
            it and a line worth reading. On a phone it collapses away entirely — the
            form is the only thing anyone came here for on a small screen. -->
       <aside class="auth-panel">
-        <img class="auth-photo" :src="photo" alt="" aria-hidden="true" decoding="async">
+        <img class="auth-photo" :src="image" alt="" aria-hidden="true" decoding="async">
         <RouterLink to="/" class="auth-mark"><span class="g">دكّان</span> كنعان</RouterLink>
         <figure class="auth-quote">
-          <blockquote>{{ t('home.storyQuote') }}</blockquote>
-          <figcaption>
-            <b>{{ t('home.storyEyebrow') }}</b>
-            <span>{{ t('footer.about') }}</span>
-          </figcaption>
+          <blockquote v-if="quote">{{ quote }}</blockquote>
+          <figcaption v-if="caption">{{ caption }}</figcaption>
         </figure>
       </aside>
 
@@ -35,15 +32,36 @@
 </template>
 
 <script setup>
+import { computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { useContentStore } from '../stores/content'
 import LangToggle from './LangToggle.vue'
 
-const { t } = useI18n()
-defineProps({
-  // which photograph stands beside the form; each auth page picks its own
+const { t, locale } = useI18n()
+const content = useContentStore()
+
+const props = defineProps({
+  // which of the three panels this is — the key the manager's copy is saved under
+  section: { type: String, required: true },
+  // the bundled photograph, used until the manager picks another
   photo: { type: String, default: '/images/olives.jpg' },
 })
+
+// The manager's saved copy wins where they've written something; everything they
+// haven't touched falls back to the wording and photograph that ship with the app.
+// Same rule as the home page's editable sections — an emptied field is a decision
+// to remove that line, which is why '' is honoured rather than replaced.
+const saved = computed(() => content.sections[props.section])
+const image = computed(() => saved.value?.image || props.photo)
+const quote = computed(() =>
+  saved.value ? (saved.value[`title_${locale.value === 'ar' ? 'ar' : 'en'}`] || '') : t('auth.panelQuote'))
+const caption = computed(() =>
+  saved.value ? (saved.value[`desc_${locale.value === 'ar' ? 'ar' : 'en'}`] || '') : t('auth.panelCaption'))
+
+// these pages are prerendered, so the panel starts on the bundled copy and swaps
+// to the manager's the moment it arrives — never a blank while it loads
+onMounted(() => { if (!content.loaded) content.fetch() })
 </script>
 
 <style scoped>
@@ -108,14 +126,14 @@ defineProps({
   margin: 0 0 1.1rem;
   text-shadow: 0 2px 18px rgba(0, 0, 0, .45);
 }
-.auth-quote figcaption { font-size: .82rem; line-height: 1.6; }
-.auth-quote figcaption b { display: block; font-weight: 700; letter-spacing: .04em; }
-.auth-quote figcaption span {
+.auth-quote figcaption {
+  font-size: .84rem;
+  line-height: 1.65;
+  opacity: .8;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  opacity: .75;
 }
 
 /* --- the form side --- */

@@ -25,6 +25,34 @@
       </div>
     </div>
 
+    <!-- the panel beside the sign-in / sign-up / reset forms -->
+    <h2 class="sub">{{ t('manager.secAuth') }}</h2>
+    <p class="a-muted hint">{{ t('manager.secAuthHint') }}</p>
+    <div class="cards">
+      <div class="a-card" v-for="p in authForms" :key="p.key">
+        <div class="c-grid">
+          <div class="c-img">
+            <label class="co-l">{{ t(`manager.authPage_${p.key}`) }}</label>
+            <ImagePicker v-model="p.images" />
+          </div>
+          <div class="c-fields">
+            <label class="co-l">{{ t('manager.authQuote') }} (ع)</label>
+            <textarea class="a-input" rows="2" v-model.trim="p.title_ar"></textarea>
+            <label class="co-l">{{ t('manager.authQuote') }} (EN)</label>
+            <textarea class="a-input" rows="2" dir="ltr" v-model.trim="p.title_en"></textarea>
+            <div class="grid2">
+              <div><label class="co-l">{{ t('manager.authCaption') }} (ع)</label><input class="a-input" v-model.trim="p.desc_ar"></div>
+              <div><label class="co-l">{{ t('manager.authCaption') }} (EN)</label><input class="a-input" dir="ltr" v-model.trim="p.desc_en"></div>
+            </div>
+            <div style="display:flex;gap:.6rem;margin-top:.7rem">
+              <button class="a-btn" :disabled="p.busy" @click="saveAuth(p)">{{ p.busy ? '…' : t('manager.save') }}</button>
+              <button class="a-btn ghost" :disabled="p.busy" @click="resetAuth(p)">{{ t('manager.secReset') }}</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <h2 class="sub">{{ t('manager.secCards') }}</h2>
     <div class="cards">
       <div class="a-card" v-for="f in forms" :key="f.id">
@@ -77,6 +105,51 @@ const forms = ref([])
 
 // a translation in a specific language, regardless of the dashboard's own locale
 const def = (key, lang) => t(key, {}, { locale: lang })
+
+// --- the auth pages' panel (image + quote + caption) ---
+// Sections like any other, so the same rule holds: what the manager saves wins,
+// and anything they haven't touched shows the wording that ships with the app.
+const AUTH_PAGES = ['login', 'register', 'reset']
+const AUTH_PHOTOS = { login: '/images/olives.jpg', register: '/images/tatreez.jpg', reset: '/images/jug.jpg' }
+const authForms = ref([])
+
+function authBlank(key) {
+  const row = content.sections[key]
+  return {
+    key,
+    busy: false,
+    images: [(row && row.image) || AUTH_PHOTOS[key]],
+    title_ar: row ? (row.title_ar || '') : def('auth.panelQuote', 'ar'),
+    title_en: row ? (row.title_en || '') : def('auth.panelQuote', 'en'),
+    desc_ar: row ? (row.desc_ar || '') : def('auth.panelCaption', 'ar'),
+    desc_en: row ? (row.desc_en || '') : def('auth.panelCaption', 'en'),
+  }
+}
+
+watch(() => content.sections, () => { authForms.value = AUTH_PAGES.map(authBlank) }, { immediate: true, deep: true })
+
+async function saveAuth(p) {
+  p.busy = true
+  try {
+    await content.updateSection(p.key, {
+      title_ar: p.title_ar, title_en: p.title_en,
+      desc_ar: p.desc_ar, desc_en: p.desc_en,
+      // '' would be stored as "no photo"; the bundled one is what we mean instead
+      image: p.images[0] || AUTH_PHOTOS[p.key],
+    })
+    toast.show(t('manager.secSaved'))
+  } catch (e) { toast.show(e.message) } finally { p.busy = false }
+}
+
+// back to the photograph and wording the app ships with
+async function resetAuth(p) {
+  const ok = await confirm.ask({ message: t('manager.secResetMsg'), confirmText: t('manager.secReset') })
+  if (!ok) return
+  Object.assign(p, authBlank(p.key), { images: [AUTH_PHOTOS[p.key]], busy: p.busy })
+  p.title_ar = def('auth.panelQuote', 'ar'); p.title_en = def('auth.panelQuote', 'en')
+  p.desc_ar = def('auth.panelCaption', 'ar'); p.desc_en = def('auth.panelCaption', 'en')
+  await saveAuth(p)
+}
 
 // --- reviews section headings ---
 const sec = ref({ ...Object.fromEntries(SECTION_FIELDS.map((f) => [f, ''])), shown: true })

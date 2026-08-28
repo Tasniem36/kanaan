@@ -60,3 +60,57 @@ def test_a_save_writes_every_field_and_caps_the_length(client, spy):
     assert len(saved["desc_en"]) == content._SECTION_FIELDS["desc_en"]
     assert "nope" not in saved
     assert saved["title_ar"] == "", "an omitted field is stored blank → falls back to the bundled text"
+
+
+# --- the auth pages' panel --------------------------------------------------
+def test_the_auth_panels_are_sections_too(client, monkeypatch):
+    """Sign-in, sign-up and reset are editable the same way a homepage heading is —
+    one mechanism, not a parallel one."""
+    import routers.content as c
+    assert set(c._SECTION_KEYS) == {"reviews", "login", "register", "reset"}
+
+
+def test_an_auth_panel_saves_its_photograph(client, monkeypatch):
+    from conftest import token_for
+    import routers.content as c
+    saved = {}
+    monkeypatch.setattr(c, "fetch_one", lambda sql, params=None: saved.update(key=params[0], value=params[1]) or {"key": params[0]})
+    res = client.patch("/api/content/sections/login",
+                       json={"title_ar": "س", "image": "/images/olives.jpg"},
+                       headers={"Authorization": f"Bearer {token_for('boss', 'manager')}"})
+    assert res.status_code == 200
+    assert res.json()["section"]["image"] == "/images/olives.jpg"
+    assert saved["key"] == "section:login"
+
+
+def test_a_section_without_a_photograph_never_grows_one(client, monkeypatch):
+    """`reviews` is a heading, not a panel — an image sent to it is ignored."""
+    from conftest import token_for
+    import routers.content as c
+    monkeypatch.setattr(c, "fetch_one", lambda sql, params=None: {"key": "section:reviews"})
+    res = client.patch("/api/content/sections/reviews",
+                       json={"title_ar": "س", "image": "/images/olives.jpg"},
+                       headers={"Authorization": f"Bearer {token_for('boss', 'manager')}"})
+    assert "image" not in res.json()["section"]
+
+
+def test_an_uploaded_photograph_becomes_a_file(client, monkeypatch):
+    """A data-URL left in the row would be re-read out of the database on every
+    visit to the sign-in page."""
+    from conftest import token_for
+    import routers.content as c
+    seen = []
+    monkeypatch.setattr(c, "save_image", lambda src, subdir=None: seen.append((src, subdir)) or "/media/content/a.webp")
+    monkeypatch.setattr(c, "fetch_one", lambda sql, params=None: {"key": "section:register"})
+    res = client.patch("/api/content/sections/register",
+                       json={"image": "data:image/png;base64,AAAA"},
+                       headers={"Authorization": f"Bearer {token_for('boss', 'manager')}"})
+    assert res.json()["section"]["image"] == "/media/content/a.webp"
+    assert seen[0][1] == "content", "kept out of the products folder"
+
+
+def test_an_unknown_section_is_still_refused(client):
+    from conftest import token_for
+    res = client.patch("/api/content/sections/nonsense", json={},
+                       headers={"Authorization": f"Bearer {token_for('boss', 'manager')}"})
+    assert res.status_code == 404

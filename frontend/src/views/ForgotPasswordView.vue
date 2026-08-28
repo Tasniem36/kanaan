@@ -1,5 +1,5 @@
 <template>
-  <AuthShell photo="/images/jug.jpg">
+  <AuthShell section="reset" photo="/images/jug.jpg">
     <!-- STEP 1 — which address -->
     <template v-if="step === 'email'">
       <h1>{{ t('auth.forgotTitle') }}</h1>

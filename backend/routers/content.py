@@ -2,6 +2,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 from psycopg.types.json import Json
 
 from db import fetch_all, fetch_one
+from media import save_image
 from security import require_manager
 
 router = APIRouter()
@@ -14,11 +15,18 @@ _EDITABLE = [
 # Editable headings for storefront sections, kept in the settings table under
 # 'section:<key>'. Only these keys exist — an unknown one 404s rather than filling
 # settings with junk. A blank field means "use the bundled translation".
-_SECTION_KEYS = ("reviews",)
+#
+# The three auth panels are sections too: the same "manager copy, else the bundled
+# wording" rule applies to the line beside the sign-in form as to a heading on the
+# home page, so they share one mechanism rather than growing a parallel one.
+_SECTION_KEYS = ("reviews", "login", "register", "reset")
 _SECTION_FIELDS = {
     "title_ar": 160, "title_en": 160,       # field -> max length
     "desc_ar": 600, "desc_en": 600,
 }
+# Sections that also carry a photograph. Empty means the bundled image, exactly as
+# an empty field means the bundled words.
+_SECTION_IMAGE_KEYS = ("login", "register", "reset")
 
 
 # GET /api/content/values — public: the "why us" cards for the storefront
@@ -70,6 +78,10 @@ def update_section(key: str, _m=Depends(require_manager), payload: dict = Body(d
     # the manager's own show/hide switch for the section, independent of whether
     # there is anything in it yet (the storefront hides an empty section anyway)
     copy["hidden"] = bool((payload or {}).get("hidden"))
+    if key in _SECTION_IMAGE_KEYS:
+        # an upload is written to a file here, the same as a product photo — a
+        # data-URL left in the row would sit in the database on every page load
+        copy["image"] = save_image((payload or {}).get("image"), subdir="content") or None
     fetch_one(
         """insert into settings (key, value) values (%s, %s)
            on conflict (key) do update set value = excluded.value, updated_at = now()

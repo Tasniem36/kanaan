@@ -1,5 +1,5 @@
 <template>
-  <AuthShell photo="/images/olives.jpg">
+  <AuthShell section="login" photo="/images/olives.jpg">
     <h1>{{ t('auth.loginTitle') }}</h1>
     <p class="auth-sub">{{ t('auth.loginSubtitle') }}</p>
 
