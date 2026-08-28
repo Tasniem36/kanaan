@@ -55,16 +55,24 @@
   .burger{display:none;width:48px;height:48px;border-radius:14px;background:var(--green);color:var(--cream);place-items:center}
   .burger svg{width:24px;height:24px}
   .mm-overlay{position:fixed;inset:0;background:rgba(44,55,25,.55);z-index:95}
-  .mobile-menu{position:fixed;top:0;inset-inline-start:0;height:100%;height:100dvh;width:min(300px,82vw);z-index:100;background:var(--cream);box-shadow:0 0 60px rgba(0,0,0,.35);transform:translateX(-110%);transition:transform .35s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;overflow-y:auto}
-  [dir="rtl"] .mobile-menu{transform:translateX(110%)}
+  /* Opens from the same edge as the burger that opens it. The burger sits in
+     .pb-actions, the last element in the header, so it lands on the inline END —
+     the left in Arabic, the right in English. Pinning the panel to inline-start
+     had it flying in from the opposite side of the screen to the button pressed.
+     The transforms are physical (translateX is not a logical property), so each
+     direction needs its own: the panel always hides towards its own edge. */
+  .mobile-menu{position:fixed;top:0;inset-inline-end:0;height:100%;height:100dvh;width:min(300px,82vw);z-index:100;background:var(--cream);box-shadow:0 0 60px rgba(0,0,0,.35);transform:translateX(110%);transition:transform .35s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;overflow:hidden}
+  [dir="rtl"] .mobile-menu{transform:translateX(-110%)}
   .mobile-menu.show,[dir="rtl"] .mobile-menu.show{transform:translateX(0)}
-  .mm-head{display:flex;align-items:center;justify-content:space-between;padding:1.2rem 1.3rem;background:var(--green);color:var(--cream)}
+  /* the head is pinned: only the list below it scrolls, so the brand and the close
+     button stay reachable however long the menu gets */
+  .mm-head{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;padding:1.2rem 1.3rem;background:var(--green);color:var(--cream)}
   .mm-brand{font-family:"Aref Ruqaa","Amiri",serif;font-size:1.5rem}
   .mm-brand .g{color:var(--gold-2)}
   .mm-close{width:40px;height:40px;border-radius:11px;background:rgba(255,255,255,.12);color:var(--cream);display:grid;place-items:center}
   .mm-close:hover{background:rgba(255,255,255,.22)}
   .mm-close svg{width:20px;height:20px}
-  .mm-links{display:flex;flex-direction:column;padding:.6rem;gap:.15rem}
+  .mm-links{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;padding:.6rem;gap:.15rem}
   .mm-links a{padding:.85rem 1rem;border-radius:11px;font-weight:700;color:var(--green);font-size:1rem}
   .mm-links a.active,.mm-links a.router-link-active{background:var(--green);color:#fff}
   .mm-links a:not(.active):not(.router-link-active):hover{background:rgba(60,74,39,.08)}
