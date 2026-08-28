@@ -22,6 +22,14 @@
       <div><label class="co-l">{{ t('manager.price') }}</label><input class="a-input" type="number" step="0.01" v-model="f.price"></div>
     </div>
     <div class="grid2">
+      <div>
+        <label class="co-l">{{ t('manager.salePrice') }}</label>
+        <input class="a-input" type="number" step="0.01" min="0" v-model="f.sale_price" :placeholder="t('manager.salePricePh')">
+        <!-- says what the shopper will see, so the offer is checked before it's saved -->
+        <small class="sale-hint" :class="{ bad: saleInvalid }">{{ saleHint }}</small>
+      </div>
+    </div>
+    <div class="grid2">
       <div><label class="co-l">{{ t('manager.unit') }} (ع)</label><input class="a-input" v-model.trim="f.unit"></div>
       <div><label class="co-l">{{ t('manager.unit') }} (EN)</label><input class="a-input" dir="ltr" v-model.trim="f.unit_en" :placeholder="t('manager.enOptional')"></div>
     </div>
@@ -44,7 +52,7 @@
 // Shared product edit form. Used by the manager Products page and the storefront
 // product page so both stay in sync. Stock is intentionally omitted (it's managed
 // via restock); this edits the descriptive fields + display order.
-import { reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useCatalogStore } from '../stores/catalog'
 import ImagePicker from './ImagePicker.vue'
@@ -54,9 +62,19 @@ const catalog = useCatalogStore()
 const props = defineProps({ product: { type: Object, required: true } })
 const emit = defineEmits(['saved'])
 
+// The offer is only meaningful next to the price it discounts, so the editor says
+// what the shopper would see — or why it won't be accepted — before anything is saved.
+const saleInvalid = computed(() =>
+  f.sale_price !== '' && !(Number(f.sale_price) > 0 && Number(f.sale_price) < Number(f.price)))
+const saleHint = computed(() => {
+  if (f.sale_price === '') return t('manager.salePriceNone')
+  if (saleInvalid.value) return t('manager.salePriceBad')
+  return t('manager.salePriceOn', { n: Math.round((1 - Number(f.sale_price) / Number(f.price)) * 100) })
+})
+
 const f = reactive({
   name: '', name_en: '', description: '', description_en: '',
-  category: 'pantry', unit: '', unit_en: '', price: '', type: '', tag: '', tag_en: '',
+  category: 'pantry', unit: '', unit_en: '', price: '', sale_price: '', type: '', tag: '', tag_en: '',
   sort: 0, images: [],
 })
 const err = ref('')
@@ -68,7 +86,7 @@ function fill(p) {
     name: p.name, name_en: p.name_en || '',
     description: p.description || '', description_en: p.description_en || '',
     category: p.category, unit: p.unit || '', unit_en: p.unit_en || '',
-    price: p.price, type: p.type || '', tag: p.tag || '', tag_en: p.tag_en || '',
+    price: p.price, sale_price: p.sale_price ?? '', type: p.type || '', tag: p.tag || '', tag_en: p.tag_en || '',
     sort: p.sort ?? 0, images: imgs,
   })
 }
@@ -86,9 +104,17 @@ async function save() {
       description: f.description, description_en: f.description_en,
       category: f.category, unit: f.unit, unit_en: f.unit_en,
       type: f.type || null, price: Number(f.price), tag: f.tag || null, tag_en: f.tag_en,
+      // '' clears the offer; the server refuses one that isn't below the usual price
+      sale_price: f.sale_price === '' || f.sale_price === null ? null : Number(f.sale_price),
       sort: Number(f.sort) || 0, images: [...f.images],
     })
     emit('saved')
   } catch (e) { err.value = e.message } finally { busy.value = false }
 }
 </script>
+
+<style scoped>
+/* what the shopper would see, or why the offer won't be accepted */
+.sale-hint { display: block; font-size: .74rem; color: var(--muted, #8a7f64); margin-top: .3rem; }
+.sale-hint.bad { color: var(--red, #9c2b2b); }
+</style>

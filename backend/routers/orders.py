@@ -203,7 +203,11 @@ def create_order(request: Request, user=Depends(optional_user), payload: dict = 
                 raise HTTPException(400, "Invalid quantity")
             wanted[pid] = wanted.get(pid, 0) + qty
 
-        products = run("select id, name, price, stock from products where id = any(%s::uuid[]) for update",
+        # coalesce, not price: an item on offer is charged at the offer price. Read
+        # here rather than trusted from the basket, so a sale that started or ended
+        # while the customer was shopping is still billed correctly.
+        products = run("""select id, name, coalesce(sale_price, price) as price, stock
+                          from products where id = any(%s::uuid[]) for update""",
                        [list(wanted)])
         by_id = {str(p["id"]): p for p in products}
 

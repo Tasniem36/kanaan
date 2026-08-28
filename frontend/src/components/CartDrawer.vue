@@ -19,7 +19,7 @@
           <span class="pic"><img :src="it.image_url" :alt="pName(it)"></span>
           <div class="info">
             <h4>{{ pName(it) }}</h4>
-            <div class="u">{{ ar(it.price) }} <span class='dh' role='img' aria-label='درهم'></span> × {{ ar(it.q) }}</div>
+            <div class="u">{{ ar(pPrice(it)) }} <span class='dh' role='img' aria-label='درهم'></span> <s v-if="pIsOnSale(it)" class="was">{{ ar(it.price) }}</s> × {{ ar(it.q) }}</div>
             <button class="remove" @click="cart.removeAll(it.id)">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14" stroke-linecap="round"><path d="M5 7h14M9 7V5h6v2M7 7l1 13h8l1-13"/></svg>{{ t('cart.remove') }}
             </button>
@@ -51,7 +51,7 @@ import { computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useCartStore } from '../stores/cart'
 import { useSettingsStore } from '../stores/settings'
-import { pName } from '../utils/product'
+import { pName, pPrice, pIsOnSale } from '../utils/product'
 
 const props = defineProps({ open: { type: Boolean, default: false } })
 const emit = defineEmits(['close', 'checkout'])
@@ -71,6 +71,7 @@ watch(() => props.open, (o) => { if (o && !loaded) { loaded = true; settings.fet
 </script>
 
 <style scoped>
+.u .was { color: var(--muted, #8a7f64); opacity: .8; margin-inline: .25rem; }
 .free-bar {
   margin-bottom: .9rem; padding: .6rem .8rem; border-radius: 12px;
   background: var(--cream-2, rgba(60,74,39,.08)); border: 1px solid rgba(184,144,47,.35);

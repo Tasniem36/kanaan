@@ -14,8 +14,8 @@ router = APIRouter()
 SORT_SQL = {
     "featured": "sort, created_at",
     "newest": "created_at desc",
-    "price_asc": "price, sort",
-    "price_desc": "price desc, sort",
+    "price_asc": "coalesce(sale_price, price), sort",
+    "price_desc": "coalesce(sale_price, price) desc, sort",
     "name": "name",
 }
 
@@ -42,6 +42,30 @@ def _price(value):
     except (TypeError, ValueError):
         return None
     return n if n >= 0 else None
+
+
+def _sale_price(value, price):
+    """The offer price, checked against the price it's an offer on.
+
+    None (or a cleared field) ends the offer. It has to be below the usual price, or
+    the crossed-out price beside it on the shelf would be a lie — the one thing a
+    shopper is entitled to trust about a sale.
+    """
+    if value in (None, ""):
+        return None
+    try:
+        sale = round(float(value), 2)
+    except (TypeError, ValueError):
+        raise HTTPException(400, "The offer price must be a number")
+    try:
+        usual = float(price)
+    except (TypeError, ValueError):
+        raise HTTPException(400, "Invalid price")
+    if sale <= 0:
+        raise HTTPException(400, "The offer price must be more than zero")
+    if sale >= usual:
+        raise HTTPException(400, "The offer price must be below the usual price")
+    return sale
 
 
 @router.get("")
@@ -71,10 +95,10 @@ def list_products(request: Request):
         params += [f"%{search}%"] * 4
     min_price, max_price = _price(q.get("min_price")), _price(q.get("max_price"))
     if min_price is not None:
-        conds.append("price >= %s")
+        conds.append("coalesce(sale_price, price) >= %s")
         params.append(min_price)
     if max_price is not None:
-        conds.append("price <= %s")
+        conds.append("coalesce(sale_price, price) <= %s")
         params.append(max_price)
     where = ("where " + " and ".join(conds)) if conds else ""
     order_by = SORT_SQL.get(q.get("sort") or "", SORT_SQL["featured"])
@@ -86,11 +110,11 @@ def list_products(request: Request):
     # LIGHT payload: only a small thumbnail, never the heavy data-URL gallery
     # (the full images load on demand via GET /products/{id}).
     if is_manager and not force_active:
-        cols = ("id, name, name_en, description, description_en, price, unit, unit_en, "
+        cols = ("id, name, name_en, description, description_en, price, sale_price, unit, unit_en, "
                 "category, type, tag, tag_en, "
                 "coalesce(thumb_url, image_url) as image_url, thumb_url, stock, is_active, sort")
     else:
-        cols = ("id, name, name_en, description, description_en, price, unit, unit_en, "
+        cols = ("id, name, name_en, description, description_en, price, sale_price, unit, unit_en, "
                 "category, type, tag, tag_en, "
                 "coalesce(thumb_url, image_url) as image_url, stock, is_active, sort")
 
@@ -156,7 +180,7 @@ def related_products(pid: str):
         """with base as (
              select category, type from products where id = %s and is_active = true
            )
-           select p.id, p.name, p.name_en, p.description, p.description_en, p.price,
+           select p.id, p.name, p.name_en, p.description, p.description_en, p.price, p.sale_price,
                   p.unit, p.unit_en, p.category, p.type, p.tag, p.tag_en,
                   coalesce(p.thumb_url, p.image_url) as image_url, p.stock, p.is_active, p.sort
            from products p, base b
@@ -195,7 +219,7 @@ def get_product(pid: str, request: Request):
     user = optional_user(request)
     is_manager = user and user.get("role") == "manager"
     row = fetch_one(
-        """select id, name, name_en, description, description_en, price, unit, unit_en,
+        """select id, name, name_en, description, description_en, price, sale_price, unit, unit_en,
                   category, type, tag, tag_en, image_url, images, thumb_url, stock, is_active, sort
            from products where id = %s""", [pid])
     if not row or (not is_manager and not row["is_active"]):
@@ -227,12 +251,14 @@ def create_product(response: Response, _m=Depends(require_manager), payload: dic
     # thumbnail is derived server-side from the primary image (managers can't set it)
     thumb_url = make_thumb(image_url)
     row = fetch_one(
-        """insert into products (name, name_en, description, description_en, price, unit, unit_en,
+        """insert into products (name, name_en, description, description_en, price, sale_price,
+                                 unit, unit_en,
                                  category, type, tag, tag_en, image_url, images, thumb_url, stock, sort)
-           values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) returning *""",
+           values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) returning *""",
         [name, _blank_to_none(payload.get("name_en")),
          payload.get("description"), _blank_to_none(payload.get("description_en")),
-         price, payload.get("unit"), _blank_to_none(payload.get("unit_en")),
+         price, _sale_price(payload.get("sale_price"), price),
+         payload.get("unit"), _blank_to_none(payload.get("unit_en")),
          category, ptype, payload.get("tag"), _blank_to_none(payload.get("tag_en")),
          image_url, Json(images), thumb_url,
          int(payload.get("stock") or 0), int(payload.get("sort") or 0)],
@@ -244,9 +270,20 @@ def create_product(response: Response, _m=Depends(require_manager), payload: dic
 @router.patch("/{pid}")
 def update_product(pid: str, _m=Depends(require_manager), payload: dict = Body(default={})):
     # thumb_url is intentionally NOT accepted from the client — it's derived below
-    allowed = ["name", "name_en", "description", "description_en", "price", "unit", "unit_en",
+    allowed = ["name", "name_en", "description", "description_en", "price", "sale_price",
+               "unit", "unit_en",
                "category", "type", "tag", "tag_en", "image_url", "stock", "is_active", "images", "sort"]
     data = {k: payload[k] for k in (payload or {}) if k in allowed}
+    # The two prices only make sense against each other, so whenever either moves the
+    # pair is checked as it will end up — including the case that reads as innocent:
+    # dropping the usual price to at or below a sale that's already running.
+    if "price" in data or "sale_price" in data:
+        current = fetch_one("select price, sale_price from products where id = %s", [pid])
+        if not current:
+            raise HTTPException(404, "Product not found")
+        price = data.get("price", current["price"])
+        sale = data["sale_price"] if "sale_price" in data else current["sale_price"]
+        data["sale_price"] = _sale_price(sale, price)
     # normalize empty type to NULL so it drops out of the filter chips
     if "type" in data:
         data["type"] = (data["type"] or "").strip() or None

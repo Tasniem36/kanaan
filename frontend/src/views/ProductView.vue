@@ -59,7 +59,12 @@
             <span v-if="ptag" class="eyebrow">{{ ptag }}</span>
             <h1 class="display">{{ pname }}</h1>
             <p class="pdp-desc">{{ pdesc }}</p>
-            <div class="pdp-price">{{ product.price }} <span class='dh' role='img' aria-label='درهم'></span> <small>/ {{ punit }}</small></div>
+            <div class="pdp-price">
+              {{ price }} <span class='dh' role='img' aria-label='درهم'></span>
+              <s v-if="onSale" class="was">{{ product.price }} <span class='dh' role='img' aria-label='درهم'></span></s>
+              <small>/ {{ punit }}</small>
+              <span v-if="onSale" class="save-pill">{{ t('product.saleOff', { n: saleOff }) }}</span>
+            </div>
 
             <!-- in stock / sold out only; the remaining count stays internal -->
             <p v-if="product.stock === 0" class="pdp-stock out">{{ t('product.outOfStock') }}</p>
@@ -156,7 +161,7 @@ import { useCatalogStore } from '../stores/catalog'
 import { useCartStore } from '../stores/cart'
 import { useAuthStore } from '../stores/auth'
 import { api } from '../services/api'
-import { pName, pDesc, pUnit, pTag } from '../utils/product'
+import { pName, pDesc, pUnit, pTag, pPrice, pIsOnSale, pSaleOff } from '../utils/product'
 import PortalBar from '../components/PortalBar.vue'
 import CartDrawer from '../components/CartDrawer.vue'
 import Dialog from '../components/Dialog.vue'
@@ -190,6 +195,9 @@ const pname = computed(() => pName(product.value))
 const pdesc = computed(() => pDesc(product.value))
 const punit = computed(() => pUnit(product.value))
 const ptag = computed(() => pTag(product.value))
+const price = computed(() => pPrice(product.value))
+const onSale = computed(() => pIsOnSale(product.value))
+const saleOff = computed(() => pSaleOff(product.value))
 
 // Per-product <head> for SEO. Reactive to the loaded product, so it updates once
 // the detail loads. Runs client-side (product pages aren't prerendered); this gives
@@ -224,7 +232,7 @@ const jsonLd = computed(() => {
     offers: {
       '@type': 'Offer',
       url: canonicalUrl.value,
-      price: Number(p.price),
+      price: pPrice(p),
       priceCurrency: 'AED',
       availability: p.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
       itemCondition: 'https://schema.org/NewCondition',
@@ -449,6 +457,8 @@ onBeforeUnmount(() => removeEventListener('scroll', onScroll))
 .pdp-desc { color: var(--ink); font-size: 1.05rem; margin-bottom: 1.2rem; }
 .pdp-price { font-family: "Amiri", serif; font-size: 2rem; color: var(--terra-deep); margin-bottom: .5rem; }
 .pdp-price small { font-size: 1rem; color: var(--muted); }
+.pdp-price .was { font-size: 1.2rem; color: var(--muted); opacity: .8; margin-inline-start: .55rem; text-decoration-thickness: 2px; }
+.pdp-price .save-pill { font-family: "Tajawal", sans-serif; font-size: .78rem; font-weight: 700; color: #fff; background: var(--terra, #a85a32); border-radius: 999px; padding: .2rem .6rem; vertical-align: .35rem; margin-inline-start: .5rem; }
 .pdp-stock { font-size: .9rem; font-weight: 700; margin-bottom: 1.2rem; }
 .pdp-stock.in { color: var(--green-soft); }
 .pdp-stock.low { color: var(--gold); }

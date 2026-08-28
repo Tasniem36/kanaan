@@ -21,8 +21,11 @@ PID_B = "aaaaaaaa-0000-0000-0000-000000000002"
 class FakeCursor:
     """Answers the handful of queries create_order runs, and records the writes."""
 
-    def __init__(self, stock):
+    def __init__(self, stock, prices=None):
         self.stock = stock          # {product_id: units available}
+        # what the shop charges for each — already the offer price where one is
+        # running, since that is what the query asks the database for
+        self.prices = prices or {}
         self.statements = []        # [(normalised sql, params)]
         self._rows = []
         self.description = True
@@ -30,10 +33,11 @@ class FakeCursor:
     def execute(self, sql, params=None):
         flat = " ".join(sql.split()).lower()
         self.statements.append((flat, list(params or [])))
-        if flat.startswith("select id, name, price, stock from products"):
+        if flat.startswith("select id, name, coalesce(sale_price, price) as price, stock"):
             wanted = params[0]
             self._rows = [
-                {"id": p, "name": f"product-{p[-1]}", "price": 10, "stock": self.stock[p]}
+                {"id": p, "name": f"product-{p[-1]}", "price": self.prices.get(p, 10),
+                 "stock": self.stock[p]}
                 for p in wanted if p in self.stock
             ]
         elif flat.startswith("insert into orders"):
@@ -69,8 +73,8 @@ class FakePool:
 @pytest.fixture
 def checkout(monkeypatch):
     """Run create_order against fake stock; returns (result_or_error, cursor)."""
-    def _run(items, stock):
-        cur = FakeCursor(stock)
+    def _run(items, stock, prices=None):
+        cur = FakeCursor(stock, prices)
         monkeypatch.setattr(orders_mod, "pool", FakePool(cur))
         monkeypatch.setattr(orders_mod, "log_action", lambda **k: None)
         monkeypatch.setattr(orders_mod, "notify_new_order", lambda o: None)
@@ -199,3 +203,26 @@ def test_placing_an_order_records_its_first_status_event(checkout):
     events = [(s, p) for s, p in cur.statements if s.startswith("insert into order_status_events")]
     assert len(events) == 1
     assert events[0][1] == ["order-1", "pending"]
+
+
+# --- an item on offer -------------------------------------------------------
+def test_the_shop_charges_the_offer_price_not_the_crossed_out_one(checkout):
+    """The prices are re-read from the database at checkout, so what's charged is the
+    offer — whatever the basket has been carrying since the customer added it."""
+    P = "aaaaaaaa-0000-0000-0000-00000000000a"
+    result, cur = checkout([{"product_id": P, "qty": 2}], {P: 5}, prices={P: 7.5})
+
+    assert not isinstance(result, HTTPException), result
+    order_insert = next(p for sql, p in cur.statements if sql.startswith("insert into orders"))
+    assert order_insert[7] == 15.0, "2 × the offer price of 7.50"
+    lines = next(p for sql, p in cur.statements if sql.startswith("insert into order_items"))
+    assert lines[3] == [7.5], "and the order records what was actually charged"
+
+
+def test_the_price_the_shop_reads_is_the_offer_when_there_is_one(checkout):
+    """Guards the coalesce itself: asking for `price` alone would charge the old price
+    on every discounted item in the shop."""
+    P = "aaaaaaaa-0000-0000-0000-00000000000b"
+    _, cur = checkout([{"product_id": P, "qty": 1}], {P: 1})
+    read = next(sql for sql, _ in cur.statements if "from products" in sql and "for update" in sql)
+    assert "coalesce(sale_price, price) as price" in read

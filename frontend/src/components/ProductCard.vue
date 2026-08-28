@@ -5,6 +5,8 @@
            shopper can do. Remaining quantity is deliberately NOT shown — low
            stock is manager information (see the dashboard's restock list). -->
       <span v-if="product.stock === 0" class="tag tag-out">{{ t('product.outOfStock') }}</span>
+      <!-- an offer outranks a promo tag: it's the reason to look twice -->
+      <span v-else-if="onSale" class="tag tag-sale">{{ t('product.saleOff', { n: saleOff }) }}</span>
       <span v-else-if="tag" class="tag">{{ tag }}</span>
       <WishlistButton :product="product" />
       <img v-if="image" :src="image" :alt="name" loading="lazy" decoding="async" class="thumb-link" @click="goDetail">
@@ -14,7 +16,12 @@
       <h3 class="thumb-link" @click="goDetail">{{ name }}</h3>
       <p class="desc">{{ desc }}</p>
       <div class="foot">
-        <span class="price">{{ ar(product.price) }} <span class='dh' role='img' aria-label='درهم'></span> <small>/ {{ unit }}</small></span>
+        <span class="price">
+          <!-- what it costs now leads; what it used to cost trails it, struck through -->
+          {{ ar(price) }} <span class='dh' role='img' aria-label='درهم'></span>
+          <s v-if="onSale" class="was">{{ ar(product.price) }} <span class='dh' role='img' aria-label='درهم'></span></s>
+          <small>/ {{ unit }}</small>
+        </span>
         <span v-if="product.stock === 0" class="add" style="opacity:.5;pointer-events:none">{{ t('product.outOfStock') }}</span>
         <button v-else-if="!cart.qty(product.id)" class="add" @click="add">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>{{ t('product.add') }}
@@ -34,7 +41,7 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useCartStore } from '../stores/cart'
-import { pName, pDesc, pUnit, pTag } from '../utils/product'
+import { pName, pDesc, pUnit, pTag, pPrice, pIsOnSale, pSaleOff } from '../utils/product'
 import WishlistButton from './WishlistButton.vue'
 
 const { t } = useI18n()
@@ -56,6 +63,9 @@ const name = computed(() => pName(props.product))
 const desc = computed(() => pDesc(props.product))
 const unit = computed(() => pUnit(props.product))
 const tag = computed(() => pTag(props.product))
+const price = computed(() => pPrice(props.product))
+const onSale = computed(() => pIsOnSale(props.product))
+const saleOff = computed(() => pSaleOff(props.product))
 function goDetail() { router.push({ name: 'product', params: { id: props.product.id } }) }
 
 function add() {
@@ -67,4 +77,7 @@ function add() {
 
 <style scoped>
 .tag-out { background: var(--red, #9c2b2b); }
+.tag-sale { background: var(--terra, #a85a32); }
+/* the old price: present, but plainly not the one being asked for */
+.price .was { color: var(--muted, #8a7f64); font-size: .92rem; font-weight: 500; opacity: .85; margin-inline-start: .4rem; text-decoration-thickness: 1.5px; }
 </style>

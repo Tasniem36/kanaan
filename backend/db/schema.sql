@@ -355,6 +355,19 @@ create table if not exists delivery_zones (
 create index if not exists order_items_product_id_idx on order_items (product_id);
 create index if not exists orders_status_idx on orders (status);
 create index if not exists products_price_idx on products (price) where is_active;
+
+-- A product on offer keeps its usual price and gains a sale price: what it actually
+-- sells for while the offer runs, and what the shopper sees the old price crossed out
+-- beside. Clearing it ends the offer — one switch rather than two prices to keep in
+-- step, and the price it used to cost is never overwritten.
+alter table products add column if not exists sale_price numeric(10, 2);
+do $$ begin
+  alter table products add constraint products_sale_price_is_a_discount
+    check (sale_price is null or (sale_price > 0 and sale_price < price));
+exception when duplicate_object then null; end $$;
+-- what a shopper actually pays, which is what the storefront sorts and filters on
+create index if not exists products_effective_price_idx
+  on products (coalesce(sale_price, price)) where is_active;
 create index if not exists users_created_at_idx on users (created_at desc);
 
 -- ---------- content_values (editable "why us" cards, admin-managed) ---------

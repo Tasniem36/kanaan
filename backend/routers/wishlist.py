@@ -9,7 +9,7 @@ from security import current_user
 router = APIRouter()
 
 # same light columns as the product feed — thumbnail only, never the full gallery
-_COLS = """p.id, p.name, p.name_en, p.description, p.description_en, p.price,
+_COLS = """p.id, p.name, p.name_en, p.description, p.description_en, p.price, p.sale_price,
            p.unit, p.unit_en, p.category, p.type, p.tag, p.tag_en,
            coalesce(p.thumb_url, p.image_url) as image_url, p.stock, p.is_active"""
 

@@ -12,7 +12,13 @@
             <tr v-if="catalog.loading && !visibleProducts.length"><td colspan="5"><Loader :label="t('common.loading')" /></td></tr>
             <tr v-for="p in visibleProducts" :key="p.id" :class="{ 'row-hidden': !p.is_active }">
               <td><div class="a-row" style="justify-content:flex-start;gap:.5rem"><img class="a-thumb" :src="p.thumb_url || p.image_url" :alt="pName(p)"><span style="font-weight:700;color:var(--green)">{{ pName(p) }}</span><span v-if="!p.is_active" class="a-pill pill-low" style="font-size:.66rem">{{ t('manager.hidden') }}</span></div></td>
-              <td>{{ p.price }}</td>
+              <!-- an item on offer shows both, so the inventory list says at a glance
+                   which products are currently discounted -->
+              <td style="white-space:nowrap">
+                <b v-if="pIsOnSale(p)" class="on-sale">{{ p.sale_price }}</b>
+                <s v-if="pIsOnSale(p)" class="was">{{ p.price }}</s>
+                <template v-else>{{ p.price }}</template>
+              </td>
               <td class="tc"><span class="a-pill" :class="p.stock === 0 ? 'pill-low' : (p.stock <= 5 ? 'pill-warn' : 'pill-ok')">{{ p.stock }}</span></td>
               <td class="tc">
                 <div class="stock-adjust">
@@ -84,7 +90,7 @@
 import { reactive, ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useCatalogStore } from '../../stores/catalog'
-import { pName } from '../../utils/product'
+import { pName, pIsOnSale } from '../../utils/product'
 import { useConfirmStore } from '../../stores/confirm'
 import { useToastStore } from '../../stores/toast'
 import ImagePicker from '../../components/ImagePicker.vue'
@@ -167,6 +173,8 @@ onMounted(() => catalog.fetch())
 </script>
 
 <style scoped>
+.was { color: var(--muted, #8a7f64); opacity: .8; margin-inline-start: .35rem; font-size: .9em; }
+.on-sale { color: var(--terra, #a85a32); }
 h1 { font-family: 'Amiri', serif; color: var(--green); font-size: 1.9rem; margin-bottom: 1rem; }
 .p-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
 .p-head h1 { margin-bottom: 0; }

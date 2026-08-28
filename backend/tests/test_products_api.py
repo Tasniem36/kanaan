@@ -55,8 +55,9 @@ def test_empty_result_reports_zero_total(client, monkeypatch):
 @pytest.mark.parametrize("key,expected", [
     ("featured", "sort, created_at"),
     ("newest", "created_at desc"),
-    ("price_asc", "price, sort"),
-    ("price_desc", "price desc, sort"),
+    # an item on offer belongs where its offer price puts it, not its old one
+    ("price_asc", "coalesce(sale_price, price), sort"),
+    ("price_desc", "coalesce(sale_price, price) desc, sort"),
     ("name", "name"),
 ])
 def test_each_sort_option_maps_to_its_clause(client, captured, key, expected):
@@ -85,7 +86,8 @@ def test_unknown_sort_falls_back_and_never_reaches_the_sql(client, captured, evi
 def test_price_bounds_are_passed_as_parameters(client, captured):
     client.get("/api/products?active=1&min_price=10&max_price=99.5")
     sql, params = captured[-1]
-    assert "price >= %s" in sql and "price <= %s" in sql
+    assert "coalesce(sale_price, price) >= %s" in sql
+    assert "coalesce(sale_price, price) <= %s" in sql, "a bound is on what's paid, not the old price"
     assert 10.0 in params and 99.5 in params
 
 
@@ -100,7 +102,7 @@ def test_price_zero_is_a_real_bound_not_falsy(client, captured):
     """0 is a legitimate minimum and must not be dropped as falsy."""
     client.get("/api/products?active=1&min_price=0")
     sql, params = captured[-1]
-    assert "price >= %s" in sql and 0.0 in params
+    assert "coalesce(sale_price, price) >= %s" in sql and 0.0 in params
 
 
 # --- search -----------------------------------------------------------------
@@ -123,7 +125,7 @@ def test_search_term_is_parameterised_not_interpolated(client, captured):
 def test_storefront_sinks_sold_out_items(client, captured):
     client.get("/api/products?active=1&sort=price_asc")
     sql, _ = captured[-1]
-    assert "order by stock = 0, price, sort" in sql
+    assert "order by stock = 0, coalesce(sale_price, price), sort" in sql
 
 
 def test_manager_inventory_keeps_its_configured_order(client, captured, monkeypatch):
@@ -132,7 +134,7 @@ def test_manager_inventory_keeps_its_configured_order(client, captured, monkeypa
     monkeypatch.setattr(products_mod, "optional_user", lambda r: {"id": "m", "role": "manager"})
     client.get("/api/products?sort=price_asc")
     sql, _ = captured[-1]
-    assert "order by price, sort" in sql
+    assert "order by coalesce(sale_price, price), sort" in sql
     assert "stock = 0" not in sql
 
 

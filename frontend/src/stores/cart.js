@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { api } from '../services/api'
 import { useAuthStore } from './auth'
+import { pPrice } from '../utils/product'
 
 const KEY = 'cart'
 
@@ -25,8 +26,11 @@ export const useCartStore = defineStore('cart', {
   getters: {
     count: (s) => Object.values(s.items).reduce((a, i) => a + i.qty, 0),
     list: (s) => Object.values(s.items).map((i) => ({ ...i.product, q: i.qty })),
+    // pPrice, not i.price: a line on offer is totalled at the offer price. The server
+    // re-reads both from the database at checkout, so this only has to agree with what
+    // the shopper is being shown.
     total() {
-      return this.list.reduce((sum, i) => sum + i.price * i.q, 0)
+      return this.list.reduce((sum, i) => sum + pPrice(i) * i.q, 0)
     },
     qty: (s) => (id) => s.items[id]?.qty || 0,
   },
