@@ -293,7 +293,7 @@ export default { name: 'HomeView' }
 </script>
 
 <script setup>
-import { ref, reactive, computed, watch, onMounted, onActivated, nextTick } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted, onActivated, nextTick } from 'vue'
 import { RouterLink, useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '../services/api'
@@ -659,6 +659,12 @@ function observeReveals() {
 }
 // re-observe when the editable "why us" cards arrive from the backend
 watch(() => content.values, observeReveals)
+
+// PREVIEW — the brighter palette is being judged on this page alone, so it's put on
+// <html> while the home page is mounted and taken off on the way out. If it's kept,
+// the values move into :root in style.css and all of this goes away.
+onMounted(() => document.documentElement.classList.add('theme-bright'))
+onUnmounted(() => document.documentElement.classList.remove('theme-bright'))
 
 onMounted(() => {
   content.fetch()

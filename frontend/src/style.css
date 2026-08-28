@@ -19,6 +19,45 @@
     --cta-w:13.5rem;
   }
 
+  /* ------------------------------------------------------------------------
+     PREVIEW — brighter, higher-contrast take on the same identity.
+     Applied to <html> only while the home page is mounted (see HomeView.vue),
+     so the rest of the shop is untouched while this is being judged. If it's
+     kept, these values move into :root above and the class goes away.
+
+     The palette isn't replaced: olive stays the identity and cream stays the
+     ground. What changes is the room they get — a near-white paper, near-black
+     ink, and gold demoted from "every hover and border" to a rare accent, which
+     is what stops four colours competing on one card.
+     ------------------------------------------------------------------------ */
+  :root.theme-bright{
+    --cream:#fbf9f5;      /* was #f5efe3 — still warm, much closer to white */
+    --cream-2:#f1ece2;
+    --paper:#ffffff;
+    --green:#36461f;      /* the identity, a touch deeper against a lighter ground */
+    --green-2:#263114;
+    --green-soft:#67754a;
+    --gold:#b8902f;       /* unchanged hex: it's the brand gold, just used far less */
+    --gold-2:#d4b25e;
+    --terra:#a8512a;
+    --terra-deep:#7e3f20;
+    --red:#a51f1f;
+    --ink:#14170e;        /* near-black: the contrast the old ink never had */
+    --muted:#6b6455;      /* darkened so secondary text actually passes AA on paper */
+  }
+  /* Flat by default; the lift on hover is depth, not a change of colour. The old
+     card announced itself with a gold border before you touched it. */
+  :root.theme-bright .card{border-color:rgba(20,23,14,.09);border-radius:16px;box-shadow:0 1px 2px rgba(20,23,14,.04)}
+  :root.theme-bright .card:hover{transform:translateY(-4px);box-shadow:0 14px 26px -14px rgba(20,23,14,.3);border-color:rgba(20,23,14,.16)}
+  :root.theme-bright .pottery .card{border-color:rgba(20,23,14,.09)}
+  :root.theme-bright .pottery .card:hover{border-color:rgba(20,23,14,.16)}
+  /* green deepens on hover instead of turning gold — one accent, one job */
+  :root.theme-bright .add:hover{background:var(--green-2);transform:translateY(-1px)}
+  :root.theme-bright .btn-green{box-shadow:0 8px 18px -14px rgba(20,23,14,.75)}
+  /* the price is the loudest thing on a card, so it reads as ink, not decoration */
+  :root.theme-bright .price{color:var(--ink);letter-spacing:-.01em}
+  :root.theme-bright .card .tag{background:var(--green);letter-spacing:0}
+
   *{box-sizing:border-box;margin:0;padding:0}
   html{scroll-behavior:smooth}
   body{font-family:"Tajawal",system-ui,Tahoma,sans-serif;background:var(--cream);color:var(--ink);line-height:1.75;overflow-x:clip}
