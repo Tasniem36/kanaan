@@ -18,6 +18,7 @@
        two can't drift apart. */
     --cta-w:13.5rem;
   }
+
   *{box-sizing:border-box;margin:0;padding:0}
   html{scroll-behavior:smooth}
   body{font-family:"Tajawal",system-ui,Tahoma,sans-serif;background:var(--cream);color:var(--ink);line-height:1.75;overflow-x:clip}
@@ -112,6 +113,41 @@
   .value .ic img{width:100%;height:100%;object-fit:cover;display:block}
   .value b{display:block;font-size:1rem;color:var(--green)}
   .value span{font-size:.84rem;color:var(--muted)}
+
+  /* --- auth pages (sign in / create account / reset) -------------------------
+     The form side of AuthShell. Kept here, not in each page, so the three can't
+     drift apart; every rule is scoped under .auth-inner so nothing else picks
+     them up. White ground, one strong colour — the button. */
+  .auth-inner h1{font-family:"Amiri",serif;font-size:1.9rem;line-height:1.3;color:var(--ink);margin-bottom:.4rem}
+  .auth-inner .auth-sub{color:var(--muted);font-size:.9rem;line-height:1.65;margin-bottom:1.5rem}
+  .auth-inner form{display:flex;flex-direction:column;gap:.7rem}
+  /* label and value live in one bordered box, so a filled field reads as a single
+     object instead of a caption floating above a control */
+  .auth-inner .af{border:1.5px solid rgba(20,23,14,.15);border-radius:12px;padding:.4rem .8rem .5rem;background:#fff;transition:border-color .18s,box-shadow .18s}
+  .auth-inner .af:focus-within{border-color:var(--green);box-shadow:0 0 0 3px rgba(60,74,39,.13)}
+  .auth-inner .af > label{display:block;font-size:.7rem;font-weight:600;letter-spacing:.02em;color:var(--muted);margin:0}
+  .auth-inner .af .a-input{border:none;background:none;border-radius:0;padding:0;width:100%;font-size:.95rem;color:var(--ink)}
+  .auth-inner .af .a-input:focus,.auth-inner .af .a-input:focus-visible{outline:none;box-shadow:none;border:none}
+  .auth-inner .af .pw-wrap .a-input{padding-inline-end:2rem}
+  .auth-inner .af .pw-toggle{inset-inline-end:0;width:26px;height:26px}
+  .auth-inner .af-hint{display:block;font-size:.72rem;color:var(--muted);margin-top:-.2rem}
+  .auth-inner .af-code .a-input{letter-spacing:.42em;font-size:1.1rem;font-weight:700;font-family:"Amiri",serif}
+  .auth-inner .af.done{border-color:var(--green);background:rgba(60,74,39,.04)}
+  /* the one strong colour on the page */
+  .auth-inner .auth-submit{width:100%;justify-content:center;border-radius:999px;padding:.85rem 1.2rem;font-size:.95rem;margin-top:.5rem;box-shadow:0 12px 26px -16px var(--green)}
+  .auth-inner .auth-submit:disabled{opacity:.6;cursor:default}
+  .auth-inner .auth-minor{display:flex;align-items:center;justify-content:space-between;gap:.8rem;flex-wrap:wrap;margin-top:-.1rem}
+  .auth-inner .auth-link{font-size:.82rem;font-weight:700;color:var(--green);text-decoration:underline;text-underline-offset:3px;background:none;font-family:inherit;cursor:pointer}
+  .auth-inner .auth-link:hover{color:var(--green-2)}
+  .auth-inner .auth-link:disabled{opacity:.5;cursor:default;text-decoration:none}
+  .auth-inner .auth-err{color:var(--red);font-size:.84rem;line-height:1.55;margin-top:.2rem}
+  .auth-inner .auth-note{color:var(--green);font-size:.84rem;margin-top:.2rem}
+  .auth-inner .auth-dev{font-size:.76rem;color:var(--gold);background:rgba(184,144,47,.12);padding:.4rem .65rem;border-radius:9px}
+  .auth-inner .auth-sep{display:flex;align-items:center;gap:.8rem;margin:1.4rem 0 1.1rem;color:var(--muted);font-size:.76rem}
+  .auth-inner .auth-sep::before,.auth-inner .auth-sep::after{content:"";flex:1;height:1px;background:rgba(20,23,14,.12)}
+  .auth-inner .auth-alt{text-align:center;font-size:.88rem;color:var(--muted)}
+  .auth-inner .auth-alt a{color:var(--green);font-weight:700;text-decoration:underline;text-underline-offset:3px}
+  .auth-inner .auth-sent{font-size:.82rem;color:var(--muted);margin:-.35rem 0 .2rem;direction:ltr;text-align:start}
 
   /* sections */
   section{padding:4.6rem 0}
