@@ -55,6 +55,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useCatalogStore } from '../stores/catalog'
+import { saleState } from '../utils/product'
 import ImagePicker from './ImagePicker.vue'
 
 const { t } = useI18n()
@@ -64,13 +65,12 @@ const emit = defineEmits(['saved'])
 
 // The offer is only meaningful next to the price it discounts, so the editor says
 // what the shopper would see — or why it won't be accepted — before anything is saved.
-const saleInvalid = computed(() =>
-  f.sale_price !== '' && !(Number(f.sale_price) > 0 && Number(f.sale_price) < Number(f.price)))
-const saleHint = computed(() => {
-  if (f.sale_price === '') return t('manager.salePriceNone')
-  if (saleInvalid.value) return t('manager.salePriceBad')
-  return t('manager.salePriceOn', { n: Math.round((1 - Number(f.sale_price) / Number(f.price)) * 100) })
-})
+const sale = computed(() => saleState(f.sale_price, f.price))
+const saleInvalid = computed(() => sale.value.kind === 'bad')
+const saleHint = computed(() => (
+  sale.value.kind === 'none' ? t('manager.salePriceNone')
+    : sale.value.kind === 'bad' ? t('manager.salePriceBad')
+      : t('manager.salePriceOn', { n: sale.value.off })))
 
 const f = reactive({
   name: '', name_en: '', description: '', description_en: '',

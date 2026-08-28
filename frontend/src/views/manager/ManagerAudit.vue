@@ -77,7 +77,15 @@
           <tr v-for="a in pagedLogs" :key="a.id">
             <td class="a-muted" style="white-space:nowrap">{{ fmtDateTime(a.created_at) }}</td>
             <td><b v-if="a.email" style="color:var(--green)">{{ a.full_name || '—' }}</b><span v-else class="a-muted">{{ t('manager.guestVisitor') }}</span></td>
-            <td class="a-muted" dir="ltr" style="font-size:.85rem">{{ a.email || '—' }}</td>
+            <!-- A failed sign-in has no account behind it, so there's no e-mail to
+                 join to — but the address that was typed is recorded on the row, and
+                 it's the one thing worth knowing about the attempt. Shown here, where
+                 an e-mail is looked for, marked so it doesn't read as an account. -->
+            <td class="a-muted" dir="ltr" style="font-size:.85rem">
+              <span v-if="a.email">{{ a.email }}</span>
+              <span v-else-if="attempted(a)" class="tried" :title="t('manager.emailTried')">{{ attempted(a) }}</span>
+              <span v-else>—</span>
+            </td>
             <td><span class="a-pill" :class="roleClass(a)">{{ roleLabel(a) }}</span></td>
             <td><span class="a-pill" :class="pillClass(a.action)">{{ actionLabel(a.action) }}</span></td>
             <td class="a-muted" style="font-size:.85rem">{{ detailText(a) }}</td>
@@ -198,6 +206,9 @@ function roleClass(a) {
   return a.role === 'manager' ? 'pill-warn' : 'pill-ok'
 }
 
+// the address someone typed on an attempt that never became a session
+const attempted = (a) => (a.email ? '' : (a.detail || {}).email || '')
+
 const FAILURES = ['login_failed', 'verify_failed', 'password_reset_failed', 'promo_invalid',
   'checkout_failed', 'out_of_stock']
 
@@ -219,10 +230,10 @@ function detailText(a) {
   if (a.action === 'visit' && d.from) return [d.from.source, d.from.medium].filter(Boolean).join(' · ')
   if (a.action === 'checkout_opened') return d.total ? `${d.items || ''} · ${d.total}` : ''
   if (a.action === 'login_failed') return d.known ? t('manager.failWrongPassword') : t('manager.failNoAccount')
+  if (a.action === 'password_reset_failed') return d.reason === 'too_many' ? t('manager.failTooMany') : ''
   if (a.action === 'verify_failed') return d.reason === 'too_many' ? t('manager.failTooMany')
     : [d.email_ok ? null : t('checkout.email'), d.phone_ok ? null : t('checkout.phone')].filter(Boolean).join(' · ')
-  if (a.action === 'password_reset_failed') return d.reason === 'too_many' ? t('manager.failTooMany') : ''
-  if (a.action === 'promo_invalid') return `${d.code || ''} — ${d.reason || ''}`
+    if (a.action === 'promo_invalid') return `${d.code || ''} — ${d.reason || ''}`
   if (a.action === 'out_of_stock') return `${d.name || ''} · ${t('manager.wantedLeft', { w: d.wanted, l: d.left })}`
   if (a.action === 'checkout_failed') return t(`manager.fail_${d.reason || 'other'}`)
   return ''
@@ -289,6 +300,8 @@ onMounted(() => { load(); loadTopProducts() })
 </script>
 
 <style scoped>
+/* an address that was typed, not one that belongs to an account */
+.tried { font-style: italic; opacity: .85; text-decoration: underline dotted rgba(20,23,14,.3); text-underline-offset: 3px; }
 h1 { font-family: 'Amiri', serif; color: var(--green); font-size: 1.9rem; margin-bottom: 1rem; }
 .a-pill { font-size: .78rem; }
 .filters { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; margin-bottom: 1rem; }

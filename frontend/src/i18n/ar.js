@@ -400,6 +400,7 @@ export default {
     colContact: 'العميل',
     colError: 'العطل',
     dismiss: 'تجاهل',
+    emailTried: 'بريدٌ جُرّب في محاولةٍ فاشلة — لا حساب له',
     colEmail: 'البريد',
     colRole: 'النوع',
     roleAdmin: 'مدير',

@@ -227,6 +227,8 @@
   .card .foot{display:flex;align-items:center;justify-content:space-between;gap:.6rem;margin-top:auto}
   .price{font-family:"Amiri",serif;font-weight:700;font-size:1.4rem;color:var(--terra-deep)}
   .price small{font-family:"Tajawal",sans-serif;font-size:.74rem;color:var(--muted);font-weight:500}
+  /* how much is off, said once, in the same voice on the card and the product page */
+  .save-pill{display:inline-flex;align-items:center;vertical-align:.12em;margin-inline-start:.45rem;font-family:"Tajawal",sans-serif;font-size:.72rem;font-weight:700;line-height:1;letter-spacing:0;color:#fff;background:var(--terra);border-radius:999px;padding:.3rem .58rem;white-space:nowrap}
   .add{background:var(--green);color:var(--cream);border-radius:12px;padding:.55rem .95rem;font-weight:700;font-size:.86rem;display:inline-flex;gap:.4rem;align-items:center;transition:background .2s,transform .2s}
   .add:hover{background:var(--gold);transform:translateY(-2px)}
   .add svg{width:16px;height:16px}
@@ -288,8 +290,13 @@
 
   /* cart */
   .overlay{position:fixed;inset:0;background:rgba(44,55,25,.55);z-index:90}
-  .drawer{position:fixed;top:0;right:0;height:100%;width:min(420px,92vw);z-index:100;background:var(--cream);box-shadow:0 0 60px rgba(0,0,0,.35);transform:translateX(110%);transition:transform .35s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column}
-  .drawer.open{transform:translateX(0)}
+  /* Same rule as the nav drawer above: it opens from the edge its own button is on.
+     `right:0` is physical, so in Arabic the basket flew in from the right while the
+     cart button sat at the top left. Both buttons live in .pb-actions, which lands
+     on the inline end in either language — so that is where both panels belong. */
+  .drawer{position:fixed;top:0;inset-inline-end:0;height:100%;width:min(420px,92vw);z-index:100;background:var(--cream);box-shadow:0 0 60px rgba(0,0,0,.35);transform:translateX(110%);transition:transform .35s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column}
+  [dir="rtl"] .drawer{transform:translateX(-110%)}
+  .drawer.open,[dir="rtl"] .drawer.open{transform:translateX(0)}
   .drawer-head{display:flex;align-items:center;justify-content:space-between;padding:1.3rem 1.4rem;background:var(--green);color:var(--cream)}
   .drawer-head b{font-family:"Amiri",serif;font-size:1.4rem}
   .drawer-head .close{width:40px;height:40px;border-radius:11px;background:rgba(255,255,255,.12);display:grid;place-items:center}

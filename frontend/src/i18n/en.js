@@ -398,6 +398,7 @@ export default {
     colContact: 'Customer',
     colError: 'Error',
     dismiss: 'Dismiss',
+    emailTried: 'Address tried in a failed attempt — no account for it',
     colEmail: 'Email',
     colRole: 'Type',
     roleAdmin: 'Admin',

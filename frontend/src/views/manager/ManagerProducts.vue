@@ -60,6 +60,14 @@
             <div><label class="co-l">{{ t('manager.price') }} *</label><input class="a-input" type="number" step="0.01" v-model="np.price"></div>
           </div>
           <div class="grid2">
+            <div>
+              <label class="co-l">{{ t('manager.salePrice') }}</label>
+              <input class="a-input" type="number" step="0.01" min="0" v-model="np.sale_price" :placeholder="t('manager.salePricePh')">
+              <small class="sale-hint" :class="{ bad: npSale.kind === 'bad' }">{{ npSaleHint }}</small>
+            </div>
+            <div></div>
+          </div>
+          <div class="grid2">
             <div><label class="co-l">{{ t('manager.unit') }} (ع)</label><input class="a-input" v-model.trim="np.unit" placeholder="400غ"></div>
             <div><label class="co-l">{{ t('manager.unit') }} (EN)</label><input class="a-input" dir="ltr" v-model.trim="np.unit_en" :placeholder="t('manager.enOptional')"></div>
           </div>
@@ -87,10 +95,10 @@
 </template>
 
 <script setup>
-import { reactive, ref, onMounted } from 'vue'
+import { computed, reactive, ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useCatalogStore } from '../../stores/catalog'
-import { pName, pIsOnSale } from '../../utils/product'
+import { pName, pIsOnSale, saleState } from '../../utils/product'
 import { useConfirmStore } from '../../stores/confirm'
 import { useToastStore } from '../../stores/toast'
 import ImagePicker from '../../components/ImagePicker.vue'
@@ -109,13 +117,21 @@ const { visible: visibleProducts, sentinel, hasMore } = useInfiniteScroll(() => 
 
 const restockQty = reactive({})
 const showAdd = ref(false)
-const np = reactive({ name: '', name_en: '', description: '', description_en: '', category: 'pantry', unit: '', unit_en: '', price: '', stock: '', type: '', tag: '', tag_en: '', sort: '', images: [] })
+const NEW_PRODUCT = { name: '', name_en: '', description: '', description_en: '', category: 'pantry', unit: '', unit_en: '', price: '', sale_price: '', stock: '', type: '', tag: '', tag_en: '', sort: '', images: [] }
+const np = reactive({ ...NEW_PRODUCT })
+
+// the same reading of the offer the edit dialog gives, from the same rule
+const npSale = computed(() => saleState(np.sale_price, np.price))
+const npSaleHint = computed(() => (
+  npSale.value.kind === 'none' ? t('manager.salePriceNone')
+    : npSale.value.kind === 'bad' ? t('manager.salePriceBad')
+      : t('manager.salePriceOn', { n: npSale.value.off })))
 const pErr = ref('')
 const pBusy = ref(false)
 
 function openAdd() {
   pErr.value = ''
-  Object.assign(np, { name: '', name_en: '', description: '', description_en: '', category: 'pantry', unit: '', unit_en: '', price: '', stock: '', type: '', tag: '', tag_en: '', sort: '', images: [] })
+  Object.assign(np, NEW_PRODUCT, { images: [] })
   showAdd.value = true
 }
 
@@ -127,7 +143,12 @@ async function addProduct() {
   pBusy.value = true
   try {
     // the backend generates the list thumbnail automatically from the first image
-    await catalog.create({ ...np, images: [...np.images], price: Number(np.price), stock: Number(np.stock) || 0, sort: Number(np.sort) || 0 })
+    await catalog.create({
+      ...np, images: [...np.images],
+      price: Number(np.price), stock: Number(np.stock) || 0, sort: Number(np.sort) || 0,
+      // '' means no offer; the server refuses one that isn't below the usual price
+      sale_price: np.sale_price === '' ? null : Number(np.sale_price),
+    })
     showAdd.value = false
     toast.show(t('manager.toastAdded'))
   } catch (e) { pErr.value = e.message } finally { pBusy.value = false }
@@ -175,6 +196,8 @@ onMounted(() => catalog.fetch())
 <style scoped>
 .was { color: var(--muted, #8a7f64); opacity: .8; margin-inline-start: .35rem; font-size: .9em; }
 .on-sale { color: var(--terra, #a85a32); }
+.sale-hint { display: block; font-size: .74rem; color: var(--muted, #8a7f64); margin-top: .3rem; }
+.sale-hint.bad { color: var(--red, #9c2b2b); }
 h1 { font-family: 'Amiri', serif; color: var(--green); font-size: 1.9rem; margin-bottom: 1rem; }
 .p-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
 .p-head h1 { margin-bottom: 0; }

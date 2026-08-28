@@ -24,6 +24,17 @@ export const pPrice = (p) => Number(pIsOnSale(p) ? p.sale_price : p?.price || 0)
 // How much off, as a whole percent — what the badge on the corner of the card says
 export const pSaleOff = (p) => (pIsOnSale(p) ? Math.round((1 - p.sale_price / p.price) * 100) : 0)
 
+// How an offer price reads against the price it discounts. Shared by the add and the
+// edit dialogs so the manager is told the same thing in both — and it matches what
+// the server will accept (routers/products._sale_price).
+export function saleState(sale, price) {
+  if (sale === '' || sale === null || sale === undefined) return { kind: 'none' }
+  const s = Number(sale)
+  const p = Number(price)
+  if (!(s > 0 && s < p)) return { kind: 'bad' }
+  return { kind: 'on', off: Math.round((1 - s / p) * 100) }
+}
+
 export const pName = (p) => (p ? pick(p.name, p.name_en) : '')
 export const pDesc = (p) => (p ? pick(p.description, p.description_en) : '')
 export const pUnit = (p) => (p ? pick(p.unit, p.unit_en) : '')

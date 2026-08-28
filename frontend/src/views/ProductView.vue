@@ -458,7 +458,7 @@ onBeforeUnmount(() => removeEventListener('scroll', onScroll))
 .pdp-price { font-family: "Amiri", serif; font-size: 2rem; color: var(--terra-deep); margin-bottom: .5rem; }
 .pdp-price small { font-size: 1rem; color: var(--muted); }
 .pdp-price .was { font-size: 1.2rem; color: var(--muted); opacity: .8; margin-inline-start: .55rem; text-decoration-thickness: 2px; }
-.pdp-price .save-pill { font-family: "Tajawal", sans-serif; font-size: .78rem; font-weight: 700; color: #fff; background: var(--terra, #a85a32); border-radius: 999px; padding: .2rem .6rem; vertical-align: .35rem; margin-inline-start: .5rem; }
+.pdp-price .save-pill { font-size: .8rem; padding: .32rem .7rem; vertical-align: .38rem; }
 .pdp-stock { font-size: .9rem; font-weight: 700; margin-bottom: 1.2rem; }
 .pdp-stock.in { color: var(--green-soft); }
 .pdp-stock.low { color: var(--gold); }

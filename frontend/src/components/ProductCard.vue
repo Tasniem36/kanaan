@@ -5,8 +5,6 @@
            shopper can do. Remaining quantity is deliberately NOT shown — low
            stock is manager information (see the dashboard's restock list). -->
       <span v-if="product.stock === 0" class="tag tag-out">{{ t('product.outOfStock') }}</span>
-      <!-- an offer outranks a promo tag: it's the reason to look twice -->
-      <span v-else-if="onSale" class="tag tag-sale">{{ t('product.saleOff', { n: saleOff }) }}</span>
       <span v-else-if="tag" class="tag">{{ tag }}</span>
       <WishlistButton :product="product" />
       <img v-if="image" :src="image" :alt="name" loading="lazy" decoding="async" class="thumb-link" @click="goDetail">
@@ -21,6 +19,10 @@
           {{ ar(price) }} <span class='dh' role='img' aria-label='درهم'></span>
           <s v-if="onSale" class="was">{{ ar(product.price) }} <span class='dh' role='img' aria-label='درهم'></span></s>
           <small>/ {{ unit }}</small>
+          <!-- the saving belongs beside the numbers it's about, not in the corner
+               opposite them: it's read as part of the price, and it no longer has
+               to fight the wishlist heart or push out the product's own tag -->
+          <span v-if="onSale" class="save-pill">{{ t('product.saleOff', { n: saleOff }) }}</span>
         </span>
         <span v-if="product.stock === 0" class="add" style="opacity:.5;pointer-events:none">{{ t('product.outOfStock') }}</span>
         <button v-else-if="!cart.qty(product.id)" class="add" @click="add">
@@ -77,7 +79,6 @@ function add() {
 
 <style scoped>
 .tag-out { background: var(--red, #9c2b2b); }
-.tag-sale { background: var(--terra, #a85a32); }
 /* the old price: present, but plainly not the one being asked for */
 .price .was { color: var(--muted, #8a7f64); font-size: .92rem; font-weight: 500; opacity: .85; margin-inline-start: .4rem; text-decoration-thickness: 1.5px; }
 </style>
