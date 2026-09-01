@@ -37,7 +37,13 @@ def _client_ip(request):
 # collapse per thing rather than per visitor: adding the same jar twice in one sitting
 # is one row, but adding three different jars is three — otherwise the collapse would
 # hide the very thing the row is worth recording for.
-_COLLAPSE = {"visit": 1800, "cart_add": 1800, "wishlist_add": 1800, "search": 600}
+#
+# checkout_opened belongs here too: a shopper who opens the basket, presses to finish
+# the order, thinks better of it and comes back is one moment of hesitation, not five.
+# The drop-off figure it feeds compares sittings that reached the form against orders
+# placed, so one row per sitting is what it wants anyway.
+_COLLAPSE = {"visit": 1800, "cart_add": 1800, "wishlist_add": 1800, "search": 600,
+             "checkout_opened": 1800}
 _recent: dict[str, float] = {}
 _recent_lock = threading.Lock()
 
