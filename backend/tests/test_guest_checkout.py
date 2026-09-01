@@ -113,10 +113,34 @@ def test_the_delivery_details_are_still_required(client, stub_order, missing):
     assert client.post("/api/orders", json={**GUEST, missing: ""}).status_code == 400
 
 
-@pytest.mark.parametrize("email", ["", "not-an-email", "a@b", "  "])
-def test_a_guest_must_give_a_usable_e_mail(client, stub_order, email):
-    """It's the fallback channel when the phone is wrong, so a junk value is no use."""
+@pytest.mark.parametrize("email", ["not-an-email", "a@b"])
+def test_a_guest_who_gives_an_e_mail_must_give_a_usable_one(client, stub_order, email):
+    """Optional, but a typo is caught rather than silently swallowed — the customer
+    would otherwise wait for a confirmation that could never arrive."""
     assert client.post("/api/orders", json={**GUEST, "email": email}).status_code == 400
+
+
+@pytest.mark.parametrize("email", ["", "   ", None])
+def test_a_guest_needs_no_e_mail_at_all(client, stub_order, email):
+    """The phone is what the shop delivers to and calls, and the order carries it — so
+    an order can be found by number + phone with no account and no address."""
+    body = {**GUEST}
+    if email is None:
+        body.pop("email")
+    else:
+        body["email"] = email
+    assert client.post("/api/orders", json=body).status_code == 200
+
+
+def test_an_order_with_no_e_mail_hangs_off_no_account(client, stub_order):
+    """There is nothing to key an account on and nothing to send to it, so the order
+    stands alone rather than creating a row with a made-up address on it."""
+    calls, _sent, _state = stub_order
+    body = {k: v for k, v in GUEST.items() if k != "email"}
+    client.post("/api/orders", json=body)
+    inserted = next(p for sql, p in calls if sql.startswith("insert into orders"))
+    assert inserted[0] is None, "user_id"
+    assert not any(sql.startswith("insert into users") for sql, _ in calls)
 
 
 def test_a_signed_in_customer_needs_no_e_mail(client, app, stub_order):

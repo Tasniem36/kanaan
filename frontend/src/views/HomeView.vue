@@ -137,11 +137,12 @@
         <span class="m-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l4 4 10-10"/></svg></span>
         <h3 class="display">{{ t('checkout.placedTitle') }}</h3>
         <p>{{ t('checkout.received', { id: placed.id.slice(0, 8) }) }}</p>
-        <p class="a-muted" style="margin:.5rem 0 .9rem">{{ t('checkout.placedEmailed') }}</p>
+        <!-- with no e-mail, this link is genuinely the only way back to the order -->
+        <p class="a-muted" style="margin:.5rem 0 .9rem">{{ placed.emailed ? t('checkout.placedEmailed') : t('checkout.placedNoEmail') }}</p>
         <RouterLink class="btn btn-green" :to="{ name: 'track', params: { id: placed.id }, query: { t: placed.token } }" @click="placed = null">
           {{ t('checkout.trackOrder') }}
         </RouterLink>
-        <p class="a-muted" style="margin-top:.9rem;font-size:.82rem">
+        <p v-if="placed.emailed" class="a-muted" style="margin-top:.9rem;font-size:.82rem">
           {{ t('checkout.placedSignupNudge') }}
           <RouterLink to="/register" class="lnk" @click="placed = null">{{ t('auth.registerTitle') }}</RouterLink>
         </p>
@@ -195,7 +196,37 @@
       <h3 style="font-family:'Amiri',serif;font-size:1.7rem;color:var(--green);text-align:center;margin-bottom:.2rem">{{ t('checkout.title') }}</h3>
       <p class="a-muted" style="text-align:center;margin-bottom:.6rem">{{ t('checkout.subtitle', { count: ar(cart.count), total: ar(finalTotal) }) }}</p>
 
-      <!-- saved addresses for logged-in customers -->
+      <!-- WHO — asked once, above the address, and only for what isn't already known.
+           A signed-in customer sees their name and number read back with a link to
+           change them where they live, instead of typing them again into a form that
+           will ignore what they type. -->
+      <p v-if="!auth.isAuthenticated" class="guest-line">
+        {{ t('checkout.guestWarn') }}
+        <RouterLink to="/login" class="lnk">{{ t('checkout.loginWord') }}</RouterLink>
+      </p>
+      <p v-else class="known-you">
+        {{ t('checkout.deliveringTo') }}
+        <b>{{ auth.user?.full_name || '—' }}</b>
+        <span v-if="auth.user?.phone" dir="ltr"> · {{ auth.user.phone }}</span>
+        <RouterLink to="/account/profile" class="lnk">{{ t('checkout.changeInAccount') }}</RouterLink>
+      </p>
+      <template v-if="askName">
+        <label class="co-l">{{ t('checkout.fullName') }} *</label>
+        <input class="a-input" v-model.trim="co.name" autocomplete="name">
+      </template>
+      <template v-if="askPhone">
+        <label class="co-l">{{ t('checkout.phone') }} *</label>
+        <input class="a-input" v-model.trim="co.phone" type="tel" inputmode="tel" dir="ltr" placeholder="050 123 4567" autocomplete="tel">
+      </template>
+      <!-- Guests only, and optional: the phone is what we deliver and call on. An
+           e-mail only adds the tracking link by mail and a history to keep. -->
+      <template v-if="!auth.isAuthenticated">
+        <label class="co-l">{{ t('checkout.email') }}</label>
+        <input class="a-input" v-model.trim="co.email" type="email" inputmode="email" dir="ltr" autocomplete="email" placeholder="you@example.com">
+        <p class="a-muted" style="font-size:.78rem;margin-top:.25rem">{{ t('checkout.emailWhy') }}</p>
+      </template>
+
+      <!-- WHERE — the saved addresses, or a new one -->
       <div v-if="auth.isAuthenticated && addresses.addresses.length && !newAddress" style="margin-bottom:.8rem">
         <label class="co-l">{{ t('checkout.chooseAddress') }}</label>
         <label v-for="a in addresses.addresses" :key="a.id" class="addr-pick" :class="{ on: selectedAddressId === a.id }">
@@ -207,24 +238,6 @@
       </div>
 
       <template v-else>
-        <!-- Which way they're checking out, and the way back if they'd rather not.
-             It used to be a paragraph arguing for an account, above a form the
-             customer had already decided to fill in. -->
-        <p v-if="!auth.isAuthenticated" class="guest-line">
-          {{ t('checkout.guestWarn') }}
-          <RouterLink to="/login" class="lnk">{{ t('checkout.loginWord') }}</RouterLink>
-        </p>
-        <label class="co-l">{{ t('checkout.fullName') }} *</label>
-        <input class="a-input" v-model.trim="co.name">
-        <label class="co-l">{{ t('checkout.phone') }} *</label>
-        <input class="a-input" v-model.trim="co.phone" type="tel" inputmode="tel" dir="ltr" placeholder="050 123 4567">
-        <!-- guests only: the second way to reach them if the phone is wrong, and
-             where the tracking link is sent -->
-        <template v-if="!auth.isAuthenticated">
-          <label class="co-l">{{ t('checkout.email') }} *</label>
-          <input class="a-input" v-model.trim="co.email" type="email" inputmode="email" dir="ltr" autocomplete="email" placeholder="you@example.com">
-          <p class="a-muted" style="font-size:.78rem;margin-top:.25rem">{{ t('checkout.emailWhy') }}</p>
-        </template>
         <div class="grid2">
           <div><label class="co-l">{{ t('checkout.city') }} *</label>
             <select class="a-input" v-model="co.city">
@@ -444,6 +457,11 @@ const payMethod = ref('cod')
 // Cash on delivery needs a person at the door to receive it and pay, so contactless
 // is card-only. Switching back to cash clears the request rather than leaving a tick
 // on screen that the order can't carry.
+// Asked for only when the account can't answer it. A guest is asked both; a signed-in
+// customer usually neither, but a row claimed from a guest order can be missing one.
+const askName = computed(() => !auth.isAuthenticated || !auth.user?.full_name)
+const askPhone = computed(() => !auth.isAuthenticated || !auth.user?.phone)
+
 const canLeaveAtDoor = computed(() => payMethod.value === 'ziina')
 watch(payMethod, () => {
   if (!canLeaveAtDoor.value) { co.leave_at_door = false; co.door_note = '' }
@@ -553,8 +571,6 @@ async function openCheckout() {
     return
   }
   reportCheckoutOpened()
-  co.name = co.name || auth.user.full_name || ''
-  co.phone = co.phone || auth.user.phone || ''
   await addresses.fetch().catch(() => {})
   selectedAddressId.value = addresses.default?.id || null
   if (!addresses.addresses.length) newAddress.value = true
@@ -564,23 +580,33 @@ async function openCheckout() {
 async function placeOrder() {
   coErr.value = ''
   let delivery
+  // Who the order is for, decided once: the field if it was shown, the account
+  // otherwise. Both address paths then agree by construction.
+  const who = {
+    customer_name: (askName.value ? co.name : auth.user?.full_name) || '',
+    phone: (askPhone.value ? co.phone : auth.user?.phone) || '',
+  }
+  if (!who.customer_name || !who.phone) { coErr.value = t('checkout.errRequired'); return }
+  const contactless = { leave_at_door: co.leave_at_door, door_note: co.door_note }
+
   const usingSaved = auth.isAuthenticated && addresses.addresses.length && !newAddress.value
   if (usingSaved) {
     const a = addresses.addresses.find((x) => x.id === selectedAddressId.value)
     if (!a) { coErr.value = t('checkout.errChoose'); return }
-    delivery = { customer_name: co.name || auth.user?.full_name || '—', phone: co.phone || auth.user?.phone || '', city: a.city, street: a.street, house: a.house, notes: a.notes, leave_at_door: co.leave_at_door, door_note: co.door_note }
-    if (!delivery.phone) { coErr.value = t('checkout.errPhone'); return }
+    delivery = { ...who, city: a.city, street: a.street, house: a.house, notes: a.notes, ...contactless }
   } else {
-    if (!co.name || !co.phone || !co.city || !co.street || !co.house) {
+    if (!co.city || !co.street || !co.house) {
       coErr.value = t('checkout.errRequired')
       return
     }
-    delivery = { customer_name: co.name, phone: co.phone, city: co.city, street: co.street, house: co.house, notes: co.notes, leave_at_door: co.leave_at_door, door_note: co.door_note }
-    // a guest is reachable only by what they type here, so the e-mail is required
-    if (!auth.isAuthenticated) {
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(co.email)) { coErr.value = t('checkout.errEmail'); return }
-      delivery.email = co.email
-    }
+    delivery = { ...who, city: co.city, street: co.street, house: co.house, notes: co.notes, ...contactless }
+  }
+  // Optional for a guest: the phone is what we deliver and call on, and it also finds
+  // the order later (number + phone). Checked only if they gave one, so a typo is
+  // caught rather than silently swallowed.
+  if (!auth.isAuthenticated && co.email) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(co.email)) { coErr.value = t('checkout.errEmail'); return }
+    delivery.email = co.email
   }
 
   // delivery phone must be a valid UAE mobile
@@ -611,7 +637,7 @@ async function placeOrder() {
     pantryFeed.value?.reload(); potteryFeed.value?.reload() // refresh stock
     // A guest has no حسابي to find the order in, so hand them the tracking link on
     // screen as well as by e-mail — the e-mail address could have a typo in it.
-    if (wasGuest) placed.value = { id: result.order.id, token: result.order.track_token }
+    if (wasGuest) placed.value = { id: result.order.id, token: result.order.track_token, emailed: !!delivery.email }
     else showToast(t('checkout.received', { id: result.order.id.slice(0, 8) }))
   } catch (e) {
     coErr.value = promoMessage(e)
@@ -750,6 +776,8 @@ onMounted(() => {
 .door-opt input { margin-top: .35rem; flex: 0 0 auto; }
 .door-opt b { font-weight: 700; color: var(--green); }
 .guest-line { font-size: .84rem; color: var(--muted); margin-bottom: .3rem; }
+.known-you { font-size: .86rem; color: var(--ink); margin-bottom: .5rem; line-height: 1.6; }
+.known-you .lnk { font-size: .8rem; margin-inline-start: .4rem; }
 .lnk { color: var(--green); text-decoration: underline; font-weight: 700; }
 .search-bar {
   position: sticky;

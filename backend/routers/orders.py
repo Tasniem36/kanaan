@@ -179,12 +179,15 @@ def create_order(request: Request, user=Depends(optional_user), payload: dict = 
         if not get_checkout_config()["guest_allowed"]:
             _checkout_failed(request, user, "sign_in_required")
             raise HTTPException(401, "Please sign in to place your order")
-        # The e-mail is the second way to reach them and the key their order history
-        # hangs off, so it has to be real-looking.
+        # Optional. The phone is what the shop actually delivers and calls on, and the
+        # order carries it, so an order can be found by number + phone with no account
+        # at all (see /orders/lookup). An e-mail, when given, buys two extra things:
+        # the tracking link by mail, and a row this order can hang off so the customer
+        # keeps one history — so it's still asked for, just not insisted on.
         guest_email = (payload.get("email") or "").strip().lower()
-        if not is_email(guest_email):
+        if guest_email and not is_email(guest_email):
             _checkout_failed(request, user, "bad_email")
-            raise HTTPException(400, "A valid e-mail address is required")
+            raise HTTPException(400, "That e-mail address doesn't look right")
         # ordering reserves stock, so throttle it now that no login stands in the way
         rate_limit(request, bucket="guest_order", limit=6, window=60)
     items = payload.get("items")
@@ -197,9 +200,15 @@ def create_order(request: Request, user=Depends(optional_user), payload: dict = 
             return cur.fetchall() if cur.description else []
 
         # A guest's account is resolved in the same transaction as the order, so a
-        # failure later can't leave an account behind with no order.
-        account = user or _guest_account(run, guest_email, customer_name, phone_norm, request)
-        user_id = account["id"]
+        # failure later can't leave an account behind with no order. With no e-mail
+        # there is nothing to key an account on and nothing to send to it, so the order
+        # stands on its own — its phone is the way back to it.
+        if user:
+            user_id = user["id"]
+        elif guest_email:
+            user_id = _guest_account(run, guest_email, customer_name, phone_norm, request)["id"]
+        else:
+            user_id = None
 
         # Collapse duplicate lines for the same product BEFORE checking stock.
         # Two lines of qty 1 would each pass the check on a product with 1 left,
