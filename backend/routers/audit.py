@@ -159,7 +159,12 @@ def client_event(request: Request, user=Depends(optional_user), payload: dict = 
     event = str((payload or {}).get("event") or "")
     if event not in CLIENT_EVENTS:
         return {"ok": False}
-    rate_limit(request, bucket="audit_event", limit=30, window=60, key=(user or {}).get("id"))
+    # A bucket per event, not one shared by all of them. cart_add and search fire far
+    # more often than the rest, and on a shared budget a shopper filling a basket would
+    # spend it and get their own checkout_opened dropped — quietly understating the
+    # drop-off figure, which is the one number this endpoint exists to feed.
+    rate_limit(request, bucket=f"audit_event:{event}", limit=30, window=60,
+               key=(user or {}).get("id"))
     detail = payload.get("detail") if isinstance(payload.get("detail"), dict) else None
     allowed = CLIENT_EVENT_DETAIL.get(event, ())
     kept = {k: v for k, v in (detail or {}).items() if k in allowed}

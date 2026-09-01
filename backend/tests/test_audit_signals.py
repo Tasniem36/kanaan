@@ -215,3 +215,13 @@ def test_a_customer_who_cannot_find_their_order_is_recorded(client, monkeypatch)
     assert res.status_code == 404
     assert logged[0]["action"] == "track_lookup_failed"
     assert logged[0]["detail"]["ref"] == "ABC1234", "normalised, as the lookup saw it"
+
+
+def test_a_busy_basket_cannot_spend_the_checkout_events_budget(client, monkeypatch):
+    """One shared allowance would let a shopper adding items exhaust it and lose their
+    own checkout_opened — silently understating the drop-off figure."""
+    monkeypatch.setattr(A, "log_action", lambda **k: None)
+    for _ in range(40):
+        client.post("/api/audit/event", json={"event": "cart_add", "detail": {"product_id": "p1"}})
+    res = client.post("/api/audit/event", json={"event": "checkout_opened", "detail": {"items": 1}})
+    assert res.status_code == 200, "the one event that feeds the funnel must still get through"
