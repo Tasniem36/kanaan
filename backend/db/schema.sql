@@ -323,6 +323,16 @@ alter table orders add column if not exists ref text;
 create unique index if not exists orders_ref_key on orders (ref) where ref is not null;
 create unique index if not exists orders_track_token_key on orders (track_token) where track_token is not null;
 
+-- Contactless delivery. The customer asks for the order to be left at the door, and
+-- may add a word for the driver about where exactly — by the guard, third floor on the
+-- left. The note is only kept when the box is ticked: an instruction with nothing to
+-- attach it to would tell a driver to do something nobody asked for.
+--
+-- Separate from `notes` above, which is the landmark for *finding* the address and is
+-- saved with the address. This is what to do on arrival, and belongs to the one order.
+alter table orders add column if not exists leave_at_door boolean not null default false;
+alter table orders add column if not exists door_note text;
+
 -- Guest checkout creates an account with an EMPTY password_hash: it can't be
 -- logged into (bcrypt rejects it), it exists so the order, the in-app chat and the
 -- notifications have a user to hang off. Registering with that e-mail later claims

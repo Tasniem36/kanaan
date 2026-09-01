@@ -41,7 +41,12 @@ class FakeCursor:
                 for p in wanted if p in self.stock
             ]
         elif flat.startswith("insert into orders"):
-            self._rows = [{"id": "order-1", "status": "pending", "total": params[7]}]
+            # track_token and ref are read back by the card path, which is the only way
+            # a contactless order can be placed
+            self._rows = [{"id": "order-1", "status": "pending", "total": params[7],
+                           "track_token": "tok-1", "ref": "ABC1234", "customer_name": "Cust",
+                           "payment_method": params[8], "leave_at_door": params[12],
+                           "door_note": params[13]}]
         else:
             self._rows = []
         return self
@@ -73,17 +78,23 @@ class FakePool:
 @pytest.fixture
 def checkout(monkeypatch):
     """Run create_order against fake stock; returns (result_or_error, cursor)."""
-    def _run(items, stock, prices=None):
+    def _run(items, stock, prices=None, extra=None):
         cur = FakeCursor(stock, prices)
         monkeypatch.setattr(orders_mod, "pool", FakePool(cur))
         monkeypatch.setattr(orders_mod, "log_action", lambda **k: None)
         monkeypatch.setattr(orders_mod, "notify_new_order", lambda o: None)
         monkeypatch.setattr(orders_mod, "_notify_new_order_admins", lambda o: None)
         monkeypatch.setattr(orders_mod, "compute_delivery_fee", lambda city, total: 0)
+        # the card path would otherwise reach Ziina, and e-mail the customer
+        monkeypatch.setattr(orders_mod, "create_payment_intent",
+                            lambda **k: {"id": "pi-1", "redirect_url": "https://pay/x"})
+        monkeypatch.setattr(orders_mod, "execute", lambda *a, **k: None)
+        monkeypatch.setattr(orders_mod, "_send_order_email", lambda *a, **k: None)
 
         payload = {
             "customer_name": "Cust", "phone": "0501234567",
             "city": "دبي", "street": "st", "house": "1", "items": items,
+            **(extra or {}),
         }
         try:
             return orders_mod.create_order(
@@ -226,3 +237,52 @@ def test_the_price_the_shop_reads_is_the_offer_when_there_is_one(checkout):
     _, cur = checkout([{"product_id": P, "qty": 1}], {P: 1})
     read = next(sql for sql, _ in cur.statements if "from products" in sql and "for update" in sql)
     assert "coalesce(sale_price, price) as price" in read
+
+
+# --- leaving the order at the door -----------------------------------------
+def _door_order(checkout, **over):
+    P = "aaaaaaaa-0000-0000-0000-00000000000d"
+    payload_extra = {"leave_at_door": True, "door_note": "  عند   الحرس  ",
+                     "payment_method": "ziina"}
+    payload_extra.update(over)
+    result, cur = checkout([{"product_id": P, "qty": 1}], {P: 3}, extra=payload_extra)
+    insert = next(p for sql, p in cur.statements if sql.startswith("insert into orders"))
+    return result, insert
+
+
+def test_a_contactless_request_is_stored_with_its_note(checkout):
+    _, insert = _door_order(checkout)
+    assert True in insert, "the request itself"
+    assert "عند الحرس" in insert, "whitespace collapsed, kept alongside it"
+
+
+def test_a_note_without_the_request_is_not_stored(checkout):
+    """An instruction with nothing to attach it to would have a driver doing something
+    nobody asked for."""
+    _, insert = _door_order(checkout, leave_at_door=False)
+    assert "عند الحرس" not in insert
+    assert None in insert
+
+
+def test_the_request_stands_on_its_own_without_a_note(checkout):
+    _, insert = _door_order(checkout, door_note="")
+    assert True in insert
+
+
+def test_an_over_long_note_is_trimmed(checkout):
+    _, insert = _door_order(checkout, door_note="x" * 500)
+    note = next(v for v in insert if isinstance(v, str) and v.startswith("xxx"))
+    assert len(note) == 200
+
+
+def test_cash_on_delivery_cannot_also_be_left_at_the_door(checkout):
+    """Someone has to open the door and hand over money, so the two can't both happen.
+    The storefront doesn't offer them together; this catches a form left open while the
+    payment method changed, and refuses rather than dropping a request the customer
+    would go on believing was accepted."""
+    P = "aaaaaaaa-0000-0000-0000-00000000000e"
+    result, cur = checkout([{"product_id": P, "qty": 1}], {P: 3},
+                           extra={"leave_at_door": True, "payment_method": "cod"})
+    assert isinstance(result, HTTPException) and result.status_code == 400
+    assert "card payment" in result.detail
+    assert not any(sql.startswith("insert into orders") for sql, _ in cur.statements), "no order made"

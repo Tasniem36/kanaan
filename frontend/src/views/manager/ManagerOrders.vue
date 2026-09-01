@@ -40,6 +40,8 @@
             <div><span style="font-family:monospace;color:var(--green)">#{{ o.id.slice(0, 8) }}</span> <span class="a-muted">· {{ fmtDate(o.created_at) }}</span></div>
             <div style="margin:.25rem 0"><span class="a-pill" :class="payClass(o)">{{ payLabel(o) }}</span></div>
             <div class="a-muted">📍 {{ t('manager.orderAddr', { city: o.city, street: o.street, house: o.house }) }}<span v-if="o.notes"> ({{ o.notes }})</span></div>
+            <!-- on the row, not only in the detail: it changes what the driver does -->
+            <div v-if="o.leave_at_door" class="door-flag">🚪 {{ t('checkout.leaveAtDoor') }}<span v-if="o.door_note"> — {{ o.door_note }}</span></div>
           </div>
           <div class="a-row order-ctrls" style="gap:.6rem" @click.stop @keydown.stop>
             <span class="a-total">{{ o.total }} <span class='dh' role='img' aria-label='درهم'></span></span>
@@ -91,6 +93,9 @@
         <div class="d-box">
           <div>📍 {{ t('manager.orderAddr', { city: detail.city, street: detail.street, house: detail.house }) }}</div>
           <div v-if="detail.notes" class="d-note">📝 {{ detail.notes }}</div>
+          <div v-if="detail.leave_at_door" class="d-note door">
+            🚪 <b>{{ t('checkout.leaveAtDoor') }}</b><span v-if="detail.door_note"> — {{ detail.door_note }}</span>
+          </div>
         </div>
 
         <!-- what's in it -->
@@ -256,6 +261,9 @@ onMounted(() => ordersStore.fetch())
 </script>
 
 <style scoped>
+/* a delivery instruction, not a note: it has to survive a glance down the list */
+.door-flag { font-size: .82rem; font-weight: 700; color: var(--terra, #a85a32); margin-top: .15rem; }
+.d-note.door { color: var(--terra, #a85a32); }
 .orders-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
 h1 { font-family: 'Amiri', serif; color: var(--green); font-size: 1.9rem; }
 /* status tabs */
