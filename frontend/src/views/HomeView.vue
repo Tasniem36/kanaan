@@ -228,13 +228,26 @@
 
       <!-- WHERE — the saved addresses, or a new one -->
       <div v-if="auth.isAuthenticated && addresses.addresses.length && !newAddress" style="margin-bottom:.8rem">
-        <label class="co-l">{{ t('checkout.chooseAddress') }}</label>
-        <label v-for="a in addresses.addresses" :key="a.id" class="addr-pick" :class="{ on: selectedAddressId === a.id }">
-          <input type="radio" :value="a.id" v-model="selectedAddressId" style="display:none">
-          <b>{{ a.label || '—' }}</b> — {{ t('account.addrLine', { city: a.city, street: a.street, house: a.house }) }}
-          <span v-if="a.notes" class="a-muted"> ({{ a.notes }})</span>
-        </label>
-        <button class="a-btn" style="margin-top:.5rem;background:var(--cream-2);color:var(--green)" @click="newAddress = true">{{ t('checkout.newAddress') }}</button>
+        <!-- One saved address is not a choice, so it isn't presented as one: it's
+             stated, with the alternative as a link. Several are a real choice, and the
+             default is already selected — so the common case costs no clicks either
+             way. -->
+        <template v-if="addresses.addresses.length === 1">
+          <p class="known-you">
+            {{ t('checkout.deliveringToAddress') }}
+            <b>{{ t('account.addrLine', { city: onlyAddress.city, street: onlyAddress.street, house: onlyAddress.house }) }}</b>
+            <span v-if="onlyAddress.notes" class="a-muted"> ({{ onlyAddress.notes }})</span>
+          </p>
+        </template>
+        <template v-else>
+          <label class="co-l">{{ t('checkout.chooseAddress') }}</label>
+          <label v-for="a in addresses.addresses" :key="a.id" class="addr-pick" :class="{ on: selectedAddressId === a.id }">
+            <input type="radio" :value="a.id" v-model="selectedAddressId" style="display:none">
+            <b>{{ a.label || '—' }}</b> — {{ t('account.addrLine', { city: a.city, street: a.street, house: a.house }) }}
+            <span v-if="a.notes" class="a-muted"> ({{ a.notes }})</span>
+          </label>
+        </template>
+        <button class="linkish" @click="newAddress = true">{{ t('checkout.newAddress') }}</button>
       </div>
 
       <template v-else>
@@ -437,6 +450,7 @@ const co = reactive({ name: '', phone: '', city: '', street: '', house: '', note
 // set after a guest's order goes through: { id, token } for the tracking link
 const placed = ref(null)
 const selectedAddressId = ref(null)
+const onlyAddress = computed(() => addresses.addresses[0] || {})
 const newAddress = ref(false)
 const saveAddress = ref(false)
 const payMethod = ref('cod')
@@ -755,6 +769,7 @@ onMounted(() => {
 .guest-line { font-size: .84rem; color: var(--muted); margin-bottom: .3rem; }
 .known-you { font-size: .86rem; color: var(--ink); margin-bottom: .5rem; line-height: 1.6; }
 .known-you .lnk { font-size: .8rem; margin-inline-start: .4rem; }
+.linkish { margin-top: .4rem; font-size: .84rem; font-weight: 700; color: var(--green); text-decoration: underline; text-underline-offset: 3px; }
 .lnk { color: var(--green); text-decoration: underline; font-weight: 700; }
 .search-bar {
   position: sticky;
