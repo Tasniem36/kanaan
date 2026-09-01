@@ -207,15 +207,13 @@
       </div>
 
       <template v-else>
-        <!-- Ordering as a guest works, but the order lives on a link rather than in
-             an account — say so plainly before they type anything. -->
-        <div v-if="!auth.isAuthenticated" class="guest-warn">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4"/><path d="M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>
-          <span>
-            {{ t('checkout.guestWarn') }}
-            <RouterLink to="/login" class="lnk">{{ t('checkout.loginWord') }}</RouterLink>
-          </span>
-        </div>
+        <!-- Which way they're checking out, and the way back if they'd rather not.
+             It used to be a paragraph arguing for an account, above a form the
+             customer had already decided to fill in. -->
+        <p v-if="!auth.isAuthenticated" class="guest-line">
+          {{ t('checkout.guestWarn') }}
+          <RouterLink to="/login" class="lnk">{{ t('checkout.loginWord') }}</RouterLink>
+        </p>
         <label class="co-l">{{ t('checkout.fullName') }} *</label>
         <input class="a-input" v-model.trim="co.name">
         <label class="co-l">{{ t('checkout.phone') }} *</label>
@@ -751,13 +749,7 @@ onMounted(() => {
 .door-opt { display: flex; gap: .5rem; align-items: flex-start; margin-top: .9rem; font-size: .86rem; line-height: 1.5; cursor: pointer; }
 .door-opt input { margin-top: .35rem; flex: 0 0 auto; }
 .door-opt b { font-weight: 700; color: var(--green); }
-.guest-warn {
-  display: flex; gap: .5rem; align-items: flex-start;
-  background: rgba(184,144,47,.12); border: 1px solid rgba(184,144,47,.4);
-  border-radius: 12px; padding: .6rem .75rem; margin-bottom: .8rem;
-  font-size: .82rem; color: var(--ink);
-}
-.guest-warn svg { width: 17px; height: 17px; flex: 0 0 auto; color: var(--gold); margin-top: .15rem; }
+.guest-line { font-size: .84rem; color: var(--muted); margin-bottom: .3rem; }
 .lnk { color: var(--green); text-decoration: underline; font-weight: 700; }
 .search-bar {
   position: sticky;

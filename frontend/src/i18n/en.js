@@ -233,7 +233,7 @@ export default {
     email: 'E-mail address',
     emailWhy: 'We send the order confirmation and tracking link here, and use it to reach you if the phone does not answer.',
     errEmail: 'Enter a valid e-mail address',
-    guestWarn: 'You are ordering without an account. We will e-mail you a tracking link, but the order will not be saved in “My account”. Creating an account keeps your addresses and every order in one place.',
+    guestWarn: 'Continuing as a guest —',
     placedSignupNudge: 'Create an account with the same e-mail to keep your orders:',
     placedTitle: 'We have your order!',
     placedEmailed: 'We e-mailed you a tracking link. Keep it to follow the order without signing in.',
