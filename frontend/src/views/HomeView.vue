@@ -30,18 +30,6 @@
     </nav>
   </aside>
 
-  <!-- Product search — sticky under the nav; auto-hides on scroll down, returns on
-       scroll up / at top. Submitting hands off to /search, the same results page
-       the header's search box uses, so there's one search experience site-wide. -->
-  <form class="search-bar" :class="{ hidden: searchHidden }" role="search" @submit.prevent="runSearch">
-    <div class="search-inner">
-      <svg class="search-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-3.5-3.5"/></svg>
-      <input class="search-input" v-model="searchQuery" :placeholder="t('search.placeholder')" type="search" enterkeyhint="search" :aria-label="t('search.placeholder')">
-      <button v-if="searchQuery" type="button" class="search-clear" @click="searchQuery = ''" :aria-label="t('search.clear')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
-      <button v-if="searchQuery.trim()" type="submit" class="search-go">{{ t('search.go') }}</button>
-    </div>
-  </form>
-
   <!-- hero -->
   <section class="hero" id="home">
     <img class="hero-img" src="/images/hero.jpg" alt="دكّان كنعان — مونة وخزف فلسطيني" fetchpriority="high" decoding="async" /><a class="scroll-cue" href="#pantry" aria-label="استكشف المتجر"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></a>
@@ -433,16 +421,6 @@ const modal = ref(null)
 const showTop = ref(false)
 const activeSection = ref('home')
 
-// product search
-const searchQuery = ref('')     // what the customer is typing
-const searchHidden = ref(false) // search bar auto-hidden while scrolling down
-
-// Hand off to the shared /search page rather than swapping the storefront's
-// content for results — one results view for both this field and the header box.
-function runSearch() {
-  const q = searchQuery.value.trim()
-  if (q) router.push({ name: 'search', query: { q } })
-}
 const checkoutOpen = ref(false)
 const coErr = ref('')
 const placing = ref(false)
@@ -709,13 +687,6 @@ onUnmounted(() => document.documentElement.classList.remove('theme-bright'))
 
 onMounted(() => {
   content.fetch()
-  // keep the sticky search bar sitting right under the nav (height varies by breakpoint)
-  const updateNavH = () => {
-    const nav = document.querySelector('.portal-bar')
-    if (nav) document.documentElement.style.setProperty('--nav-h', nav.offsetHeight + 'px')
-  }
-  nextTick(updateNavH)
-  addEventListener('resize', updateNavH, { passive: true })
   const navSections = ['home', 'pantry', 'pottery', 'story', 'reviews', 'contact']
   function updateActiveSection() {
     const line = scrollY + innerHeight * 0.3 // a bit below the sticky header
@@ -728,16 +699,9 @@ onMounted(() => {
     if (innerHeight + scrollY >= document.body.scrollHeight - 4) current = navSections[navSections.length - 1]
     activeSection.value = current
   }
-  let lastY = scrollY
   addEventListener('scroll', () => {
     scrolled.value = scrollY > 10
     showTop.value = scrollY > 620
-    // search bar: visible near the top, hides when scrolling down, returns on scroll up
-    const y = scrollY
-    if (y < 140) searchHidden.value = false
-    else if (y > lastY + 6) searchHidden.value = true
-    else if (y < lastY - 6) searchHidden.value = false
-    lastY = y
     updateActiveSection()
   }, { passive: true })
   updateActiveSection()
@@ -771,42 +735,6 @@ onMounted(() => {
 .known-you .lnk { font-size: .8rem; margin-inline-start: .4rem; }
 .linkish { margin-top: .4rem; font-size: .84rem; font-weight: 700; color: var(--green); text-decoration: underline; text-underline-offset: 3px; }
 .lnk { color: var(--green); text-decoration: underline; font-weight: 700; }
-.search-bar {
-  position: sticky;
-  top: var(--nav-h, 56px);
-  z-index: 55;
-  background: var(--cream, #f5efe3);
-  padding: .55rem 1.4rem;
-  transition: transform .3s ease;
-}
-.search-bar.hidden { transform: translateY(calc(-100% - var(--nav-h, 56px))); }
-.search-inner {
-  max-width: 640px; margin: 0 auto;
-  display: flex; align-items: center; gap: .5rem;
-  background: #fff; border: 1.5px solid rgba(60,74,39,.2);
-  border-radius: 999px; padding: .5rem .95rem;
-  transition: border-color .15s, box-shadow .15s;
-}
-.search-inner:focus-within { border-color: var(--green); box-shadow: 0 6px 20px -12px rgba(60,74,39,.6); }
-.search-ic { width: 20px; height: 20px; color: var(--green); flex: 0 0 auto; }
-.search-input {
-  flex: 1; border: none; outline: none; background: transparent;
-  font-family: inherit; font-size: .95rem; color: var(--ink);
-}
-.search-input::-webkit-search-cancel-button { display: none; }
-.search-clear {
-  width: 26px; height: 26px; flex: 0 0 auto; display: grid; place-items: center;
-  border-radius: 50%; background: var(--cream-2, rgba(60,74,39,.08)); color: var(--green); cursor: pointer;
-}
-.search-clear svg { width: 15px; height: 15px; }
-.search-go {
-  flex: 0 0 auto; padding: .3rem .8rem; border-radius: 999px;
-  background: var(--green); color: var(--cream);
-  font-family: inherit; font-size: .82rem; font-weight: 700; cursor: pointer;
-  transition: background .15s;
-}
-.search-go:hover { background: var(--gold); }
-@media (max-width: 560px) { .search-bar { padding: .5rem 1rem; } }
 .sec-more { text-align: center; margin-top: 1.6rem; }
 /* same width as the reviews section's buttons, so the storefront's section CTAs
    all read as one control rather than three sizes */
