@@ -45,7 +45,6 @@
           <p>{{ order.customer_name }}<span v-if="order.phone_hint" class="a-muted" dir="ltr"> · {{ order.phone_hint }}</span></p>
           <p class="a-muted">{{ t('account.addrLine', { city: order.city, street: order.street, house: order.house }) }}</p>
           <p v-if="order.notes" class="a-muted">{{ order.notes }}</p>
-          <p v-if="order.leave_at_door" class="door-line">🚪 {{ t('checkout.leaveAtDoor') }}<span v-if="order.door_note"> — {{ order.door_note }}</span></p>
         </div>
 
         <p class="a-muted help">{{ t('track.wrongDetails') }}</p>
@@ -143,7 +142,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.door-line { font-size: .86rem; font-weight: 700; color: var(--terra, #a85a32); margin-top: .3rem; }
 .tw { min-height: 100vh; background: var(--cream); display: grid; place-items: start center; padding: 2.2rem 1.1rem 3rem; }
 .tcard {
   width: min(560px, 100%); background: var(--paper);

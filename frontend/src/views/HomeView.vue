@@ -257,20 +257,6 @@
         <button v-if="auth.isAuthenticated && addresses.addresses.length" class="a-btn" style="margin-top:.5rem;background:var(--cream-2);color:var(--green)" @click="newAddress = false">{{ t('checkout.savedAddresses') }}</button>
       </template>
 
-      <!-- Contactless delivery. Offered whichever address is used, since it's about
-           arrival rather than the address.
-           Absent with cash on delivery rather than shown and refused: someone has to
-           open the door and hand over money, so the two can't both happen, and a
-           disabled control with a reason beside it is just a rule read aloud. -->
-      <template v-if="canLeaveAtDoor">
-        <label class="door-opt">
-          <input type="checkbox" v-model="co.leave_at_door">
-          <span><b>{{ t('checkout.leaveAtDoor') }}</b><br><span class="a-muted">{{ t('checkout.leaveAtDoorHint') }}</span></span>
-        </label>
-        <input v-if="co.leave_at_door" class="a-input" v-model.trim="co.door_note"
-               maxlength="200" :placeholder="t('checkout.doorNotePh')">
-      </template>
-
       <label class="co-l" style="margin-top:.8rem">{{ t('checkout.promo') }}</label>
       <div style="display:flex;gap:.5rem">
         <input class="a-input" v-model.trim="promoCode" :disabled="discount > 0" dir="ltr" style="text-align:start">
@@ -447,7 +433,7 @@ function runSearch() {
 const checkoutOpen = ref(false)
 const coErr = ref('')
 const placing = ref(false)
-const co = reactive({ name: '', phone: '', city: '', street: '', house: '', notes: '', email: '', leave_at_door: false, door_note: '' })
+const co = reactive({ name: '', phone: '', city: '', street: '', house: '', notes: '', email: '' })
 // set after a guest's order goes through: { id, token } for the tracking link
 const placed = ref(null)
 const selectedAddressId = ref(null)
@@ -462,10 +448,6 @@ const payMethod = ref('cod')
 const askName = computed(() => !auth.isAuthenticated || !auth.user?.full_name)
 const askPhone = computed(() => !auth.isAuthenticated || !auth.user?.phone)
 
-const canLeaveAtDoor = computed(() => payMethod.value === 'ziina')
-watch(payMethod, () => {
-  if (!canLeaveAtDoor.value) { co.leave_at_door = false; co.door_note = '' }
-})
 const promoCode = ref('')
 const promoBusy = ref(false)
 const promoErr = ref('')
@@ -587,19 +569,17 @@ async function placeOrder() {
     phone: (askPhone.value ? co.phone : auth.user?.phone) || '',
   }
   if (!who.customer_name || !who.phone) { coErr.value = t('checkout.errRequired'); return }
-  const contactless = { leave_at_door: co.leave_at_door, door_note: co.door_note }
-
   const usingSaved = auth.isAuthenticated && addresses.addresses.length && !newAddress.value
   if (usingSaved) {
     const a = addresses.addresses.find((x) => x.id === selectedAddressId.value)
     if (!a) { coErr.value = t('checkout.errChoose'); return }
-    delivery = { ...who, city: a.city, street: a.street, house: a.house, notes: a.notes, ...contactless }
+    delivery = { ...who, city: a.city, street: a.street, house: a.house, notes: a.notes }
   } else {
     if (!co.city || !co.street || !co.house) {
       coErr.value = t('checkout.errRequired')
       return
     }
-    delivery = { ...who, city: co.city, street: co.street, house: co.house, notes: co.notes, ...contactless }
+    delivery = { ...who, city: co.city, street: co.street, house: co.house, notes: co.notes }
   }
   // Optional for a guest: the phone is what we deliver and call on, and it also finds
   // the order later (number + phone). Checked only if they gave one, so a typo is
@@ -633,7 +613,7 @@ async function placeOrder() {
     cart.clear()
     checkoutOpen.value = false
     saveAddress.value = false
-    Object.assign(co, { name: '', phone: '', city: '', street: '', house: '', notes: '', email: '', leave_at_door: false, door_note: '' })
+    Object.assign(co, { name: '', phone: '', city: '', street: '', house: '', notes: '', email: '' })
     pantryFeed.value?.reload(); potteryFeed.value?.reload() // refresh stock
     // A guest has no حسابي to find the order in, so hand them the tracking link on
     // screen as well as by e-mail — the e-mail address could have a typo in it.
@@ -772,9 +752,6 @@ onMounted(() => {
   transition: border-color .15s, background .15s;
 }
 .addr-pick.on { border-color: var(--green); background: rgba(60,74,39,.06); }
-.door-opt { display: flex; gap: .5rem; align-items: flex-start; margin-top: .9rem; font-size: .86rem; line-height: 1.5; cursor: pointer; }
-.door-opt input { margin-top: .35rem; flex: 0 0 auto; }
-.door-opt b { font-weight: 700; color: var(--green); }
 .guest-line { font-size: .84rem; color: var(--muted); margin-bottom: .3rem; }
 .known-you { font-size: .86rem; color: var(--ink); margin-bottom: .5rem; line-height: 1.6; }
 .known-you .lnk { font-size: .8rem; margin-inline-start: .4rem; }

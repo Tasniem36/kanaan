@@ -83,20 +83,11 @@ def _order_email_body(order, track_url):
     """Plain-text confirmation. Deliberately no prices per line — the total and the
     live status live on the tracking page, which can't go stale the way an e-mail can."""
     number = display_ref(order.get("ref"), order["id"])
-    # Read back what they asked for on arrival, so a contactless request is visibly
-    # received rather than hoped for.
-    door = ""
-    if order.get("leave_at_door"):
-        door = "\nسنترك الطلب عند الباب"
-        if order.get("door_note"):
-            door += f" — {order['door_note']}"
-        door += "\n"
     return (
         f"مرحباً {order['customer_name']},\n\n"
         f"استلمنا طلبك رقم {number} في دكّان كنعان.\n"
         f"الإجمالي: {order['total']} درهم\n"
-        f"طريقة الدفع: {'الدفع عند الاستلام' if order['payment_method'] == 'cod' else 'مدفوع إلكترونياً'}\n"
-        f"{door}\n"
+        f"طريقة الدفع: {'الدفع عند الاستلام' if order['payment_method'] == 'cod' else 'مدفوع إلكترونياً'}\n\n"
         f"تابع حالة طلبك من هنا:\n{track_url}\n\n"
         f"احفظ هذا الرابط — يفتح صفحة طلبك دون تسجيل دخول.\n"
         f"وإن فقدته، ابحث عن طلبك برقمه ({number}) ورقم هاتفك أو بريدك من صفحة تتبّع الطلب.\n\n"
@@ -164,13 +155,6 @@ def create_order(request: Request, user=Depends(optional_user), payload: dict = 
     if not phone_norm:
         _checkout_failed(request, user, "bad_phone")
         raise HTTPException(400, "Invalid UAE phone number")
-    # Cash on delivery needs someone at the door to receive it and pay, so it cannot
-    # also be left there. The storefront doesn't offer the two together; this catches a
-    # form left open while the payment method changed, and refuses rather than quietly
-    # dropping a request the customer would go on believing was accepted.
-    if payload.get("leave_at_door") and payment_method == "cod":
-        _checkout_failed(request, user, "door_needs_card")
-        raise HTTPException(400, "Leaving the order at the door is only available with card payment")
     guest_email = None
     if not user:
         # Guest checkout is off unless the manager turned it on (Dashboard → delivery
@@ -266,22 +250,13 @@ def create_order(request: Request, user=Depends(optional_user), payload: dict = 
         delivery_fee = compute_delivery_fee(city, total)
         final_total = max(0, round((total - discount + delivery_fee) * 100) / 100)
 
-        # Contactless delivery. The note only means anything alongside the request, so
-        # it is dropped when the box isn't ticked rather than stored to confuse a driver.
-        leave_at_door = bool(payload.get("leave_at_door"))
-        door_note = " ".join(str(payload.get("door_note") or "").split())[:200] or None
-        if not leave_at_door:
-            door_note = None
-
         order = run(
             """insert into orders (user_id, customer_name, phone, city, street, house, notes, total,
                                    payment_method, discount_code, discount_amount, delivery_fee,
-                                   leave_at_door, door_note,
                                    track_token, ref)
-               values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) returning *""",
+               values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) returning *""",
             [user_id, customer_name, phone_norm, city, street, house, payload.get("notes"),
              final_total, payment_method, discount_code, discount, delivery_fee,
-             leave_at_door, door_note,
              secrets.token_urlsafe(16),
              new_ref(lambda r: bool(run("select 1 from orders where ref = %s", [r])))],
         )[0]
@@ -434,8 +409,7 @@ def _own_order_or_404(oid, user, token=None):
 def track_order(oid: str, request: Request, t: str = Query(""), user=Depends(optional_user)):
     order = _own_order_or_404(oid, user, token=t)
     fields = ("id", "customer_name", "city", "street", "house", "notes", "status", "total",
-              "payment_method", "payment_status", "delivery_fee", "discount_amount",
-              "leave_at_door", "door_note", "created_at")
+              "payment_method", "payment_status", "delivery_fee", "discount_amount", "created_at")
     safe = {k: order[k] for k in fields}
     safe["number"] = display_ref(order.get("ref"), order["id"])
     # the phone is shown back partially, so they can check what they typed without
