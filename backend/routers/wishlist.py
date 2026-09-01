@@ -1,9 +1,10 @@
 """Saved products ("favourites"). One row per customer+product; the list returns
 the same light product shape the storefront feed uses, so the account page can
 render it with the normal product card."""
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from db import execute, fetch_all, fetch_one
+from audit import log_action
 from security import current_user
 
 router = APIRouter()
@@ -34,14 +35,19 @@ def list_wishlist_ids(user=Depends(current_user)):
 
 
 @router.put("/{pid}")
-def add_to_wishlist(pid: str, user=Depends(current_user)):
-    if not fetch_one("select 1 as x from products where id = %s and is_active = true", [pid]):
+def add_to_wishlist(pid: str, request: Request, user=Depends(current_user)):
+    row = fetch_one("select name from products where id = %s and is_active = true", [pid])
+    if not row:
         raise HTTPException(404, "Product not found")
     execute(
         """insert into wishlists (user_id, product_id) values (%s, %s)
            on conflict (user_id, product_id) do nothing""",
         [user["id"], pid],
     )
+    # wanted, but not now — worth knowing which products people keep putting aside.
+    # Collapsed per product, so re-saving the same one isn't a second row.
+    log_action(user_id=user["id"], action="wishlist_add",
+               detail={"product_id": pid, "name": row["name"]}, request=request, dedupe=pid)
     return {"saved": True}
 
 

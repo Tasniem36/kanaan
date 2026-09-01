@@ -34,6 +34,7 @@
           :page-size="12"
           :empty-text="t('search.noResults')"
           @added="onAdded"
+          @results="onResults"
         />
       </template>
       <p v-else class="a-muted sr-hint">{{ t('search.startTyping') }}</p>
@@ -54,6 +55,7 @@ import { pName } from '../utils/product'
 import PortalBar from '../components/PortalBar.vue'
 import CartDrawer from '../components/CartDrawer.vue'
 import ProductFeed from '../components/ProductFeed.vue'
+import { track } from '../services/track'
 import ProductFilters from '../components/ProductFilters.vue'
 
 const { t } = useI18n()
@@ -80,6 +82,14 @@ useHead({
 })
 
 function onAdded(p) { toast.show(t('cart.added', { name: pName(p) })) }
+
+// What shoppers looked for, and whether the shop had it. Reported from here rather
+// than from every keystroke in the search box: this fires once the results for a
+// submitted term are in, so the log holds real searches and their outcome — and a
+// term that found nothing is a product worth stocking.
+function onResults(n) {
+  if (q.value) track('search', { q: q.value, results: n })
+}
 function goCheckout() {
   openCart.value = false
   router.push({ name: 'home', query: { checkout: '1' } })

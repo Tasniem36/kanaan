@@ -12,12 +12,31 @@ from security import optional_user, require_manager
 # What the storefront itself may add to the trail. Everything else in the log is
 # written server-side from a real action; these are moments only the browser knows
 # about. Whitelisted, so a page can't invent action names.
-CLIENT_EVENTS = {"checkout_opened"}
+# Adding to the basket and searching happen entirely in the browser — the server sees
+# a cart sync (signed-in customers only, and after the fact) or a product query that
+# is indistinguishable from browsing. Being told by the page is the only way to record
+# them for every shopper, guests included, which is the same reason checkout_opened
+# has always come from here.
+CLIENT_EVENTS = {"checkout_opened", "cart_add", "search", "checkout_login_required"}
+# What each event may carry. Anything else a page sends is dropped rather than trusted:
+# this is the one place the log takes client input.
+CLIENT_EVENT_DETAIL = {
+    "checkout_opened": ("items", "total"),
+    "cart_add": ("product_id", "name", "qty"),
+    "search": ("q", "results"),
+    "checkout_login_required": ("items", "total"),
+}
+# Events collapsed per subject rather than per visitor, so one row is kept for each
+# distinct product or search term instead of one for the whole sitting.
+_CLIENT_DEDUPE = {"cart_add": "product_id", "search": "q"}
 
 # The failures that mean a customer is stuck. Kept in one place: the dashboard's
 # follow-up list and the drop-off figure both read from it.
 STRUGGLE_ACTIONS = ("login_failed", "verify_failed", "password_reset_failed",
-                    "promo_invalid", "checkout_failed", "out_of_stock")
+                    "promo_invalid", "checkout_failed", "out_of_stock",
+                    # a shopper sent away from a full basket to sign in, and one who
+                    # can't find the order they were e-mailed a link to
+                    "checkout_login_required", "track_lookup_failed")
 
 router = APIRouter()
 
@@ -142,10 +161,16 @@ def client_event(request: Request, user=Depends(optional_user), payload: dict = 
         return {"ok": False}
     rate_limit(request, bucket="audit_event", limit=30, window=60, key=(user or {}).get("id"))
     detail = payload.get("detail") if isinstance(payload.get("detail"), dict) else None
-    log_action(user_id=(user or {}).get("id"), action=event,
-               detail={k: v for k, v in (detail or {}).items()
-                       if k in ("items", "total")} or None,
-               request=request)
+    allowed = CLIENT_EVENT_DETAIL.get(event, ())
+    kept = {k: v for k, v in (detail or {}).items() if k in allowed}
+    # a search term is free text from a shopper: trimmed to something loggable
+    if "q" in kept:
+        kept["q"] = " ".join(str(kept["q"]).split())[:80]
+    if "name" in kept:
+        kept["name"] = str(kept["name"])[:120]
+    field = _CLIENT_DEDUPE.get(event)
+    log_action(user_id=(user or {}).get("id"), action=event, detail=kept or None,
+               request=request, dedupe=str(kept.get(field, "")) if field else None)
     return {"ok": True}
 
 

@@ -22,7 +22,9 @@
     <div v-if="struggling.length || funnel.opened" class="panel warn">
       <h2>
         {{ t('manager.stuckTitle') }}
+        <!-- 0 of 0 is not a good score, it's no data — say which it is -->
         <span v-if="funnel.opened" class="a-muted drop">{{ t('manager.dropOff', dropOff) }}</span>
+        <span v-else class="a-muted drop">{{ t('manager.noCheckoutsYet') }}</span>
       </h2>
       <p v-if="!struggling.length" class="a-muted">{{ t('manager.stuckNone') }}</p>
       <ul v-else class="stuck-list">
@@ -146,7 +148,9 @@ function message(c) {
 const geo = ref({})   // ip → "City, Country" (filled in after the rows load)
 const loading = ref(false)
 const filters = reactive({ email: '', action: '', from: '', to: '', location: '' })
-const actionOptions = ['login', 'register', 'password_reset', 'order_placed', 'payment_confirmed', 'address_added', 'address_removed', 'product_view', 'visit']
+const actionOptions = ['login', 'register', 'password_reset', 'order_placed', 'payment_confirmed',
+  'address_added', 'address_removed', 'product_view', 'cart_add', 'search', 'wishlist_add',
+  'stock_alert', 'visit']
 
 const PAGE_SIZE = 30
 const page = ref(1)
@@ -210,13 +214,13 @@ function roleClass(a) {
 const attempted = (a) => (a.email ? '' : (a.detail || {}).email || '')
 
 const FAILURES = ['login_failed', 'verify_failed', 'password_reset_failed', 'promo_invalid',
-  'checkout_failed', 'out_of_stock']
+  'checkout_failed', 'out_of_stock', 'checkout_login_required', 'track_lookup_failed']
 
 function pillClass(action) {
   if (FAILURES.includes(action)) return 'pill-bad'   // something the customer hit a wall on
   if (action === 'payment_confirmed') return 'pill-ok'
   if (action === 'order_placed') return 'pill-warn'
-  if (action === 'visit' || action === 'product_view' || action === 'checkout_opened') return ''
+  if (['visit', 'product_view', 'checkout_opened', 'cart_add', 'search', 'wishlist_add'].includes(action)) return ''
   return 'pill-ok'
 }
 
@@ -226,6 +230,11 @@ function detailText(a) {
     return `#${String(d.order_id || '').slice(0, 8)} · ${d.total}` + (d.discount_code ? ` · ${d.discount_code}` : '') + (d.payment_method ? ` · ${d.payment_method}` : '')
   if (a.action === 'payment_confirmed') return `#${String(d.order_id || '').slice(0, 8)} · ${d.total}`
   if (a.action === 'product_view') return d.name || ''
+  if (a.action === 'cart_add' || a.action === 'wishlist_add' || a.action === 'stock_alert') return d.name || ''
+  // a term that found nothing is a product worth stocking, so the count is the point
+  if (a.action === 'search') return `“${d.q || ''}” — ${d.results ? t('manager.searchFound', { n: d.results }) : t('manager.searchNothing')}`
+  if (a.action === 'checkout_login_required') return d.total ? `${d.items || ''} · ${d.total}` : ''
+  if (a.action === 'track_lookup_failed') return [d.ref, d.contact].filter(Boolean).join(' · ')
   if (a.action === 'address_added') return d.city || ''
   if (a.action === 'visit' && d.from) return [d.from.source, d.from.medium].filter(Boolean).join(' · ')
   if (a.action === 'checkout_opened') return d.total ? `${d.items || ''} · ${d.total}` : ''

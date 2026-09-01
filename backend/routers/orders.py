@@ -350,12 +350,23 @@ def lookup_order(request: Request, payload: dict = Body(default={})):
            left join users u on u.id = o.user_id
            where o.ref = %s""", [ref])
     not_found = HTTPException(404, "We could not find an order with those details")
+
+    def _lookup_failed():
+        # Someone holding an order number who still can't reach their order: a lost
+        # e-mail, a typo, or the wrong phone on the order. No session here — this is
+        # the page for people who have no account — so what they typed is the only
+        # thing that identifies them, and it's what the shop needs to put it right.
+        log_action(action="track_lookup_failed",
+                   detail={"ref": ref[:20], "contact": contact[:60]}, request=request)
+
     if not order or not order["track_token"]:
+        _lookup_failed()
         raise not_found
     # the contact may be the phone in any local format, or the e-mail on the account
     phone = normalize_uae_phone(contact)
     matches = (phone and phone == order["phone"]) or (contact == (order["email"] or "").lower())
     if not matches:
+        _lookup_failed()
         raise not_found
     return {"id": order["id"], "token": order["track_token"]}
 

@@ -34,7 +34,9 @@ const props = defineProps({
   // short home-page teasers that link out to the full category page
   preview: { type: Boolean, default: false },
 })
-defineEmits(['added'])
+// `results` fires once per query with how many matched — the search page reports it,
+// because a term that finds nothing is the most useful thing in the log
+const emit = defineEmits(['added', 'results'])
 
 const items = ref([])
 const total = ref(0)
@@ -63,9 +65,11 @@ async function loadMore() {
     if (props.maxPrice !== '' && props.maxPrice !== null) qs.set('max_price', props.maxPrice)
     const { products, total: t } = await api(`/products?${qs}`)
     if (mine !== gen) return
+    const first = !loaded.value
     items.value.push(...products)
     total.value = t
     loaded.value = true
+    if (first) emit('results', t)
     nextTick(revealCards)
   } catch {
     if (mine === gen) loaded.value = true // stop retrying on error

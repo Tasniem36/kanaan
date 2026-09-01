@@ -17,7 +17,9 @@ def spy(monkeypatch):
         calls.append((" ".join(sql.split()), list(params or []))) or
         [{"id": "p1", "name": "زيت", "name_en": "Olive oil"}]
     ))
-    monkeypatch.setattr(wl, "fetch_one", lambda sql, params=None: {"x": 1})
+    # the row the handler reads to check the product exists, and to name it in the log
+    monkeypatch.setattr(wl, "fetch_one", lambda sql, params=None: {"x": 1, "name": "زيت"})
+    monkeypatch.setattr(wl, "log_action", lambda **k: None)
     return calls
 
 

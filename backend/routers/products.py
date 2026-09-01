@@ -193,9 +193,9 @@ def related_products(pid: str):
 
 
 @router.post("/{pid}/stock-alert")
-def add_stock_alert(pid: str, user=Depends(current_user)):
+def add_stock_alert(pid: str, request: Request, user=Depends(current_user)):
     """"Tell me when it's back" — remembered until the product is restocked."""
-    row = fetch_one("select id, stock from products where id = %s and is_active = true", [pid])
+    row = fetch_one("select id, name, stock from products where id = %s and is_active = true", [pid])
     if not row:
         raise HTTPException(404, "Product not found")
     if row["stock"] > 0:
@@ -205,6 +205,11 @@ def add_stock_alert(pid: str, user=Depends(current_user)):
            on conflict (user_id, product_id) do nothing""",
         [user["id"], pid],
     )
+    # A sale the shop lost for want of stock, with someone's name attached to it.
+    # out_of_stock already records the basket that failed; this records the ones who
+    # asked to be told, which is what makes a restock worth ordering.
+    log_action(user_id=user["id"], action="stock_alert",
+               detail={"product_id": pid, "name": row["name"]}, request=request)
     return {"subscribed": True}
 
 

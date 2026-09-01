@@ -187,8 +187,10 @@ def test_stock_alert_refused_when_already_in_stock(client, as_user, monkeypatch)
 
 def test_stock_alert_is_recorded_for_a_sold_out_product(client, as_user, monkeypatch):
     seen = []
-    monkeypatch.setattr(products_mod, "fetch_one", lambda sql, params=None: {"id": "p1", "stock": 0})
+    monkeypatch.setattr(products_mod, "fetch_one",
+                        lambda sql, params=None: {"id": "p1", "name": "لبنة", "stock": 0})
     monkeypatch.setattr(products_mod, "execute", lambda sql, params=None: seen.append(params))
+    monkeypatch.setattr(products_mod, "log_action", lambda **k: None)
     as_user({"id": "u1", "role": "shopper"})
     r = client.post("/api/products/p1/stock-alert")
     assert r.status_code == 200 and r.json() == {"subscribed": True}

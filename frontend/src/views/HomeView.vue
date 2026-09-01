@@ -297,6 +297,7 @@ import { ref, reactive, computed, watch, onMounted, onUnmounted, onActivated, ne
 import { RouterLink, useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '../services/api'
+import { track } from '../services/track'
 import { useCartStore } from '../stores/cart'
 import { useAuthStore } from '../stores/auth'
 import { useOrdersStore } from '../stores/orders'
@@ -499,10 +500,7 @@ function toTop() {
 // placed, that's the drop-off rate — the one part of the funnel the server can't see
 // on its own. Fire-and-forget: this must never delay or break checkout.
 function reportCheckoutOpened() {
-  api('/audit/event', {
-    method: 'POST',
-    body: { event: 'checkout_opened', detail: { items: cart.count, total: finalTotal.value } },
-  }).catch(() => {})
+  track('checkout_opened', { items: cart.count, total: finalTotal.value })
 }
 
 async function openCheckout() {
@@ -520,6 +518,10 @@ async function openCheckout() {
   if (!auth.isAuthenticated) {
     if (!settings.checkoutLoaded) await settings.fetchCheckout()
     if (!settings.checkout.guest_allowed) {
+      // The wall this shop puts in front of a guest with a full basket. The server
+      // never sees it — the redirect happens here — so it would be invisible in the
+      // log, which is exactly the drop-off worth knowing about.
+      track('checkout_login_required', { items: cart.count, total: finalTotal.value })
       showToast(t('checkout.loginRequired'))
       router.push({ name: 'login', query: { redirect: '/?checkout=1' } })
       return

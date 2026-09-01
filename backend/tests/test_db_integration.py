@@ -309,8 +309,8 @@ def test_wishlist_round_trip(live_db):
     import routers.wishlist as w
 
     assert [str(p["id"]) for p in w.list_wishlist(user={"id": U_CUST})["products"]] == [P_OIL]
-    w.add_to_wishlist(P_CUP, user={"id": U_CUST})
-    w.add_to_wishlist(P_CUP, user={"id": U_CUST})   # idempotent
+    w.add_to_wishlist(P_CUP, Req(), user={"id": U_CUST})
+    w.add_to_wishlist(P_CUP, Req(), user={"id": U_CUST})   # idempotent
     ids = set(w.list_wishlist_ids(user={"id": U_CUST})["ids"])
     assert ids == {P_OIL, P_CUP}
 

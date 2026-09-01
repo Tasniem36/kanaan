@@ -32,17 +32,26 @@ def _client_ip(request):
 
 # Actions a single visitor repeats just by using the site. One row per window per
 # visitor is plenty — the 30 minutes is a rough "same sitting".
-_COLLAPSE = {"visit": 1800}
+#
+# The per-product and per-search ones pass a `dedupe` (see log_action), so they
+# collapse per thing rather than per visitor: adding the same jar twice in one sitting
+# is one row, but adding three different jars is three — otherwise the collapse would
+# hide the very thing the row is worth recording for.
+_COLLAPSE = {"visit": 1800, "cart_add": 1800, "wishlist_add": 1800, "search": 600}
 _recent: dict[str, float] = {}
 _recent_lock = threading.Lock()
 
 
-def _is_repeat(action, who) -> bool:
-    """True when this visitor already logged `action` inside its collapse window."""
+def _is_repeat(action, who, dedupe=None) -> bool:
+    """True when this visitor already logged `action` inside its collapse window.
+
+    `dedupe` narrows the window to one subject — a product, a search term — so the
+    same one repeated is suppressed while a different one still gets its row.
+    """
     window = _COLLAPSE.get(action)
     if not window:
         return False
-    key = f"{action}:{who or 'anon'}"
+    key = f"{action}:{who or 'anon'}:{dedupe or ''}"
     now = time.monotonic()
     with _recent_lock:
         last = _recent.get(key)
@@ -190,12 +199,12 @@ def traffic_source(request):
     return src or None
 
 
-def log_action(*, user_id=None, action, detail=None, request=None):
+def log_action(*, user_id=None, action, detail=None, request=None, dedupe=None):
     ip = _client_ip(request)
     visitor = _visitor(request)
     # one browser is one visitor; the address is only a fallback, since a household
     # or an office all share one
-    if _is_repeat(action, user_id or visitor or ip):
+    if _is_repeat(action, user_id or visitor or ip, dedupe):
         return
     page = _page(request)
     api = _api(request)

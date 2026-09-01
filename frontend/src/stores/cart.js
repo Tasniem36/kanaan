@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { api } from '../services/api'
 import { useAuthStore } from './auth'
 import { pPrice } from '../utils/product'
+import { track } from '../services/track'
 
 const KEY = 'cart'
 
@@ -72,6 +73,10 @@ export const useCartStore = defineStore('cart', {
       if (this.items[product.id]) this.items[product.id].qty++
       else this.items[product.id] = { product, qty: 1 }
       this.persist()
+      // Recorded here rather than at each button, so every route into the basket is
+      // counted: the card, the product page, the related row, the saved list. The
+      // server collapses repeats of the same product within a sitting.
+      track('cart_add', { product_id: product.id, name: product.name, qty: this.items[product.id].qty })
     },
     dec(id) {
       const it = this.items[id]

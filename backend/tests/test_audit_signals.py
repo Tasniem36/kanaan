@@ -124,4 +124,94 @@ def test_the_struggle_actions_are_defined_in_one_place():
     """The list drives both the follow-up query and the dashboard's red pills."""
     assert set(A.STRUGGLE_ACTIONS) == {
         "login_failed", "verify_failed", "password_reset_failed", "promo_invalid",
-        "checkout_failed", "out_of_stock"}
+        "checkout_failed", "out_of_stock", "checkout_login_required",
+        "track_lookup_failed"}
+
+
+# --- the interest trail ------------------------------------------------------
+def test_the_basket_and_the_search_box_can_report_themselves(client, monkeypatch):
+    """Neither is visible to the server: a basket lives in the browser until checkout,
+    and a search looks exactly like browsing the catalogue."""
+    logged = []
+    monkeypatch.setattr(A, "log_action", lambda **k: logged.append(k))
+    client.post("/api/audit/event", json={
+        "event": "cart_add", "detail": {"product_id": "p1", "name": "زعتر", "qty": 2}})
+    client.post("/api/audit/event", json={
+        "event": "search", "detail": {"q": "  زيت   زيتون ", "results": 0}})
+    assert [l["action"] for l in logged] == ["cart_add", "search"]
+    assert logged[0]["detail"] == {"product_id": "p1", "name": "زعتر", "qty": 2}
+    assert logged[1]["detail"] == {"q": "زيت زيتون", "results": 0}, "whitespace collapsed"
+
+
+def test_each_product_and_each_term_keeps_its_own_row(client, monkeypatch):
+    """Collapsing per visitor would hide the one thing these rows are for: which
+    products, and which words."""
+    logged = []
+    monkeypatch.setattr(A, "log_action", lambda **k: logged.append(k))
+    client.post("/api/audit/event", json={"event": "cart_add", "detail": {"product_id": "p1"}})
+    client.post("/api/audit/event", json={"event": "cart_add", "detail": {"product_id": "p2"}})
+    client.post("/api/audit/event", json={"event": "search", "detail": {"q": "زعتر"}})
+    assert [l["dedupe"] for l in logged] == ["p1", "p2", "زعتر"]
+
+
+def test_a_page_still_cannot_invent_an_event_or_a_field(client, monkeypatch):
+    logged = []
+    monkeypatch.setattr(A, "log_action", lambda **k: logged.append(k))
+    assert client.post("/api/audit/event", json={"event": "order_placed"}).json() == {"ok": False}
+    client.post("/api/audit/event", json={
+        "event": "cart_add", "detail": {"product_id": "p1", "price": 0.01, "admin": True}})
+    assert logged[0]["detail"] == {"product_id": "p1"}, "only the whitelisted fields survive"
+
+
+def test_a_long_search_term_is_trimmed_before_it_is_stored(client, monkeypatch):
+    logged = []
+    monkeypatch.setattr(A, "log_action", lambda **k: logged.append(k))
+    client.post("/api/audit/event", json={"event": "search", "detail": {"q": "x" * 500}})
+    assert len(logged[0]["detail"]["q"]) == 80
+
+
+def test_being_sent_to_sign_in_at_the_checkout_is_recorded(client, monkeypatch):
+    """The storefront redirects before any endpoint is reached, so without this the
+    shop's own sign-in wall is the one drop-off it can't see."""
+    logged = []
+    monkeypatch.setattr(A, "log_action", lambda **k: logged.append(k))
+    client.post("/api/audit/event", json={
+        "event": "checkout_login_required", "detail": {"items": 3, "total": 180}})
+    assert logged[0]["action"] == "checkout_login_required"
+    assert logged[0]["detail"] == {"items": 3, "total": 180}
+    assert "checkout_login_required" in A.STRUGGLE_ACTIONS, "a wall, not a browse"
+
+
+def test_saving_a_product_is_recorded(client, as_user, monkeypatch):
+    import routers.wishlist as w
+    logged = []
+    monkeypatch.setattr(w, "log_action", lambda **k: logged.append(k))
+    monkeypatch.setattr(w, "fetch_one", lambda sql, params=None: {"name": "إبريق"})
+    monkeypatch.setattr(w, "execute", lambda *a, **k: None)
+    as_user({"id": "me", "role": "customer"})
+    client.put("/api/wishlist/p1")
+    assert logged[0]["action"] == "wishlist_add"
+    assert logged[0]["detail"]["name"] == "إبريق" and logged[0]["dedupe"] == "p1"
+
+
+def test_asking_to_be_told_when_something_is_back_is_recorded(client, as_user, monkeypatch):
+    """A sale lost for want of stock, with someone's name on it — which is what makes
+    a restock worth ordering."""
+    import routers.products as pr
+    logged = []
+    monkeypatch.setattr(pr, "log_action", lambda **k: logged.append(k))
+    monkeypatch.setattr(pr, "fetch_one", lambda sql, params=None: {"id": "p1", "name": "لبنة", "stock": 0})
+    monkeypatch.setattr(pr, "execute", lambda *a, **k: None)
+    as_user({"id": "me", "role": "customer"})
+    client.post("/api/products/p1/stock-alert")
+    assert logged[0]["action"] == "stock_alert" and logged[0]["detail"]["name"] == "لبنة"
+
+
+def test_a_customer_who_cannot_find_their_order_is_recorded(client, monkeypatch):
+    logged = []
+    monkeypatch.setattr(orders, "log_action", lambda **k: logged.append(k))
+    monkeypatch.setattr(orders, "fetch_one", lambda sql, params=None: None)
+    res = client.post("/api/orders/lookup", json={"ref": "DK-ABC1234", "contact": "0501234567"})
+    assert res.status_code == 404
+    assert logged[0]["action"] == "track_lookup_failed"
+    assert logged[0]["detail"]["ref"] == "ABC1234", "normalised, as the lookup saw it"
