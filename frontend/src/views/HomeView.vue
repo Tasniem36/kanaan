@@ -279,11 +279,11 @@
       </div>
 
       <label class="co-l" style="margin-top:.8rem">{{ t('checkout.payMethod') }}</label>
-      <label class="addr-pick" :class="{ on: payMethod === 'cod' }">
-        <input type="radio" value="cod" v-model="payMethod" style="display:none"> {{ t('checkout.cod') }}
-      </label>
       <label class="addr-pick" :class="{ on: payMethod === 'ziina' }">
         <input type="radio" value="ziina" v-model="payMethod" style="display:none"> {{ t('checkout.ziina') }}
+      </label>
+      <label class="addr-pick" :class="{ on: payMethod === 'cod' }">
+        <input type="radio" value="cod" v-model="payMethod" style="display:none"> {{ t('checkout.cod') }}
       </label>
 
       <p v-if="coErr" style="color:var(--red);font-size:.85rem;margin-top:.6rem">{{ coErr }}</p>
@@ -431,10 +431,9 @@ const selectedAddressId = ref(null)
 const onlyAddress = computed(() => addresses.addresses[0] || {})
 const newAddress = ref(false)
 const saveAddress = ref(false)
-const payMethod = ref('cod')
-// Cash on delivery needs a person at the door to receive it and pay, so contactless
-// is card-only. Switching back to cash clears the request rather than leaving a tick
-// on screen that the order can't carry.
+// Paying now is the default, and sits first in the list: the order is settled before
+// the driver leaves, so nothing rides on cash being at the door. Cash stays one tap away.
+const payMethod = ref('ziina')
 // Asked for only when the account can't answer it. A guest is asked both; a signed-in
 // customer usually neither, but a row claimed from a guest order can be missing one.
 const askName = computed(() => !auth.isAuthenticated || !auth.user?.full_name)
