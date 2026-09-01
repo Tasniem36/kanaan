@@ -593,9 +593,10 @@ async function placeOrder() {
       await addresses.add({ city: co.city, street: co.street, house: co.house, notes: co.notes, label: t('checkout.defaultAddrLabel') }).catch(() => {})
     }
     const result = await ordersStore.place(delivery, items, payMethod.value, appliedCode.value)
-    // Ziina → hand off to the hosted payment page
+    // Ziina → hand off to the hosted payment page. The basket stays put: paying can
+    // still be abandoned or refused, and a shopper who comes back to try again
+    // shouldn't have to rebuild it. /pay/return empties it once the money arrives.
     if (result.redirect_url) {
-      cart.clear()
       window.location.href = result.redirect_url
       return
     }

@@ -32,10 +32,12 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useOrdersStore } from '../stores/orders'
+import { useCartStore } from '../stores/cart'
 
 const { t } = useI18n()
 const route = useRoute()
 const ordersStore = useOrdersStore()
+const cart = useCartStore()
 
 const state = ref('verifying') // verifying | success | failed
 const orderId = String(route.query.order || '')
@@ -43,6 +45,14 @@ const orderId = String(route.query.order || '')
 // authorises confirming/cancelling their own payment
 const token = String(route.query.t || '')
 const shortId = computed(() => orderId.slice(0, 8))
+
+// The basket is emptied here, not before the redirect to Ziina — so a payment that
+// was abandoned, refused, or simply backed out of leaves it intact to try again.
+// Only money actually arriving clears it.
+function settle() {
+  state.value = 'success'
+  cart.clear()
+}
 
 onMounted(async () => {
   if (!orderId) { state.value = 'failed'; return }
@@ -56,7 +66,7 @@ onMounted(async () => {
   for (let i = 0; i < 3; i++) {
     try {
       const r = await ordersStore.confirmPayment(orderId, token)
-      if (r.paid) { state.value = 'success'; return }
+      if (r.paid) { settle(); return }
     } catch { /* keep trying */ }
     await new Promise((res) => setTimeout(res, 1500))
   }
