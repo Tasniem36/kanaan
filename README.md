@@ -49,6 +49,10 @@ npm install
 npm run dev                  # http://localhost:5173  (يمرّر /api إلى :8080)
 ```
 
+أو بدون تشغيل API محليًّا: انسخ `frontend/.env.example` إلى `frontend/.env.local`
+واضبط `VITE_API_PROXY=https://dukkan-kanaan.com` ليقرأ `npm run dev` من الموقع
+الحقيقي — بيانات حقيقية، فاحذر. مفيد أيضًا إذا كان المنفذ :8080 مشغولًا بمشروع آخر.
+
 لجعل حسابك مديرًا يدويًّا:
 ```sql
 update users set role = 'manager' where email = 'you@example.com';
