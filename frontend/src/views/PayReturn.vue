@@ -45,6 +45,7 @@ import { useRoute, RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useOrdersStore } from '../stores/orders'
 import { useCartStore } from '../stores/cart'
+import { rememberAwaited, forgetAwaited } from '../services/awaitingPayment'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -64,6 +65,7 @@ const shortId = computed(() => orderId.slice(0, 8))
 function settle() {
   state.value = 'success'
   cart.clear()
+  forgetAwaited()  // answered here; nothing for the next load to chase
 }
 
 // Ziina can take a moment to mark an intent completed, and a card being authorised
@@ -102,6 +104,9 @@ onMounted(async () => {
     } catch { /* keep trying */ }
     if (i < tries - 1) await new Promise((res) => setTimeout(res, GAP_MS))
   }
+  // We stopped waiting; the server hasn't. Note the order so the next visit can find
+  // out how it ended and empty the basket if the money did arrive.
+  rememberAwaited(orderId, token)
   state.value = 'unresolved'
 })
 </script>

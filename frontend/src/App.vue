@@ -11,7 +11,14 @@
 </template>
 
 <script setup>
+import { onMounted } from 'vue'
 import { RouterView } from 'vue-router'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import ToastHost from './components/ToastHost.vue'
+import { useCartStore } from './stores/cart'
+import { settleAwaited } from './services/awaitingPayment'
+
+// A payment the return page never got an answer about may have been settled by the
+// server since — see services/awaitingPayment. Costs nothing for everyone else.
+onMounted(() => { settleAwaited(useCartStore()) })
 </script>
