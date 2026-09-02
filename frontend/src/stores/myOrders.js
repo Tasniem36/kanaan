@@ -2,8 +2,9 @@ import { defineStore } from 'pinia'
 import { api } from '../services/api'
 
 const KEY = 'my_orders'
-const MAX = 20        // a shop this size: more than anyone will scroll back through
-const SHOW_STATUS = 8 // how many of them to fetch a live status for at once
+// One cap, not two: the list shows a live status on every row it renders, so keeping
+// more than we're willing to fetch statuses for just leaves rows with a blank badge.
+const MAX = 10
 
 // A guest's own orders, remembered on the device that placed them.
 //
@@ -74,7 +75,7 @@ export const useMyOrdersStore = defineStore('myOrders', {
     // 404 (an order deleted, or a token no longer valid) drops the row rather than
     // leaving something in the list that can't be opened.
     async fetchStatuses() {
-      const batch = this.items.slice(0, SHOW_STATUS)
+      const batch = this.items
       if (!batch.length) return
       this.loading = true
       try {
@@ -97,6 +98,7 @@ export const useMyOrdersStore = defineStore('myOrders', {
         }
         if (gone.length) {
           this.items = this.items.filter((o) => !gone.includes(o.id))
+          for (const id of gone) delete this.statuses[id]
           this.persist()
         }
       } finally {

@@ -132,8 +132,17 @@ async function lookup() {
   finding.value = true
   try {
     const { id, token } = await api('/orders/lookup', { method: 'POST', body: { ...form } })
-    // the route watcher loads it — see the bottom of this file
-    await router.replace({ name: 'track', params: { id }, query: { t: token } })
+    // Normally the route watcher loads it — see the bottom of this file. But looking up
+    // the order that's already in the address bar changes nothing about the route, so
+    // the watcher wouldn't fire and the button would look dead: load it here instead.
+    const sameOrder = String(route.params.id || '') === String(id)
+      && String(route.query.t || '') === String(token)
+    if (sameOrder) {
+      hadLink.value = true
+      await load(id, token)
+    } else {
+      await router.replace({ name: 'track', params: { id }, query: { t: token } })
+    }
   } catch (e) {
     lookupErr.value = e.message
   } finally {

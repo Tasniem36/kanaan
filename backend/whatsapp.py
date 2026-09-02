@@ -84,7 +84,11 @@ def _send_template(phone: str, template: str, params: list[str]) -> dict:
     except requests.RequestException as e:
         print("[whatsapp] error:", e)
         return {"configured": True, "ok": False, "error": str(e)}
-    data = res.json() if res.content else {}
+    try:
+        data = res.json() if res.content else {}
+    except ValueError:
+        # a proxy or gateway answering with an HTML error page, not Meta
+        data = {}
     if not res.ok:
         # the message that matters is Meta's: a template not yet approved, a number
         # outside the allowed list on a trial app, an expired token

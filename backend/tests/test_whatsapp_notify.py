@@ -139,19 +139,50 @@ def test_no_phone_on_the_order_is_not_sent(sent):
 
 # ---- who gets messaged ------------------------------------------------------
 
-def test_guest_order_is_messaged(sent):
+def test_guest_order_with_no_account_is_messaged(sent):
+    """user_id is None, so no account lookup is even needed."""
     _wait(orders._send_order_whatsapp(GUEST_ORDER, None, status_label="قيد التجهيز"))
     assert len(sent) == 1
     params = [p["text"] for p in sent[0]["body"]["template"]["components"][0]["parameters"]]
     assert params[0] == "DK-L4MNFBU"
 
 
-def test_account_holder_is_left_to_their_own_channels(sent):
+@pytest.fixture
+def account(monkeypatch):
+    """Control whether the order's user can actually sign in."""
+    def use(password_hash):
+        monkeypatch.setattr(orders, "fetch_one",
+                            lambda *a, **k: {"password_hash": password_hash})
+    return use
+
+
+def test_real_account_holder_is_left_to_their_own_channels(sent, account):
+    account("$2b$12$a-real-bcrypt-hash")
     _wait(orders._send_order_whatsapp(ACCOUNT_ORDER, None, status_label="قيد التجهيز"))
     assert sent == []
 
 
-def test_notify_all_reaches_account_holders_too(sent, monkeypatch):
+def test_guest_who_left_an_email_is_still_messaged(sent, account):
+    """The commonest guest. _guest_account gives them a user_id, but the row has an
+    empty password_hash and cannot be logged into — so the in-app bell and the push
+    both land somewhere they can never look. Gating on user_id alone told them
+    nothing at all."""
+    account("")
+    _wait(orders._send_order_whatsapp(ACCOUNT_ORDER, None, status_label="قيد التجهيز"))
+    assert len(sent) == 1
+
+
+def test_an_unreadable_account_row_errs_towards_telling_them(sent, monkeypatch):
+    def boom(*a, **k):
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(orders, "fetch_one", boom)
+    _wait(orders._send_order_whatsapp(ACCOUNT_ORDER, None, status_label="قيد التجهيز"))
+    assert len(sent) == 1, "a message too many beats a customer told nothing"
+
+
+def test_notify_all_reaches_account_holders_too(sent, monkeypatch, account):
+    account("$2b$12$a-real-bcrypt-hash")
     monkeypatch.setenv("WA_NOTIFY_ALL", "true")
     _wait(orders._send_order_whatsapp(ACCOUNT_ORDER, None, status_label="قيد التجهيز"))
     assert len(sent) == 1

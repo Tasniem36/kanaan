@@ -115,13 +115,33 @@ def _send_order_email(order, email, request):
         print("[order-email]", e)
 
 
+def _can_sign_in(user_id) -> bool:
+    """Whether this order's customer can reach the in-app notifications at all.
+
+    A shadow account from guest checkout has an empty password_hash and cannot be
+    logged into until it is claimed through /register, so its owner sees nothing the
+    bell or the push puts there. Treated as unreachable, and told on WhatsApp instead.
+    On a lookup failure, say False: a message too many beats a customer told nothing.
+    """
+    if not user_id:
+        return False
+    try:
+        row = fetch_one("select password_hash from users where id = %s", [user_id])
+    except Exception as e:  # noqa: BLE001
+        print("[order-whatsapp] account lookup failed:", e)
+        return False
+    return bool(row and (row.get("password_hash") or "").strip())
+
+
 def _send_order_whatsapp(order, request=None, *, status_label=None):
     """Tell the customer on WhatsApp. The phone is the one contact detail every order
-    has, so this is the only channel that reaches a guest who left no e-mail.
+    has, so this is the only channel that reaches a customer who can't sign in.
 
-    Skipped for a customer who already has an account: they get the in-app
-    notification and the push, and each template message is billed. WA_NOTIFY_ALL
-    turns that off.
+    Skipped only for someone who can actually read the in-app notification and the
+    push — that is, someone who can log in. A guest who left an e-mail address has a
+    user_id, but it points at the shadow account _guest_account opens for them, with
+    an empty password_hash and no way to sign in: gating on user_id alone left them
+    with a row in a bell they can't reach. WA_NOTIFY_ALL messages everyone.
 
     Sent on a thread, like the device push in push.py. Meta's endpoint is a
     twenty-second timeout away, and a manager marking an order shipped shouldn't wait
@@ -130,7 +150,7 @@ def _send_order_whatsapp(order, request=None, *, status_label=None):
     """
     if not whatsapp.configured():
         return None
-    if order.get("user_id") and not whatsapp.notify_all():
+    if not whatsapp.notify_all() and _can_sign_in(order.get("user_id")):
         return None
     # read what the message needs before leaving the request — `request` is not ours
     # to touch once it has been answered
@@ -501,7 +521,7 @@ def confirm_payment(oid: str, request: Request, t: str = Query(""), user=Depends
 
 
 @router.post("/{oid}/cancel-payment")
-def cancel_payment(oid: str, t: str = Query(""), user=Depends(optional_user)):
+def cancel_payment(oid: str, request: Request, t: str = Query(""), user=Depends(optional_user)):
     if not user and not t:
         raise HTTPException(401, "Authentication required")
     order = _own_order_or_404(oid, user, token=t)
@@ -514,6 +534,10 @@ def cancel_payment(oid: str, t: str = Query(""), user=Depends(optional_user)):
                 upd = fetch_one("update orders set payment_status = 'paid', status = 'paid' where id = %s returning *", [oid])
                 its = fetch_all("select name, price, qty from order_items where order_id = %s", [oid])
                 notify_new_order({**upd, "items": its})
+                _notify_new_order_admins(upd)
+                # they pressed cancel but the money had already gone through: it is a
+                # real order, and gets the same confirmation confirm_payment sends
+                _send_order_whatsapp(upd, request)
                 return {"cancelled": False, "paid": True}
         except HTTPException:
             pass
@@ -526,6 +550,8 @@ def set_status(oid: str, request: Request, _m=Depends(require_manager), payload:
     status = payload.get("status")
     if status not in ("pending", "paid", "preparing", "fulfilled", "delivered", "cancelled"):
         raise HTTPException(400, "Invalid status")
+    before = fetch_one("select status from orders where id = %s", [oid])
+    was = (before or {}).get("status")
     row = fetch_one("update orders set status = %s where id = %s returning *", [status, oid])
     if not row:
         raise HTTPException(404, "Order not found")
@@ -534,6 +560,12 @@ def set_status(oid: str, request: Request, _m=Depends(require_manager), payload:
     # notify the customer their order status changed. An account holder gets the
     # in-app notification and the push; a guest has neither, and until this was wired
     # to WhatsApp was never told anything at all.
+    #
+    # Only on a real change: re-selecting the status an order already has, or a retried
+    # request, would otherwise cost the customer a repeat message and the shop a repeat
+    # bill. The event row above is still written, so the timeline keeps every touch.
+    if was == status:
+        return {"order": row}
     label = STATUS_LABELS.get(status, status)
     if row.get("user_id"):
         notify_users([row["user_id"]], type="order_status",

@@ -9,8 +9,11 @@
         @added="$emit('added', $event)"
       />
     </div>
-    <!-- sentinel: loads the next page when it scrolls into view (not in preview mode) -->
-    <div v-if="hasMore && !preview" ref="sentinel" class="load-more"><span class="ld-spin"></span></div>
+    <!-- sentinel: loads the next page when it scrolls into view (not in preview mode).
+         Gone once a request has failed — it sits in view, so leaving it there would
+         re-trigger the load it just failed, over and over. The retry below is the way
+         back. -->
+    <div v-if="hasMore && !preview && !failed" ref="sentinel" class="load-more"><span class="ld-spin"></span></div>
     <!-- the shelf is exhausted: somewhere to say what comes next, rather than dropping
          the shopper straight into the footer -->
     <!-- not after a failure: the shelf isn't finished, it just stopped arriving -->
@@ -23,7 +26,7 @@
       <p>{{ t('common.loadFailed') }}</p>
       <button class="btn btn-green" type="button" @click="reload">{{ t('common.retry') }}</button>
     </div>
-    <p v-else-if="!items.length && !loading" class="a-muted" style="text-align:center">{{ emptyText }}</p>
+    <p v-else-if="loaded && !items.length && !loading" class="a-muted" style="text-align:center">{{ emptyText }}</p>
   </div>
 </template>
 
@@ -112,7 +115,7 @@ function revealCards() {
 // re-observe after each load so a short batch keeps filling the viewport
 function arm() {
   if (io) io.disconnect()
-  if (props.preview || !sentinel.value) return
+  if (props.preview || failed.value || !sentinel.value) return
   io = new IntersectionObserver(
     (entries) => { if (entries.some((e) => e.isIntersecting)) loadMore() },
     { rootMargin: '400px 0px' }

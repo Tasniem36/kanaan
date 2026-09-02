@@ -99,7 +99,6 @@
       />
 
       <ProductFeed
-        ref="shopFeed"
         :key="shopCat"
         :category="shopCat"
         :type="shopType"
@@ -402,7 +401,6 @@ const shopCat = ref('pantry')
 const shopMeta = computed(() => SHOP_CATS.find((c) => c.cat === shopCat.value) || SHOP_CATS[0])
 // the shelf being offered at the end of the current one
 const otherShelf = computed(() => SHOP_CATS.find((c) => c.cat !== shopCat.value) || SHOP_CATS[1])
-const shopFeed = ref(null)
 const shopType = ref('')
 const shopSort = ref('featured')
 const shopMin = ref('')
@@ -707,7 +705,10 @@ async function placeOrder() {
     checkoutOpen.value = false
     saveAddress.value = false
     Object.assign(co, { name: '', phone: '', city: '', street: '', house: '', notes: '', email: '' })
-    shopFeed.value?.reload() // refresh stock
+    // deliberately not reloading the feed: it would drop a shopper who had scrolled
+    // through all 47 items back to the first 12, collapsing the page under the
+    // confirmation they're reading. Stock badges go stale for this page view only, and
+    // the server re-reads stock and prices on every order anyway (see routers/orders).
     // A guest has no حسابي to find the order in, so hand them the tracking link on
     // screen as well as by e-mail — the e-mail address could have a typo in it.
     if (wasGuest) {
