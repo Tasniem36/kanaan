@@ -64,6 +64,12 @@
        a time. The tabs aren't decoration — each feed loads more as you scroll, and
        stacked the pantry's shelf would never let anyone reach the pottery. -->
   <section id="shop" :class="{ pottery: shopCat === 'pottery' }">
+    <!-- The two sections this replaced were linked from outside the site — an Instagram
+         bio, a WhatsApp broadcast — and those links would now land nowhere. Keep the old
+         ids as empty targets: the browser scrolls here, and the watcher below opens the
+         shelf that was asked for. -->
+    <span id="pantry" class="anchor-alias" aria-hidden="true"></span>
+    <span id="pottery" class="anchor-alias" aria-hidden="true"></span>
     <div class="wrap">
       <div class="sec-head reveal">
         <span class="eyebrow">{{ t(shopMeta.eyebrow) }}</span>
@@ -421,6 +427,14 @@ function goShop(cat) {
   shopCat.value = cat
   mobileMenu.value = false
   nextTick(() => document.getElementById('shop')?.scrollIntoView({ behavior: 'smooth' }))
+}
+
+// An arrival at the old '/#pantry' or '/#pottery' — a link shared before these became
+// tabs — opens the shelf it asked for. The empty spans in the template are what the
+// browser scrolls to; this is what makes it the right shelf.
+function openShelfFromHash() {
+  const cat = location.hash.slice(1)
+  if (SHOP_CATS.some((c) => c.cat === cat)) shopCat.value = cat
 }
 
 // "Contact us" opens the in-app chat with the shop (login first if a guest)
@@ -788,7 +802,10 @@ onMounted(() => {
   }, { passive: true })
   updateActiveSection()
   observeReveals()
+  openShelfFromHash()
+  addEventListener('hashchange', openShelfFromHash)
 })
+onUnmounted(() => removeEventListener('hashchange', openShelfFromHash))
 </script>
 
 <style scoped>
@@ -817,6 +834,10 @@ onMounted(() => {
 .known-you .lnk { font-size: .8rem; margin-inline-start: .4rem; }
 .linkish { margin-top: .4rem; font-size: .84rem; font-weight: 700; color: var(--green); text-decoration: underline; text-underline-offset: 3px; }
 .lnk { color: var(--green); text-decoration: underline; font-weight: 700; }
+/* targets for the retired #pantry / #pottery links — no size of their own, and set
+   back from the sticky header so an arrival doesn't land under it */
+.anchor-alias { display: block; height: 0; overflow: hidden; scroll-margin-top: 5.5rem; }
+
 /* the hand-off at the bottom of a finished shelf */
 .shelf-end {
   text-align: center;
