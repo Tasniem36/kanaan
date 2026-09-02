@@ -33,6 +33,14 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="4"/><path d="M3 21a6 6 0 0 1 12 0M18 8v6M21 11h-6"/></svg>
             {{ t('auth.createAccount') }}
           </RouterLink>
+          <!-- Someone who has ordered without an account still has orders. They're
+               remembered on this device (stores/myOrders.js), so this only appears
+               once there's something to show. -->
+          <RouterLink v-if="myOrders.count" to="/track" class="menu-item" @click="open = false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6h15l-1.5 9h-12L6 6Z"/><path d="M6 6 5 3H2"/><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/></svg>
+            {{ t('track.mineTitle') }}
+            <span class="mine-count">{{ myOrders.count }}</span>
+          </RouterLink>
         </template>
 
         <!-- shared: language (+ logout when signed in) -->
@@ -54,10 +62,12 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '../stores/auth'
+import { useMyOrdersStore } from '../stores/myOrders'
 import { setLocale } from '../i18n'
 
 const { t, locale } = useI18n()
 const auth = useAuthStore()
+const myOrders = useMyOrdersStore()
 const router = useRouter()
 
 const open = ref(false)
@@ -85,6 +95,17 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
 </script>
 
 <style scoped>
+/* how many orders this device remembers, next to طلباتي */
+.mine-count {
+  margin-inline-start: auto;
+  font-size: .75rem;
+  font-weight: 700;
+  color: var(--green);
+  background: rgba(60,74,39,.1);
+  border-radius: 999px;
+  padding: .05rem .45rem;
+}
+
 .user-menu { position: relative; }
 .avatar {
   width: 40px;

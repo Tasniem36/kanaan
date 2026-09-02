@@ -366,6 +366,7 @@ import { useSettingsStore } from '../stores/settings'
 import { useInboxStore } from '../stores/inbox'
 import { deliveryFee, EMIRATES } from '../utils/delivery'
 import { useCatalogStore } from '../stores/catalog'
+import { useMyOrdersStore } from '../stores/myOrders'
 import ProductFeed from '../components/ProductFeed.vue'
 import ProductFilters from '../components/ProductFilters.vue'
 import ReviewsSection from '../components/ReviewsSection.vue'
@@ -381,6 +382,7 @@ const cart = useCartStore()
 const auth = useAuthStore()
 const reviewsSection = ref(null)
 const catalog = useCatalogStore()
+const myOrders = useMyOrdersStore()
 const ordersStore = useOrdersStore()
 const addresses = useAddressesStore()
 const content = useContentStore()
@@ -693,6 +695,9 @@ async function placeOrder() {
     // still be abandoned or refused, and a shopper who comes back to try again
     // shouldn't have to rebuild it. /pay/return empties it once the money arrives.
     if (result.redirect_url) {
+      // remembered before the redirect: this page is about to be replaced, and a
+      // guest coming back from Ziina would otherwise have nothing tying them to it
+      if (!auth.isAuthenticated) myOrders.remember(result.order)
       window.location.href = result.redirect_url
       return
     }
@@ -705,7 +710,11 @@ async function placeOrder() {
     shopFeed.value?.reload() // refresh stock
     // A guest has no حسابي to find the order in, so hand them the tracking link on
     // screen as well as by e-mail — the e-mail address could have a typo in it.
-    if (wasGuest) placed.value = { id: result.order.id, token: result.order.track_token, emailed: !!delivery.email }
+    if (wasGuest) {
+      // kept on this device so طلباتي can gather it with the rest — see stores/myOrders
+      myOrders.remember(result.order)
+      placed.value = { id: result.order.id, token: result.order.track_token, emailed: !!delivery.email }
+    }
     else showToast(t('checkout.received', { id: result.order.id.slice(0, 8) }))
   } catch (e) {
     coErr.value = promoMessage(e)

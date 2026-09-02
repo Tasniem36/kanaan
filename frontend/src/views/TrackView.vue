@@ -58,6 +58,24 @@
         <h1 class="display">{{ hadLink ? t('track.notFoundTitle') : t('track.lookupTitle') }}</h1>
         <p class="a-muted">{{ hadLink ? t('track.notFoundMsg') : t('track.lookupMsg') }}</p>
 
+        <!-- Orders placed from this device, gathered without an account: each one
+             carries its own tracking token, which is all the status page needs. See
+             stores/myOrders.js for what this is and isn't. -->
+        <section v-if="myOrders.count" class="mine" aria-labelledby="mine-h">
+          <h2 id="mine-h">{{ t('track.mineTitle') }}</h2>
+          <ul>
+            <li v-for="o in myOrders.list" :key="o.id">
+              <RouterLink :to="{ name: 'track', params: { id: o.id }, query: { t: o.token } }" class="mine-row">
+                <span class="mine-ref" dir="ltr">{{ o.number || refOf(o) }}</span>
+                <span class="mine-when a-muted">{{ fmtDate(o.created_at || o.at) }}</span>
+                <span v-if="o.status" class="mine-status" :class="'s-' + o.status">{{ statusLabel(o) }}</span>
+                <span v-else-if="myOrders.loading" class="mine-status a-muted">…</span>
+              </RouterLink>
+            </li>
+          </ul>
+          <p class="a-muted mine-note">{{ t('track.mineNote') }}</p>
+        </section>
+
         <form class="lookup" @submit.prevent="lookup">
           <label class="co-l" for="lk-ref">{{ t('track.orderNumber') }}</label>
           <input id="lk-ref" class="a-input" v-model.trim="form.ref" dir="ltr" placeholder="DK-K7M2XPQ" autocomplete="off">
@@ -77,12 +95,13 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '../services/api'
 import Loader from '../components/Loader.vue'
 import OrderTimeline from '../components/OrderTimeline.vue'
+import { useMyOrdersStore } from '../stores/myOrders'
 
 // Public order status page. The token in the URL is the credential — no account
 // needed, which is the whole point for a guest who checked out without one.
@@ -96,6 +115,14 @@ const hadLink = ref(false)
 const form = reactive({ ref: '', contact: '' })
 const finding = ref(false)
 const lookupErr = ref('')
+const myOrders = useMyOrdersStore()
+
+// 'pending' means two different things: a cash order being processed, and a card
+// order still waiting to be paid. OrderTimeline draws the same distinction.
+const statusLabel = (o) => t(o.status === 'pending' && o.payment_method === 'cod'
+  ? 'status.pendingCod' : 'status.' + o.status)
+// the order number, before the live one has arrived
+const refOf = (o) => (o.ref ? `DK-${o.ref}` : `#${String(o.id).slice(0, 8)}`)
 
 // Exchange the order number + a contact detail for the order's own tracking link,
 // then show it the same way the e-mailed link does.
@@ -105,8 +132,8 @@ async function lookup() {
   finding.value = true
   try {
     const { id, token } = await api('/orders/lookup', { method: 'POST', body: { ...form } })
+    // the route watcher loads it — see the bottom of this file
     await router.replace({ name: 'track', params: { id }, query: { t: token } })
-    await load(id, token)
   } catch (e) {
     lookupErr.value = e.message
   } finally {
@@ -134,11 +161,24 @@ const fmtDate = (d) => new Date(d).toLocaleString(locale.value, { dateStyle: 'me
 const waText = computed(() => encodeURIComponent(
   t('track.whatsappText', { id: order.value?.number || '' })))
 
-onMounted(() => {
-  if (!route.params.id) { loading.value = false; return }  // /track → straight to the form
+// Driven by the route, not by mount: opening an order from the طلباتي list goes
+// /track → /track/:id, which is the same component, so no mount hook fires again and
+// the page would sit on the form. The lookup form's redirect lands here too, which is
+// why it doesn't load anything itself.
+watch(() => [route.params.id, String(route.query.t || '')], ([id, tok]) => {
+  if (!id) {
+    // bare /track: the form, and above it whatever this device remembers ordering.
+    // Statuses are fetched here and only here — no point costing requests on a page
+    // opened straight to a single order.
+    order.value = null
+    hadLink.value = false
+    loading.value = false
+    myOrders.fetchStatuses()
+    return
+  }
   hadLink.value = true
-  return load(route.params.id, route.query.t)
-})
+  load(id, tok)
+}, { immediate: true })
 </script>
 
 <style scoped>
@@ -165,6 +205,34 @@ h1 { font-size: clamp(1.4rem, 4vw, 1.9rem); color: var(--green); margin: .45rem 
 .deliv h2 { font-size: .82rem; color: var(--green); margin-bottom: .3rem; letter-spacing: .03em; }
 .deliv p { font-size: .88rem; }
 .help { margin: 1.3rem 0 .7rem; font-size: .84rem; }
+/* طلباتي — what this device remembers ordering, above the lookup form */
+.mine { margin: 1.6rem 0 .4rem; text-align: start; }
+.mine h2 {
+  font-size: .95rem; color: var(--green); margin-bottom: .5rem;
+  text-align: center;
+}
+.mine ul { list-style: none; margin: 0; }
+.mine li + li { margin-top: .4rem; }
+.mine-row {
+  display: flex; align-items: center; gap: .6rem;
+  padding: .65rem .8rem;
+  border: 1px solid rgba(60,74,39,.14); border-radius: 12px;
+  font-size: .88rem;
+  transition: border-color .15s, background .15s;
+}
+.mine-row:hover { border-color: var(--green); background: rgba(60,74,39,.04); }
+.mine-ref { font-weight: 700; color: var(--green); }
+.mine-when { font-size: .78rem; }
+.mine-status {
+  margin-inline-start: auto; font-size: .78rem; font-weight: 700;
+  padding: .1rem .5rem; border-radius: 999px;
+  background: rgba(60,74,39,.1); color: var(--green);
+  white-space: nowrap;
+}
+.mine-status.s-delivered { background: rgba(60,74,39,.14); }
+.mine-status.s-cancelled { background: rgba(156,43,43,.12); color: var(--red); }
+.mine-note { font-size: .78rem; margin: .6rem 0 0; text-align: center; }
+
 .lookup { text-align: start; margin: 1.4rem 0 .4rem; }
 .lookup .btn { width: 100%; justify-content: center; margin-top: 1rem; }
 .err { color: var(--red); font-size: .85rem; margin-top: .6rem; }
