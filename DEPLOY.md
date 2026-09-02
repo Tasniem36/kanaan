@@ -103,6 +103,59 @@ Get a WhatsApp message whenever a customer places an order, using CallMeBot (fre
 Now every new order sends you a WhatsApp with the customer, items, and total.
 (The in-app dashboard badge + chime work with no setup at all.)
 
+## WhatsApp updates to the customer (optional, paid)
+The section above messages **you** when an order arrives. This one messages **the
+customer** when their order moves — which is the only way to reach a guest who
+checked out without an e-mail address: they have no account, so no in-app
+notification and no push. The phone is the one detail every order carries.
+
+It needs Meta's WhatsApp Business Cloud API, not CallMeBot — CallMeBot can only
+write to a number that has already messaged the bot.
+
+1. In **Meta for Developers**, create an app of type *Business*, add the
+   **WhatsApp** product, and connect a sender phone number. Note the
+   **Phone number ID** (a number, not the phone number itself).
+2. Create a **permanent access token**: Business Settings → System users → add a
+   system user with the `whatsapp_business_messaging` permission, then generate a
+   token that does not expire. A temporary 24-hour token works for a first test.
+3. Submit two **message templates** for approval, category *Utility*. Business-initiated
+   messages have to be templates. Body text, with the placeholders exactly as shown:
+
+   `order_placed` —
+   ```
+   شكرًا لك! استلمنا طلبك {{1}}. الإجمالي {{2}} درهم.
+   تابع حالة طلبك من هنا: {{3}}
+   ```
+   `order_status` —
+   ```
+   طلبك {{1}}: {{2}}
+   تابع التفاصيل من هنا: {{3}}
+   ```
+   Approval usually takes minutes. Keep the placeholder order — the server fills
+   {{1}} with the order number, {{2}} with the total or the new status, {{3}} with
+   the tracking link.
+4. On the server, edit `.env`:
+   ```
+   WA_CLOUD_TOKEN=your-permanent-access-token
+   WA_CLOUD_PHONE_ID=your-phone-number-id
+   # optional:
+   # WA_TEMPLATE_PLACED=order_placed   # if you named the templates differently
+   # WA_TEMPLATE_STATUS=order_status
+   # WA_TEMPLATE_LANG=ar
+   # WA_NOTIFY_ALL=true                # message account holders too (see below)
+   ```
+5. Re-deploy: `docker compose -f docker-compose.prod.yml up -d --build`
+
+By default only customers with **no other channel** are messaged — a guest with no
+e-mail. Account holders already get the in-app notification and the device push, and
+every template message is billed, so they're left alone unless you set
+`WA_NOTIFY_ALL=true`.
+
+Leave `WA_CLOUD_TOKEN` unset and nothing is sent — the shop takes orders exactly as
+before. Sends happen in the background and never delay an order or a status change;
+failures are logged (`[whatsapp] send failed: …`) and affect nothing else. While your
+app is in test mode, Meta only delivers to numbers you've added to its allowed list.
+
 ## Online payments with Ziina (optional)
 Lets customers pay by card / Apple Pay / Google Pay at checkout (alongside cash on delivery).
 1. In your **Ziina Business** dashboard, create an **API key** (with payment-intent write access).

@@ -1,5 +1,6 @@
 import os
 import secrets
+import threading
 import uuid
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
@@ -13,6 +14,7 @@ from audit import log_action
 from ziina import create_payment_intent, get_payment_intent
 from notify import notify_new_order
 from notifications import notify_managers, notify_users
+import whatsapp
 from delivery import compute_fee as compute_delivery_fee
 from routers.discounts import error_body, evaluate_code
 from routers.settings import get_checkout_config
@@ -96,17 +98,63 @@ def _order_email_body(order, track_url):
     )
 
 
+def _track_url(order, request=None) -> str:
+    """The link that opens an order with no account: its id plus its token."""
+    base = os.getenv("APP_URL") or (request and request.headers.get("origin")) or ""
+    return f"{base}/track/{order['id']}?t={order['track_token']}"
+
+
 def _send_order_email(order, email, request):
     """Best-effort: a failed e-mail must never fail the order that triggered it."""
     if not email:
         return
     try:
-        base = os.getenv("APP_URL") or request.headers.get("origin") or ""
-        track_url = f"{base}/track/{order['id']}?t={order['track_token']}"
         send_email(email, f"تأكيد طلبك {display_ref(order.get('ref'), order['id'])} — دكّان كنعان",
-                   _order_email_body(order, track_url))
+                   _order_email_body(order, _track_url(order, request)))
     except Exception as e:  # noqa: BLE001 — never break checkout over a mail failure
         print("[order-email]", e)
+
+
+def _send_order_whatsapp(order, request=None, *, status_label=None):
+    """Tell the customer on WhatsApp. The phone is the one contact detail every order
+    has, so this is the only channel that reaches a guest who left no e-mail.
+
+    Skipped for a customer who already has an account: they get the in-app
+    notification and the push, and each template message is billed. WA_NOTIFY_ALL
+    turns that off.
+
+    Sent on a thread, like the device push in push.py. Meta's endpoint is a
+    twenty-second timeout away, and a manager marking an order shipped shouldn't wait
+    on it — measured at 20.9s for one status change before this was moved off the
+    request. Returns the thread so a test can wait for it; no request path does.
+    """
+    if not whatsapp.configured():
+        return None
+    if order.get("user_id") and not whatsapp.notify_all():
+        return None
+    # read what the message needs before leaving the request — `request` is not ours
+    # to touch once it has been answered
+    try:
+        args = {"phone": order["phone"],
+                "number": display_ref(order.get("ref"), order["id"]),
+                "track_url": _track_url(order, request)}
+        args.update({"status_label": status_label} if status_label
+                    else {"total": order["total"]})
+    except Exception as e:  # noqa: BLE001 — a row missing fields is not worth a 500
+        print("[order-whatsapp]", e)
+        return None
+
+    send = whatsapp.send_order_status if status_label else whatsapp.send_order_placed
+
+    def _safe():
+        try:
+            send(**args)
+        except Exception as e:  # noqa: BLE001 — never break an order over a message
+            print("[order-whatsapp]", e)
+
+    thread = threading.Thread(target=_safe, daemon=True)
+    thread.start()
+    return thread
 
 
 def _checkout_failed(request, user, reason, **extra):
@@ -300,9 +348,11 @@ def create_order(request: Request, user=Depends(optional_user), payload: dict = 
 
     notify_new_order(order)  # COD: alert the manager now (Ziina alerts once paid)
     _notify_new_order_admins(order)  # in-app bell for managers
-    # A guest has no order history to come back to, so the tracking link in this
-    # e-mail is their only route to the order. Signed-in customers find it in حسابي.
+    # A guest has no order history to come back to, so the tracking link is their
+    # only route to the order. Signed-in customers find it in حسابي. The e-mail is
+    # sent when there is one; the WhatsApp goes to the phone, which there always is.
     _send_order_email(order, guest_email, request)
+    _send_order_whatsapp(order, request)
     return {"order": order}
 
 
@@ -438,6 +488,9 @@ def confirm_payment(oid: str, request: Request, t: str = Query(""), user=Depends
         its = fetch_all("select name, price, qty from order_items where order_id = %s", [oid])
         notify_new_order({**upd, "items": its})
         _notify_new_order_admins(upd)  # in-app bell for managers (Ziina paid = real order)
+        # the customer's own confirmation: here, not at the hand-off to Ziina, because
+        # this is the point the order became real
+        _send_order_whatsapp(upd, request)
         log_action(user_id=order["user_id"], action="payment_confirmed",
                    detail={"order_id": oid, "total": order["total"]}, request=request)
         return {"paid": True, "status": "paid"}
@@ -469,7 +522,7 @@ def cancel_payment(oid: str, t: str = Query(""), user=Depends(optional_user)):
 
 
 @router.patch("/{oid}/status")
-def set_status(oid: str, _m=Depends(require_manager), payload: dict = Body(default={})):
+def set_status(oid: str, request: Request, _m=Depends(require_manager), payload: dict = Body(default={})):
     status = payload.get("status")
     if status not in ("pending", "paid", "preparing", "fulfilled", "delivered", "cancelled"):
         raise HTTPException(400, "Invalid status")
@@ -478,11 +531,15 @@ def set_status(oid: str, _m=Depends(require_manager), payload: dict = Body(defau
         raise HTTPException(404, "Order not found")
     # add the point the customer's tracking timeline reads
     execute("insert into order_status_events (order_id, status) values (%s, %s)", [oid, status])
-    # notify the customer their order status changed
+    # notify the customer their order status changed. An account holder gets the
+    # in-app notification and the push; a guest has neither, and until this was wired
+    # to WhatsApp was never told anything at all.
+    label = STATUS_LABELS.get(status, status)
     if row.get("user_id"):
         notify_users([row["user_id"]], type="order_status",
                      title="تحديث حالة طلبك",
-                     body=f"طلب #{oid[:8]}: {STATUS_LABELS.get(status, status)}", order_id=oid)
+                     body=f"طلب #{oid[:8]}: {label}", order_id=oid)
+    _send_order_whatsapp(row, request, status_label=label)
     return {"order": row}
 
 
