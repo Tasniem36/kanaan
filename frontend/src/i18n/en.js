@@ -247,8 +247,11 @@ export default {
   },
   pay: {
     verifying: 'Verifying payment…',
+    keepOpen: 'Please keep this page open — confirming can take a few seconds.',
     success: 'Payment successful!',
     successMsg: 'Your order #{id} has been received. Thank you — we will contact you soon.',
+    unresolved: 'Still confirming your payment',
+    unresolvedMsg: "We haven't had a final answer yet. Please don't pay again — if it went through we'll confirm your order and message you on WhatsApp.",
     failed: 'Payment not completed',
     failedMsg: "We didn't receive the payment. You can try again.",
     backHome: 'Back to store',
