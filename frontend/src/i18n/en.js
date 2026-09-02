@@ -59,7 +59,7 @@ export default {
     allTypes: 'All',
     showAll: 'Show all',
     // said at the bottom of a shelf the shopper has seen all of, to point at the other
-    shelfEnd: "That's the whole {shelf} — {n} products",
+    shelfEnd: "That's the whole {shelf}",
     shelfEndCta: 'Browse {other}',
     pantryEyebrow: 'From the Palestinian pantry',
     pantryTitle: 'A table full of goodness',

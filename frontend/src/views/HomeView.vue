@@ -112,9 +112,9 @@
       >
         <!-- end of this shelf: hand the shopper over to the other one, so finishing
              the pantry doesn't dead-end in the footer with the pottery unmentioned -->
-        <template #end="{ total }">
+        <template #end>
           <div class="shelf-end">
-            <p>{{ t('home.shelfEnd', { n: ar(total), shelf: t(shopMeta.label) }) }}</p>
+            <p>{{ t('home.shelfEnd', { shelf: t(shopMeta.label) }) }}</p>
             <button class="btn btn-green" type="button" @click="goShop(otherShelf.cat)">
               {{ t('home.shelfEndCta', { other: t(otherShelf.label) }) }}
             </button>

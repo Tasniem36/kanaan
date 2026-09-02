@@ -14,7 +14,7 @@
     <!-- the shelf is exhausted: somewhere to say what comes next, rather than dropping
          the shopper straight into the footer -->
     <!-- not after a failure: the shelf isn't finished, it just stopped arriving -->
-    <slot v-if="loaded && !hasMore && !failed && items.length" name="end" :total="total" />
+    <slot v-if="loaded && !hasMore && !failed && items.length" name="end" />
     <!-- The request failed, which is not the same as the shelf being empty: telling a
          shopper "nothing matches your filters" when the shop couldn't be reached sends
          them fiddling with filters that were never the problem. Say so instead, and
