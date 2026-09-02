@@ -56,9 +56,14 @@ function settle() {
 
 onMounted(async () => {
   if (!orderId) { state.value = 'failed'; return }
-  // customer cancelled on Ziina → release the reserved stock, show failed
+  // cancel=1 says which URL Ziina redirected to, not what happened to the money — they
+  // may have paid and then hit cancel or the back button. So the server checks the intent
+  // before cancelling and answers paid if it completed; trusting the button over that
+  // answer would show "payment failed", basket still full, to someone who has paid.
+  // Otherwise it is a real cancellation and the reserved stock goes back.
   if (route.query.cancel) {
-    await ordersStore.cancelPayment(orderId, token).catch(() => {})
+    const r = await ordersStore.cancelPayment(orderId, token).catch(() => null)
+    if (r?.paid) { settle(); return }
     state.value = 'failed'
     return
   }
