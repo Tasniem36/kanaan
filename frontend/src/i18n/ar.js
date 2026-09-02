@@ -2,6 +2,9 @@ export default {
   common: {
     loading: '…جارٍ التحميل',
     error: 'حدث خطأٌ غير متوقّع',
+    // the shelf couldn't be fetched — said instead of "nothing matches your filters"
+    loadFailed: 'لم نتمكّن من تحميل المنتجات. تحقّق من اتّصالك وأعد المحاولة.',
+    retry: 'أعد المحاولة',
     close: 'إغلاق',
   },
   inbox: {
@@ -72,7 +75,6 @@ export default {
     newsPlaceholder: 'بريدك الإلكتروني',
     subscribe: 'اشترك',
     subscribed: 'تمّ اشتراكك في نشرة كنعان — أهلًا بك!',
-    loadError: 'تعذّر تحميل المنتجات',
   },
   values: {
     v1: { t: 'منتجاتٌ أصليّة', d: 'من مصادرها مباشرةً، بلا وسطاء', more: 'نتعامل مباشرةً مع المزارعين والحِرفيّين الفلسطينيّين بلا وسطاء، وكلّ صنفٍ موثَّقُ المصدر والمنشأ.', linkLabel: 'تصفّح المونة' },

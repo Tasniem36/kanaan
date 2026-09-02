@@ -2,6 +2,9 @@ export default {
   common: {
     loading: 'Loading…',
     error: 'An unexpected error occurred',
+    // the shelf couldn't be fetched — said instead of "nothing matches your filters"
+    loadFailed: "We couldn't load the products. Check your connection and try again.",
+    retry: 'Try again',
     close: 'Close',
   },
   inbox: {
@@ -72,7 +75,6 @@ export default {
     newsPlaceholder: 'Your email',
     subscribe: 'Subscribe',
     subscribed: "You're subscribed to the Kanaan newsletter — welcome!",
-    loadError: 'Could not load products',
   },
   values: {
     v1: { t: 'Authentic products', d: 'Straight from the source, no middlemen', more: 'We deal directly with Palestinian farmers and artisans with no middlemen, and every item has a documented source and origin.', linkLabel: 'Browse the pantry' },
