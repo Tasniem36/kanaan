@@ -42,6 +42,13 @@ def _notify_new_order_admins(order):
     )
 
 
+# Ziina statuses that mean the money is definitely not coming. Anything else —
+# pending, an instrument not yet chosen, a status this code has never seen — means
+# "not resolved yet", and an unresolved payment never destroys an order: see
+# cancel_payment.
+FAILED_STATUSES = {"failed", "cancelled", "canceled", "expired"}
+
+
 def cancel_and_restore(order_id):
     """Restore reserved stock and mark an order cancelled (payment couldn't start/complete)."""
     with pool.connection() as conn, conn.transaction(), conn.cursor() as cur:
@@ -58,6 +65,23 @@ def cancel_and_restore(order_id):
         )
         cur.execute("update orders set status = 'cancelled' where id = %s", [order_id])
         cur.execute("insert into order_status_events (order_id, status) values (%s, 'cancelled')", [order_id])
+
+
+def reserve_stock(order_id):
+    """The inverse of the restore above: take this order's lines out of stock again.
+
+    For an order that was cancelled and then turned out to have been paid for. The
+    count may go negative — that is the honest reading (the shelf owes a unit), and a
+    manager can see it. Leaving it high would sell the same jar to someone else.
+    """
+    execute(
+        """update products p set stock = p.stock - s.qty
+           from (select product_id, sum(qty) as qty from order_items
+                 where order_id = %s and product_id is not null
+                 group by product_id) s
+           where p.id = s.product_id""",
+        [order_id],
+    )
 
 
 # Order-number alphabet: no 0/O/1/I, so a customer reading it out over the phone
@@ -492,6 +516,31 @@ def track_order(oid: str, request: Request, t: str = Query(""), user=Depends(opt
     return {"order": safe}
 
 
+def mark_paid(order, request=None):
+    """The moment an order becomes real: flip it to paid and raise every alarm a real
+    order raises. Callers check payment_status first — this does not re-check.
+
+    Both return paths and the reconcile sweep land here, so a payment discovered ten
+    minutes late by cron reaches the manager and the customer exactly like one seen
+    at the return URL.
+    """
+    oid = str(order["id"])
+    # An order cancelled while the money was still in flight had its stock put back.
+    # The payment is real, so the order is real again, and the shelf has to reflect it
+    # before that stock is sold to someone else.
+    if order["status"] == "cancelled":
+        reserve_stock(oid)
+    upd = fetch_one("update orders set payment_status = 'paid', status = 'paid' where id = %s returning *", [oid])
+    execute("insert into order_status_events (order_id, status) values (%s, 'paid')", [oid])
+    its = fetch_all("select name, price, qty from order_items where order_id = %s", [oid])
+    notify_new_order({**upd, "items": its})
+    _notify_new_order_admins(upd)  # in-app bell for managers (Ziina paid = real order)
+    # the customer's own confirmation: here, not at the hand-off to Ziina, because
+    # this is the point the order became real
+    _send_order_whatsapp(upd, request)
+    return upd
+
+
 @router.post("/{oid}/confirm-payment")
 def confirm_payment(oid: str, request: Request, t: str = Query(""), user=Depends(optional_user)):
     if not user and not t:
@@ -501,23 +550,16 @@ def confirm_payment(oid: str, request: Request, t: str = Query(""), user=Depends
         return {"paid": True, "status": order["status"]}
     if order["payment_method"] != "ziina" or not order["ziina_payment_id"]:
         return {"paid": False, "status": order["status"]}
-    intent = get_payment_intent(order["ziina_payment_id"])
-    if intent.get("status") == "completed":
-        upd = fetch_one("update orders set payment_status = 'paid', status = 'paid' where id = %s returning *", [oid])
-        execute("insert into order_status_events (order_id, status) values (%s, 'paid')", [oid])
-        its = fetch_all("select name, price, qty from order_items where order_id = %s", [oid])
-        notify_new_order({**upd, "items": its})
-        _notify_new_order_admins(upd)  # in-app bell for managers (Ziina paid = real order)
-        # the customer's own confirmation: here, not at the hand-off to Ziina, because
-        # this is the point the order became real
-        _send_order_whatsapp(upd, request)
+    status = get_payment_intent(order["ziina_payment_id"]).get("status")
+    if status == "completed":
+        mark_paid(order, request)
         log_action(user_id=order["user_id"], action="payment_confirmed",
                    detail={"order_id": oid, "total": order["total"]}, request=request)
         return {"paid": True, "status": "paid"}
-    if intent.get("status") == "failed":
+    if status in FAILED_STATUSES:
         cancel_and_restore(oid)
         return {"paid": False, "status": "failed"}
-    return {"paid": False, "status": intent.get("status")}
+    return {"paid": False, "status": status}
 
 
 @router.post("/{oid}/cancel-payment")
@@ -527,22 +569,32 @@ def cancel_payment(oid: str, request: Request, t: str = Query(""), user=Depends(
     order = _own_order_or_404(oid, user, token=t)
     if order["payment_status"] == "paid":
         return {"cancelled": False, "paid": True}
-    if order["payment_method"] == "ziina" and order["ziina_payment_id"]:
-        try:
-            intent = get_payment_intent(order["ziina_payment_id"])
-            if intent.get("status") == "completed":
-                upd = fetch_one("update orders set payment_status = 'paid', status = 'paid' where id = %s returning *", [oid])
-                its = fetch_all("select name, price, qty from order_items where order_id = %s", [oid])
-                notify_new_order({**upd, "items": its})
-                _notify_new_order_admins(upd)
-                # they pressed cancel but the money had already gone through: it is a
-                # real order, and gets the same confirmation confirm_payment sends
-                _send_order_whatsapp(upd, request)
-                return {"cancelled": False, "paid": True}
-        except HTTPException:
-            pass
-    cancel_and_restore(oid)
-    return {"cancelled": True}
+    if order["payment_method"] != "ziina" or not order["ziina_payment_id"]:
+        cancel_and_restore(oid)
+        return {"cancelled": True}
+    # Arriving here says which URL Ziina redirected to, not what happened to the money:
+    # failure_url is the same URL, and a customer can pay and then press cancel or back.
+    # So ask Ziina, and only act on an answer.
+    try:
+        status = get_payment_intent(order["ziina_payment_id"]).get("status")
+    except HTTPException:
+        # Couldn't ask. Cancelling now would restore the stock and bury an order that
+        # may have been paid for, and nothing would ever revisit it — there is no
+        # webhook, and the customer's browser is not coming back a second time. Leave
+        # it pending for reconcile_payments, which asks again once Ziina answers.
+        return {"cancelled": False, "paid": False, "pending": True}
+    if status == "completed":
+        mark_paid(order, request)  # they pressed cancel, but the money had gone through
+        return {"cancelled": False, "paid": True}
+    if status in FAILED_STATUSES:
+        cancel_and_restore(oid)
+        return {"cancelled": True}
+    # Pressing cancel on Ziina's page does not itself fail the intent, so the usual
+    # abandoned checkout lands here, unresolved — indistinguishable, right now, from a
+    # card still being authorised. The order keeps its stock until reconcile_payments
+    # can ask again with the answer settled. A shelf held for a few minutes is worth
+    # more than an order cancelled out from under a payment that was on its way.
+    return {"cancelled": False, "paid": False, "pending": True}
 
 
 @router.patch("/{oid}/status")
