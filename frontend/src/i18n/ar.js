@@ -55,6 +55,9 @@ export default {
   home: {
     allTypes: 'الكل',
     showAll: 'عرض الكل',
+    // said at the bottom of a shelf the shopper has seen all of, to point at the other
+    shelfEnd: 'هذا كلُّ ما في {shelf} — {n} منتجًا',
+    shelfEndCta: 'تصفَّح {other}',
     pantryEyebrow: 'من المونة الفلسطينيّة',
     pantryTitle: 'مائدةٌ عامرةٌ بالخير',
     pantryDesc: 'لبنةٌ وأجبان، زعترٌ بلديّ، وزيت زيتونٍ بكرٍ ممتاز — نختارها من أيدي المزارعين كما تعلّمناها من الجدّات.',

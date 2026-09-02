@@ -12,7 +12,7 @@
       <div v-if="!cart.list.length" class="empty">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6h15l-1.5 9h-12L6 6Z"/><path d="M6 6 5 3H2"/><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/></svg>
         <b>{{ t('cart.empty') }}</b>{{ t('cart.emptySub') }}
-        <div style="margin-top:1.2rem"><a href="#pantry" class="btn btn-green" @click="emit('close')">{{ t('cart.browse') }}</a></div>
+        <div style="margin-top:1.2rem"><a href="#shop" class="btn btn-green" @click="emit('close')">{{ t('cart.browse') }}</a></div>
       </div>
       <div v-else>
         <div class="cart-item" v-for="it in cart.list" :key="it.id">

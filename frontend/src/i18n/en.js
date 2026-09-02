@@ -55,6 +55,9 @@ export default {
   home: {
     allTypes: 'All',
     showAll: 'Show all',
+    // said at the bottom of a shelf the shopper has seen all of, to point at the other
+    shelfEnd: "That's the whole {shelf} — {n} products",
+    shelfEndCta: 'Browse {other}',
     pantryEyebrow: 'From the Palestinian pantry',
     pantryTitle: 'A table full of goodness',
     pantryDesc: "Labneh and cheeses, wild za'atar, and premium extra-virgin olive oil — chosen from the hands of farmers, the way our grandmothers taught us.",

@@ -1,7 +1,7 @@
 <template>
   <PortalBar :scrolled="scrolled" search>
     <nav class="tabs store-nav" aria-label="nav">
-      <a href="#home" :class="{ active: activeSection === 'home' }">{{ t('nav.home') }}</a><a href="#pantry" :class="{ active: activeSection === 'pantry' }">{{ t('nav.pantry') }}</a><a href="#pottery" :class="{ active: activeSection === 'pottery' }">{{ t('nav.pottery') }}</a><a href="#story" :class="{ active: activeSection === 'story' }">{{ t('nav.story') }}</a><a v-if="reviews.visible" href="#reviews" :class="{ active: activeSection === 'reviews' }">{{ t('nav.reviews') }}</a><a href="#contact" :class="{ active: activeSection === 'contact' }">{{ t('nav.contact') }}</a>
+      <a href="#home" :class="{ active: activeSection === 'home' }">{{ t('nav.home') }}</a><a href="#shop" :class="{ active: activeSection === 'shop' && shopCat === 'pantry' }" @click.prevent="goShop('pantry')">{{ t('nav.pantry') }}</a><a href="#shop" :class="{ active: activeSection === 'shop' && shopCat === 'pottery' }" @click.prevent="goShop('pottery')">{{ t('nav.pottery') }}</a><a href="#story" :class="{ active: activeSection === 'story' }">{{ t('nav.story') }}</a><a v-if="reviews.visible" href="#reviews" :class="{ active: activeSection === 'reviews' }">{{ t('nav.reviews') }}</a><a href="#contact" :class="{ active: activeSection === 'contact' }">{{ t('nav.contact') }}</a>
     </nav>
     <template #actions>
       <button class="cart-btn" @click="openCart = true" aria-label="cart">
@@ -20,8 +20,8 @@
     </div>
     <nav class="mm-links">
       <a href="#home" :class="{ active: activeSection === 'home' }" @click="mobileMenu = false">{{ t('nav.home') }}</a>
-      <a href="#pantry" :class="{ active: activeSection === 'pantry' }" @click="mobileMenu = false">{{ t('nav.pantry') }}</a>
-      <a href="#pottery" :class="{ active: activeSection === 'pottery' }" @click="mobileMenu = false">{{ t('nav.pottery') }}</a>
+      <a href="#shop" :class="{ active: activeSection === 'shop' && shopCat === 'pantry' }" @click.prevent="goShop('pantry')">{{ t('nav.pantry') }}</a>
+      <a href="#shop" :class="{ active: activeSection === 'shop' && shopCat === 'pottery' }" @click.prevent="goShop('pottery')">{{ t('nav.pottery') }}</a>
       <a href="#story" :class="{ active: activeSection === 'story' }" @click="mobileMenu = false">{{ t('nav.story') }}</a>
       <a v-if="reviews.visible" href="#reviews" :class="{ active: activeSection === 'reviews' }" @click="mobileMenu = false">{{ t('nav.reviews') }}</a>
       <a href="#contact" :class="{ active: activeSection === 'contact' }" @click="mobileMenu = false">{{ t('nav.contact') }}</a>
@@ -32,21 +32,21 @@
 
   <!-- hero -->
   <section class="hero" id="home">
-    <img class="hero-img" src="/images/hero.jpg" alt="دكّان كنعان — مونة وخزف فلسطيني" fetchpriority="high" decoding="async" /><a class="scroll-cue" href="#pantry" aria-label="استكشف المتجر"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></a>
+    <img class="hero-img" src="/images/hero.jpg" alt="دكّان كنعان — مونة وخزف فلسطيني" fetchpriority="high" decoding="async" /><a class="scroll-cue" href="#shop" aria-label="استكشف المتجر" @click.prevent="goShop('pantry')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></a>
     <div class="cta">
-      <a href="#pantry" class="btn btn-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6h15l-1.5 9h-12L6 6Z"/><path d="M6 6 5 3H2"/></svg>{{ t('hero.shopPantry') }}</a>
-      <a href="#pottery" class="btn btn-gold">{{ t('hero.discoverPottery') }}</a>
+      <a href="#shop" class="btn btn-green" @click.prevent="goShop('pantry')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6h15l-1.5 9h-12L6 6Z"/><path d="M6 6 5 3H2"/></svg>{{ t('hero.shopPantry') }}</a>
+      <a href="#shop" class="btn btn-gold" @click.prevent="goShop('pottery')">{{ t('hero.discoverPottery') }}</a>
     </div>
   </section>
 
   <!-- categories -->
   <div class="cats">
     <div class="wrap row">
-      <a class="cat" href="#pantry"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3h4v3l2 2v12a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V8l2-2Z"/><path d="M8 12h8"/></svg>{{ t('cats.oil') }}</a>
-      <a class="cat" href="#pantry"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21c-1-7 2-12 8-14-1 7-3 12-8 14Z"/><path d="M12 21c1-6-1-10-6-12 1 6 2 9 6 12Z"/></svg>{{ t('cats.zaatar') }}</a>
-      <a class="cat" href="#pantry"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14 14 6l6 4-2 8H6Z"/><circle cx="10" cy="13" r="1"/><circle cx="14" cy="14" r="1"/></svg>{{ t('cats.cheese') }}</a>
-      <a class="cat" href="#pantry"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6l-1 3 2 3v11a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V9l2-3Z"/><path d="M8 13h8"/></svg>{{ t('cats.dairy') }}</a>
-      <a class="cat" href="#pottery"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6l-1 4c3 1 5 4 5 8s-3 6-7 6-7-2-7-6 2-7 5-8Z"/></svg>{{ t('cats.ceramics') }}</a>
+      <a class="cat" href="#shop" @click.prevent="goShop('pantry')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3h4v3l2 2v12a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V8l2-2Z"/><path d="M8 12h8"/></svg>{{ t('cats.oil') }}</a>
+      <a class="cat" href="#shop" @click.prevent="goShop('pantry')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21c-1-7 2-12 8-14-1 7-3 12-8 14Z"/><path d="M12 21c1-6-1-10-6-12 1 6 2 9 6 12Z"/></svg>{{ t('cats.zaatar') }}</a>
+      <a class="cat" href="#shop" @click.prevent="goShop('pantry')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14 14 6l6 4-2 8H6Z"/><circle cx="10" cy="13" r="1"/><circle cx="14" cy="14" r="1"/></svg>{{ t('cats.cheese') }}</a>
+      <a class="cat" href="#shop" @click.prevent="goShop('pantry')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6l-1 3 2 3v11a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V9l2-3Z"/><path d="M8 13h8"/></svg>{{ t('cats.dairy') }}</a>
+      <a class="cat" href="#shop" @click.prevent="goShop('pottery')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6l-1 4c3 1 5 4 5 8s-3 6-7 6-7-2-7-6 2-7 5-8Z"/></svg>{{ t('cats.ceramics') }}</a>
     </div>
   </div>
 
@@ -60,21 +60,61 @@
     <Loader v-if="!content.loaded" class="values-loading" />
   </div></div>
 
-  <!-- pantry -->
-  <section id="pantry">
+  <!-- The shop: both catalogues on the front page, filtered and complete, one tab at
+       a time. The tabs aren't decoration — each feed loads more as you scroll, and
+       stacked the pantry's shelf would never let anyone reach the pottery. -->
+  <section id="shop" :class="{ pottery: shopCat === 'pottery' }">
     <div class="wrap">
-      <div class="sec-head reveal"><span class="eyebrow">{{ t('home.pantryEyebrow') }}</span><h2 class="display">{{ t('home.pantryTitle') }}</h2><p>{{ t('home.pantryDesc') }}</p></div>
-      <ProductFeed ref="pantryFeed" category="pantry" :page-size="8" preview @added="onAdded" />
-      <div class="sec-more"><RouterLink class="btn btn-green" :to="{ name: 'category', params: { cat: 'pantry' } }">{{ t('home.showAll') }}</RouterLink></div>
-    </div>
-  </section>
+      <div class="sec-head reveal">
+        <span class="eyebrow">{{ t(shopMeta.eyebrow) }}</span>
+        <h2 class="display">{{ t(shopMeta.title) }}</h2>
+        <p>{{ t(shopMeta.desc) }}</p>
+      </div>
 
-  <!-- pottery -->
-  <section class="pottery" id="pottery">
-    <div class="wrap">
-      <div class="sec-head reveal"><span class="eyebrow">{{ t('home.potteryEyebrow') }}</span><h2 class="display">{{ t('home.potteryTitle') }}</h2><p>{{ t('home.potteryDesc') }}</p></div>
-      <ProductFeed ref="potteryFeed" category="pottery" :page-size="8" preview @added="onAdded" />
-      <div class="sec-more"><RouterLink class="btn btn-green" :to="{ name: 'category', params: { cat: 'pottery' } }">{{ t('home.showAll') }}</RouterLink></div>
+      <div class="shop-tabs" role="tablist">
+        <button
+          v-for="c in SHOP_CATS"
+          :key="c.cat"
+          class="shop-tab"
+          :class="{ on: shopCat === c.cat }"
+          type="button"
+          role="tab"
+          :aria-selected="shopCat === c.cat"
+          @click="goShop(c.cat)"
+        >{{ t(c.label) }}</button>
+      </div>
+
+      <ProductFilters
+        :types="shopTypes"
+        v-model:type="shopType"
+        v-model:sort="shopSort"
+        v-model:min-price="shopMin"
+        v-model:max-price="shopMax"
+      />
+
+      <ProductFeed
+        ref="shopFeed"
+        :key="shopCat"
+        :category="shopCat"
+        :type="shopType"
+        :sort="shopSort"
+        :min-price="shopMin"
+        :max-price="shopMax"
+        :page-size="12"
+        :empty-text="t('filters.noMatch')"
+        @added="onAdded"
+      >
+        <!-- end of this shelf: hand the shopper over to the other one, so finishing
+             the pantry doesn't dead-end in the footer with the pottery unmentioned -->
+        <template #end="{ total }">
+          <div class="shelf-end">
+            <p>{{ t('home.shelfEnd', { n: ar(total), shelf: t(shopMeta.label) }) }}</p>
+            <button class="btn btn-green" type="button" @click="goShop(otherShelf.cat)">
+              {{ t('home.shelfEndCta', { other: t(otherShelf.label) }) }}
+            </button>
+          </div>
+        </template>
+      </ProductFeed>
     </div>
   </section>
 
@@ -98,7 +138,7 @@
     <div class="band" aria-hidden="true"></div>
     <div class="wrap fcols">
       <div class="about"><div class="name display"><span class="g">دكّان</span> كنعان</div><p>{{ t('footer.about') }}</p></div>
-      <div><h5>{{ t('footer.shop') }}</h5><a href="#pantry">{{ t('nav.pantry') }}</a><a href="#pottery">{{ t('nav.pottery') }}</a></div>
+      <div><h5>{{ t('footer.shop') }}</h5><a href="#shop" @click.prevent="goShop('pantry')">{{ t('nav.pantry') }}</a><a href="#shop" @click.prevent="goShop('pottery')">{{ t('nav.pottery') }}</a></div>
       <div><h5>{{ t('footer.links') }}</h5><a href="#story">{{ t('nav.story') }}</a><a href="#" @click.prevent="contactUs">{{ t('footer.contactUs') }}</a><RouterLink to="/track">{{ t('track.findOrder') }}</RouterLink><RouterLink to="/account">{{ t('nav.account') }}</RouterLink></div>
       <div><h5>{{ t('footer.contact') }}</h5>
         <a href="https://wa.me/971522981187" target="_blank" rel="noopener">{{ t('footer.whatsapp') }}: <span dir="ltr">+971 52 298 1187</span></a>
@@ -319,7 +359,9 @@ import { useReviewsStore } from '../stores/reviews'
 import { useSettingsStore } from '../stores/settings'
 import { useInboxStore } from '../stores/inbox'
 import { deliveryFee, EMIRATES } from '../utils/delivery'
+import { useCatalogStore } from '../stores/catalog'
 import ProductFeed from '../components/ProductFeed.vue'
+import ProductFilters from '../components/ProductFilters.vue'
 import ReviewsSection from '../components/ReviewsSection.vue'
 import CartDrawer from '../components/CartDrawer.vue'
 import PortalBar from '../components/PortalBar.vue'
@@ -331,15 +373,55 @@ import { pName } from '../utils/product'
 const { t, locale } = useI18n()
 const cart = useCartStore()
 const auth = useAuthStore()
-const pantryFeed = ref(null)
-const potteryFeed = ref(null)
 const reviewsSection = ref(null)
+const catalog = useCatalogStore()
 const ordersStore = useOrdersStore()
 const addresses = useAddressesStore()
 const content = useContentStore()
 const reviews = useReviewsStore() // only for the nav link's visibility (see its store)
 const settings = useSettingsStore()
 const inbox = useInboxStore()
+
+// ---- the shop section -------------------------------------------------------
+// Two catalogues, one tab at a time, each showing everything it has. The heading
+// follows the tab, so the copy that used to introduce two separate sections still
+// gets said.
+const SHOP_CATS = [
+  { cat: 'pantry', label: 'nav.pantry', eyebrow: 'home.pantryEyebrow', title: 'home.pantryTitle', desc: 'home.pantryDesc' },
+  { cat: 'pottery', label: 'nav.pottery', eyebrow: 'home.potteryEyebrow', title: 'home.potteryTitle', desc: 'home.potteryDesc' },
+]
+const shopCat = ref('pantry')
+const shopMeta = computed(() => SHOP_CATS.find((c) => c.cat === shopCat.value) || SHOP_CATS[0])
+// the shelf being offered at the end of the current one
+const otherShelf = computed(() => SHOP_CATS.find((c) => c.cat !== shopCat.value) || SHOP_CATS[1])
+const shopFeed = ref(null)
+const shopType = ref('')
+const shopSort = ref('featured')
+const shopMin = ref('')
+const shopMax = ref('')
+const shopTypes = ref([])
+
+// Sub-types belong to their category — the pantry's زعتر means nothing under pottery
+// — so switching tabs drops the type and fetches the new list. Sort and price ask the
+// same question of either shelf, so they carry over.
+watch(shopCat, (cat) => {
+  shopType.value = ''
+  shopTypes.value = []
+  catalog.fetchTypes(cat)
+    .then((types) => { if (shopCat.value === cat) shopTypes.value = types })
+    .catch(() => {})
+}, { immediate: true })
+
+// Everything that used to be an #pantry / #pottery anchor — the nav, the hero, the
+// category chips, the footer — now opens a tab and scrolls to the one shop section.
+// The tabs themselves come through here too: 47 jars of pantry make a long page, and
+// switching to the 14 of pottery from the bottom of it would otherwise leave the
+// shopper stranded below the end of the shorter shelf.
+function goShop(cat) {
+  shopCat.value = cat
+  mobileMenu.value = false
+  nextTick(() => document.getElementById('shop')?.scrollIntoView({ behavior: 'smooth' }))
+}
 
 // "Contact us" opens the in-app chat with the shop (login first if a guest)
 function contactUs() {
@@ -352,9 +434,9 @@ const ar = (n) => String(n)
 
 // bundled defaults — used until the editable cards load (and for the nav link labels)
 const fallbackValues = computed(() => [
-  { icon: `<img src='/images/badge-asli.png' alt=''>`, link: '#pantry', t: t('values.v1.t'), d: t('values.v1.d'), more: t('values.v1.more'), linkLabel: t('values.v1.linkLabel') },
+  { icon: `<img src='/images/badge-asli.png' alt=''>`, link: '#shop', t: t('values.v1.t'), d: t('values.v1.d'), more: t('values.v1.more'), linkLabel: t('values.v1.linkLabel') },
   { icon: `<img src='/images/badge-ard.png' alt=''>`, link: '#story', t: t('values.v2.t'), d: t('values.v2.d'), more: t('values.v2.more'), linkLabel: t('values.v2.linkLabel') },
-  { icon: `<img src='/images/badge-jawda.png' alt=''>`, link: '#pantry', t: t('values.v3.t'), d: t('values.v3.d'), more: t('values.v3.more'), linkLabel: t('values.v3.linkLabel') },
+  { icon: `<img src='/images/badge-jawda.png' alt=''>`, link: '#shop', t: t('values.v3.t'), d: t('values.v3.d'), more: t('values.v3.more'), linkLabel: t('values.v3.linkLabel') },
   { icon: `<img src='/images/badge-tawsil.png' alt=''>`, link: '#contact', t: t('values.v4.t'), d: t('values.v4.d'), more: t('values.v4.more'), linkLabel: t('values.v4.linkLabel') },
 ])
 // admin-editable cards from the backend, mapped to the active language (falls back to Arabic, then to the bundled defaults)
@@ -606,7 +688,7 @@ async function placeOrder() {
     checkoutOpen.value = false
     saveAddress.value = false
     Object.assign(co, { name: '', phone: '', city: '', street: '', house: '', notes: '', email: '' })
-    pantryFeed.value?.reload(); potteryFeed.value?.reload() // refresh stock
+    shopFeed.value?.reload() // refresh stock
     // A guest has no حسابي to find the order in, so hand them the tracking link on
     // screen as well as by e-mail — the e-mail address could have a typo in it.
     if (wasGuest) placed.value = { id: result.order.id, token: result.order.track_token, emailed: !!delivery.email }
@@ -687,7 +769,7 @@ onUnmounted(() => document.documentElement.classList.remove('theme-bright'))
 
 onMounted(() => {
   content.fetch()
-  const navSections = ['home', 'pantry', 'pottery', 'story', 'reviews', 'contact']
+  const navSections = ['home', 'shop', 'story', 'reviews', 'contact']
   function updateActiveSection() {
     const line = scrollY + innerHeight * 0.3 // a bit below the sticky header
     let current = navSections[0]
@@ -735,11 +817,57 @@ onMounted(() => {
 .known-you .lnk { font-size: .8rem; margin-inline-start: .4rem; }
 .linkish { margin-top: .4rem; font-size: .84rem; font-weight: 700; color: var(--green); text-decoration: underline; text-underline-offset: 3px; }
 .lnk { color: var(--green); text-decoration: underline; font-weight: 700; }
-.sec-more { text-align: center; margin-top: 1.6rem; }
-/* same width as the reviews section's buttons, so the storefront's section CTAs
-   all read as one control rather than three sizes */
-.sec-more .btn { min-width: var(--cta-w); justify-content: center; }
-@media (max-width: 560px) { .sec-more .btn { width: 100%; } }
+/* the hand-off at the bottom of a finished shelf */
+.shelf-end {
+  text-align: center;
+  margin-top: 2.2rem;
+  padding-top: 1.8rem;
+  border-top: 1px solid rgba(60,74,39,.12);
+}
+.shelf-end p { color: var(--muted); font-size: .95rem; margin-bottom: 1rem; }
+.shelf-end .btn { min-width: var(--cta-w); justify-content: center; }
+@media (max-width: 560px) { .shelf-end .btn { width: 100%; } }
+.pottery .shelf-end { border-top-color: rgba(166,90,58,.16); }
+
+/* the shop's two shelves. A pill pair rather than underlined tabs: it reads as a
+   choice at a glance on a phone, where this is the first thing under the fold. */
+.shop-tabs {
+  display: flex;
+  justify-content: center;
+  gap: .5rem;
+  margin: 0 auto 1.4rem;
+  padding: .3rem;
+  border-radius: 999px;
+  background: rgba(60,74,39,.07);
+  width: fit-content;
+  max-width: 100%;
+}
+.shop-tab {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  font-size: .95rem;
+  color: var(--muted);
+  padding: .55rem 1.5rem;
+  border-radius: 999px;
+  transition: background .15s, color .15s, box-shadow .15s;
+}
+.shop-tab:hover { color: var(--ink); }
+.shop-tab.on {
+  background: #fff;
+  color: var(--green);
+  box-shadow: 0 2px 8px rgba(60,74,39,.12);
+}
+/* the pottery shelf keeps its terracotta palette (see .pottery in style.css), so the
+   active pill follows it rather than staying olive on a warm background */
+.pottery .shop-tabs { background: rgba(166,90,58,.10); }
+.pottery .shop-tab.on { color: var(--terra-deep); box-shadow: 0 2px 8px rgba(166,90,58,.16); }
+@media (max-width: 560px) {
+  .shop-tabs { width: 100%; }
+  .shop-tab { flex: 1; padding: .55rem .8rem; text-align: center; }
+}
 .value { position: relative; }
 /* the values loader spans the whole row (grid is repeat(3,1fr)) and centers */
 .values-loading { grid-column: 1 / -1; }

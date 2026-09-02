@@ -11,6 +11,9 @@
     </div>
     <!-- sentinel: loads the next page when it scrolls into view (not in preview mode) -->
     <div v-if="hasMore && !preview" ref="sentinel" class="load-more"><span class="ld-spin"></span></div>
+    <!-- the shelf is exhausted: somewhere to say what comes next, rather than dropping
+         the shopper straight into the footer -->
+    <slot v-if="loaded && !hasMore && items.length" name="end" :total="total" />
     <p v-if="!items.length && !loading" class="a-muted" style="text-align:center">{{ emptyText }}</p>
   </div>
 </template>
