@@ -10,6 +10,8 @@ moment later was lost silently.
 These tests pin the rule: destroy an order only on an answer that says the money is
 definitely not coming.
 """
+from contextlib import contextmanager
+
 import pytest
 from fastapi import HTTPException
 
@@ -102,37 +104,98 @@ def test_cancel_of_a_cash_order_needs_no_payment_lookup(client, owner, monkeypat
 
 
 # --- an order cancelled before the money landed comes back with its stock ----
-def test_confirming_a_cancelled_order_takes_its_stock_back_off_the_shelf(client, owner, monkeypatch):
-    taken = []
-    monkeypatch.setattr(orders_mod, "fetch_one", lambda sql, params=None: _order(status="cancelled"))
-    monkeypatch.setattr(orders_mod, "fetch_all", lambda sql, params=None: [])
-    monkeypatch.setattr(orders_mod, "execute", lambda sql, params=None: None)
-    monkeypatch.setattr(orders_mod, "get_payment_intent", _intent("completed"))
-    monkeypatch.setattr(orders_mod, "reserve_stock", lambda oid: taken.append(oid))
-    monkeypatch.setattr(orders_mod, "notify_new_order", lambda order: None)
-    monkeypatch.setattr(orders_mod, "_notify_new_order_admins", lambda order: None)
-    monkeypatch.setattr(orders_mod, "_send_order_whatsapp", lambda order, request: None)
+# mark_paid does its work inside one transaction on the pool, so these script that
+# transaction rather than patching a helper per statement. Answers are matched on a
+# fragment of the SQL, so a test says what a statement should come back with without
+# having to count the statements around it.
+class _Cursor:
+    def __init__(self, answers):
+        self.answers, self.sql, self._last = answers, [], None
+
+    def execute(self, sql, params=None):
+        flat = " ".join(sql.split())
+        self.sql.append(flat)
+        self._last = next((v for k, v in self.answers.items() if k in flat), None)
+
+    def fetchone(self):
+        return self._last
+
+    def fetchall(self):
+        return self._last or []
+
+    def ran(self, fragment):
+        """Whether any statement in the transaction contained this."""
+        return any(fragment in s for s in self.sql)
+
+
+class _Txn:
+    """Stands in for the pool, the connection and the transaction at once — they are
+    only ever used together, as one `with`."""
+
+    def __init__(self, answers):
+        self.cur = _Cursor(answers)
+
+    def connection(self):
+        return _open(self)
+
+    def transaction(self):
+        return _open(None)
+
+    def cursor(self):
+        return _open(self.cur)
+
+
+@contextmanager
+def _open(v):
+    yield v
+
+
+@pytest.fixture
+def settling(monkeypatch):
+    """Script mark_paid's transaction and hand back its cursor to assert against."""
+    def install(**answers):
+        txn = _Txn(answers)
+        monkeypatch.setattr(orders_mod, "pool", txn)
+        return txn.cur
+    return install
+
+
+def _claimed(status="pending"):
+    """A locked row saying `status`, and a claim that wins."""
+    return {"for update": {"status": status},
+            "is distinct from 'paid'": _order(payment_status="paid", status="paid")}
+
+
+TAKE_OFF_SHELF = "stock = p.stock - s.qty"
+
+
+@pytest.fixture
+def quiet(monkeypatch):
+    """mark_paid's alarms, silenced. They are their own tests."""
+    for name in ("notify_new_order", "_notify_new_order_admins", "_send_order_whatsapp"):
+        monkeypatch.setattr(orders_mod, name, lambda *a, **k: None)
     monkeypatch.setattr(orders_mod, "log_action", lambda **k: None)
+
+
+# --- an order cancelled before the money landed comes back with its stock ----
+def test_confirming_a_cancelled_order_takes_its_stock_back_off_the_shelf(
+        client, owner, monkeypatch, quiet, settling):
+    monkeypatch.setattr(orders_mod, "fetch_one", lambda sql, params=None: _order(status="cancelled"))
+    monkeypatch.setattr(orders_mod, "get_payment_intent", _intent("completed"))
+    cur = settling(**_claimed("cancelled"))
     r = client.post(f"/api/orders/{ORDER_ID}/confirm-payment")
     assert r.json() == {"paid": True, "status": "paid"}
     # cancel_and_restore had put these units back; the payment makes the order real
     # again, so they leave the shelf a second time or the shop oversells them
-    assert taken == [ORDER_ID]
+    assert cur.ran(TAKE_OFF_SHELF)
 
 
-def test_confirming_a_live_order_does_not_double_deduct(client, owner, monkeypatch):
-    taken = []
+def test_confirming_a_live_order_does_not_double_deduct(client, owner, monkeypatch, quiet, settling):
     monkeypatch.setattr(orders_mod, "fetch_one", lambda sql, params=None: _order())
-    monkeypatch.setattr(orders_mod, "fetch_all", lambda sql, params=None: [])
-    monkeypatch.setattr(orders_mod, "execute", lambda sql, params=None: None)
     monkeypatch.setattr(orders_mod, "get_payment_intent", _intent("completed"))
-    monkeypatch.setattr(orders_mod, "reserve_stock", lambda oid: taken.append(oid))
-    monkeypatch.setattr(orders_mod, "notify_new_order", lambda order: None)
-    monkeypatch.setattr(orders_mod, "_notify_new_order_admins", lambda order: None)
-    monkeypatch.setattr(orders_mod, "_send_order_whatsapp", lambda order, request: None)
-    monkeypatch.setattr(orders_mod, "log_action", lambda **k: None)
+    cur = settling(**_claimed("pending"))
     client.post(f"/api/orders/{ORDER_ID}/confirm-payment")
-    assert taken == []  # its stock was taken at checkout and never given back
+    assert not cur.ran(TAKE_OFF_SHELF)  # taken at checkout and never given back
 
 
 # --- one settle per order, whoever gets there first --------------------------
@@ -140,37 +203,80 @@ def test_confirming_a_live_order_does_not_double_deduct(client, owner, monkeypat
 def raised(monkeypatch):
     """Everything mark_paid sets off once an order becomes real."""
     calls = []
-    monkeypatch.setattr(orders_mod, "fetch_all", lambda sql, params=None: [])
-    monkeypatch.setattr(orders_mod, "execute", lambda sql, params=None: calls.append("event"))
-    monkeypatch.setattr(orders_mod, "reserve_stock", lambda oid: calls.append("stock"))
     monkeypatch.setattr(orders_mod, "notify_new_order", lambda order: calls.append("manager"))
     monkeypatch.setattr(orders_mod, "_notify_new_order_admins", lambda order: calls.append("bell"))
     monkeypatch.setattr(orders_mod, "_send_order_whatsapp", lambda order, request=None: calls.append("whatsapp"))
     return calls
 
 
-def test_settling_an_order_that_was_already_paid_raises_nothing_twice(monkeypatch, raised):
+def test_settling_an_order_that_was_already_paid_raises_nothing_twice(raised, settling):
     """The return page's polling and the reconcile sweep can reach mark_paid for the
     same order at the same moment, each having read payment_status in an earlier,
     separate query. The write is what decides: no row means someone else settled it,
     and the loser must not send a second billed WhatsApp template, ring the managers
     again, or take the stock off the shelf twice.
     """
-    monkeypatch.setattr(orders_mod, "fetch_one", lambda sql, params=None: None)
+    cur = settling(**{"for update": {"status": "cancelled"}})  # the claim wins nothing
     assert orders_mod.mark_paid(_order(status="cancelled")) is None
     assert raised == []
+    assert not cur.ran(TAKE_OFF_SHELF)
 
 
-def test_settling_claims_the_order_in_the_write_itself(monkeypatch, raised):
-    seen = {}
+def test_settling_an_order_that_has_been_deleted_does_nothing(raised, settling):
+    cur = settling()  # not even a row to lock
+    assert orders_mod.mark_paid(_order()) is None
+    assert raised == []
+    assert not cur.ran("update orders")
 
-    def _fetch_one(sql, params=None):
-        seen["sql"] = " ".join(sql.split())
-        return _order(payment_status="paid", status="paid")
 
-    monkeypatch.setattr(orders_mod, "fetch_one", _fetch_one)
+def test_settling_claims_the_order_in_the_write_itself(raised, settling):
+    cur = settling(**_claimed())
     assert orders_mod.mark_paid(_order())["payment_status"] == "paid"
-    assert "payment_status is distinct from 'paid'" in seen["sql"], (
+    assert cur.ran("payment_status is distinct from 'paid'"), (
         "the check has to be part of the update, or two settles both pass it"
     )
-    assert raised == ["event", "manager", "bell", "whatsapp"]
+    assert raised == ["manager", "bell", "whatsapp"]
+
+
+def test_the_whole_settle_happens_in_one_transaction(raised, settling):
+    """Nothing comes back for a half-settled order: unresolved_orders in reconcile.py
+    stops looking at one the moment it is paid. So the flip, the stock and the
+    timeline point have to be all-or-nothing."""
+    cur = settling(**_claimed("cancelled"))
+    orders_mod.mark_paid(_order(status="cancelled"))
+    assert [s.split(" ", 2)[0] for s in cur.sql] == ["select", "update", "update", "insert", "select"]
+
+
+# --- the stock follows the locked row, not the caller's copy ------------------
+def test_a_stale_pending_copy_still_takes_the_stock_off_the_shelf(raised, settling):
+    """The caller read this order before a Ziina call that can take twenty seconds —
+    and in the sweep, before every other order's. A manager who cancelled inside that
+    window has already put the stock back. Deciding from the caller's copy leaves it
+    sitting on the shelf with the order paid, and the shop sells the same jar twice."""
+    cur = settling(**_claimed("cancelled"))
+    orders_mod.mark_paid(_order(status="pending"))
+    assert cur.ran(TAKE_OFF_SHELF)
+
+
+def test_a_stale_cancelled_copy_does_not_deduct_a_revived_order_twice(raised, settling):
+    """The mirror image: the caller read 'cancelled', and a manager has since revived
+    the order, which took its stock off again. Deducting on the stale copy takes it
+    twice and the shelf ends up owing units nobody ordered."""
+    cur = settling(**_claimed("preparing"))
+    orders_mod.mark_paid(_order(status="cancelled"))
+    assert not cur.ran(TAKE_OFF_SHELF)
+
+
+# --- the alarms are raised independently -------------------------------------
+def test_one_alarm_failing_does_not_silence_the_ones_after_it(monkeypatch, settling):
+    """These run after the settle has committed, and nothing revisits a paid order, so
+    a message lost here is lost for good. Losing the manager's alert to a Telegram
+    outage must not also cost the customer their confirmation."""
+    calls = []
+    monkeypatch.setattr(orders_mod, "notify_new_order",
+                        lambda order: (_ for _ in ()).throw(RuntimeError("telegram is down")))
+    monkeypatch.setattr(orders_mod, "_notify_new_order_admins", lambda order: calls.append("bell"))
+    monkeypatch.setattr(orders_mod, "_send_order_whatsapp", lambda order, request=None: calls.append("whatsapp"))
+    settling(**_claimed())
+    assert orders_mod.mark_paid(_order())["payment_status"] == "paid", "still paid, whatever was said"
+    assert calls == ["bell", "whatsapp"]

@@ -52,7 +52,10 @@ FAILED_STATUSES = {"failed", "cancelled", "canceled", "expired"}
 # per order rather than a read plus an update per line item, and grouping by product
 # keeps the arithmetic right even if the same product somehow landed on two lines.
 # Both are written to run on a caller's cursor, so a status change can move the stock
-# inside the same transaction that changes the status.
+# inside the same transaction that changes the status — which is the only way the two
+# can't come apart. Reserving may take a count negative: that is the honest reading
+# (the shelf owes a unit) and a manager can see it, where leaving it high would sell
+# the same jar to someone else.
 _STOCK_MOVE = """update products p set stock = p.stock {op} s.qty
                  from (select product_id, sum(qty) as qty from order_items
                        where order_id = %s and product_id is not null
@@ -90,16 +93,6 @@ def cancel_and_restore(order_id):
         cur.execute(_RESTORE_STOCK, [order_id])
         cur.execute("insert into order_status_events (order_id, status) values (%s, 'cancelled')", [order_id])
     return True
-
-
-def reserve_stock(order_id):
-    """The inverse of the restore above: take this order's lines out of stock again.
-
-    For an order that was cancelled and then turned out to have been paid for. The
-    count may go negative — that is the honest reading (the shelf owes a unit), and a
-    manager can see it. Leaving it high would sell the same jar to someone else.
-    """
-    execute(_RESERVE_STOCK, [order_id])
 
 
 # Order-number alphabet: no 0/O/1/I, so a customer reading it out over the phone
@@ -537,6 +530,19 @@ def track_order(oid: str, request: Request, t: str = Query(""), user=Depends(opt
     return {"order": safe}
 
 
+def _raise_alarm(oid, what, send):
+    """Let one of a paid order's alarms fail without silencing the rest.
+
+    These run after the settle has committed, and nothing revisits a paid order (see
+    mark_paid), so a message lost here is lost for good — but so would the messages
+    after it be, if one of them took the function down on its way out.
+    """
+    try:
+        send()
+    except Exception as e:  # noqa: BLE001 — the order is paid; no message can unpay it
+        print(f"[mark-paid] {what} failed for {oid[:8]}:", e)
+
+
 def mark_paid(order, request=None):
     """The moment an order becomes real: flip it to paid and raise every alarm a real
     order raises.
@@ -549,27 +555,46 @@ def mark_paid(order, request=None):
     check made before the write. Everything below the flip happens once — one paid
     event, one manager alert, one billed WhatsApp template, one stock deduction.
 
+    The flip, the stock and the timeline point go in together, because a settle that
+    stops halfway can never be finished by anything: unresolved_orders in reconcile.py
+    stops looking at an order the moment it is paid, so an order left paid without its
+    stock taken off the shelf is invisible to the only thing that would come back.
+
     Returns the paid order, or None if it had already been settled and this call did
     nothing.
     """
     oid = str(order["id"])
-    upd = fetch_one("""update orders set payment_status = 'paid', status = 'paid'
+    with pool.connection() as conn, conn.transaction(), conn.cursor() as cur:
+        # `order` was read before a Ziina call that can take twenty seconds — and in
+        # the sweep, before every other order's — so its status is not evidence of
+        # anything by now. The locked row is: a manager who cancelled inside that
+        # window has already put this stock back, and only this read can see that.
+        cur.execute("select status from orders where id = %s for update", [oid])
+        was = cur.fetchone()
+        if not was:
+            return None  # the order is gone
+        cur.execute("""update orders set payment_status = 'paid', status = 'paid'
                        where id = %s and payment_status is distinct from 'paid'
                        returning *""", [oid])
-    if not upd:
-        return None
-    # An order cancelled while the money was still in flight had its stock put back.
-    # The payment is real, so the order is real again, and the shelf has to reflect it
-    # before that stock is sold to someone else.
-    if order["status"] == "cancelled":
-        reserve_stock(oid)
-    execute("insert into order_status_events (order_id, status) values (%s, 'paid')", [oid])
-    its = fetch_all("select name, price, qty from order_items where order_id = %s", [oid])
-    notify_new_order({**upd, "items": its})
-    _notify_new_order_admins(upd)  # in-app bell for managers (Ziina paid = real order)
+        upd = cur.fetchone()
+        if not upd:
+            return None  # someone else settled it, and did everything below with it
+        # An order cancelled while the money was still in flight had its stock put
+        # back. The payment is real, so the order is real again, and the shelf has to
+        # reflect it before that stock is sold to someone else.
+        if was["status"] == "cancelled":
+            cur.execute(_RESERVE_STOCK, [oid])
+        cur.execute("insert into order_status_events (order_id, status) values (%s, 'paid')", [oid])
+        cur.execute("select name, price, qty from order_items where order_id = %s", [oid])
+        its = cur.fetchall()
+    # Past the commit the order is paid for good and nothing passes this way again, so
+    # one alarm failing must not cost the others: the managers still hear about a real
+    # order if the customer's WhatsApp template is refused, and the other way round.
+    _raise_alarm(oid, "manager alert", lambda: notify_new_order({**upd, "items": its}))
+    _raise_alarm(oid, "manager bell", lambda: _notify_new_order_admins(upd))
     # the customer's own confirmation: here, not at the hand-off to Ziina, because
     # this is the point the order became real
-    _send_order_whatsapp(upd, request)
+    _raise_alarm(oid, "customer confirmation", lambda: _send_order_whatsapp(upd, request))
     return upd
 
 
