@@ -14,6 +14,21 @@ def _headers():
     return {"Authorization": f"Bearer {key}"}
 
 
+def _body(res) -> dict:
+    """Ziina's answer as a dict, whatever came back.
+
+    A proxy or a gateway in front of the API answers with an HTML error page, not
+    JSON, and parsing that raises a bare ValueError from inside a helper everyone
+    calls — escaping callers that guard HTTPException, which is every one of them.
+    That aborted the whole reconcile sweep on one bad response. A body we can't read
+    is no body: the not-ok check below turns it into the 502 it always was.
+    """
+    try:
+        return res.json() if res.content else {}
+    except ValueError:
+        return {}
+
+
 def create_payment_intent(*, amount_fils, success_url, cancel_url, message):
     """amount_fils: integer in fils (100 AED = 10000). Returns dict with id, redirect_url, status."""
     try:
@@ -33,7 +48,7 @@ def create_payment_intent(*, amount_fils, success_url, cancel_url, message):
         )
     except requests.RequestException as e:
         raise HTTPException(status_code=502, detail=f"Could not reach Ziina: {e}")
-    data = res.json() if res.content else {}
+    data = _body(res)
     if not res.ok:
         raise HTTPException(status_code=502, detail=data.get("message") or "Could not create the Ziina payment")
     return data
@@ -44,7 +59,7 @@ def get_payment_intent(pid):
         res = requests.get(f"{BASE}/payment_intent/{pid}", headers=_headers(), timeout=20)
     except requests.RequestException as e:
         raise HTTPException(status_code=502, detail=f"Could not verify the payment: {e}")
-    data = res.json() if res.content else {}
+    data = _body(res)
     if not res.ok:
         raise HTTPException(status_code=502, detail=data.get("message") or "Could not verify the payment")
     pi = data.get("payment_intent") or data.get("result") or data or {}

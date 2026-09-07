@@ -11,6 +11,11 @@ from fastapi import HTTPException
 import reconcile as rec
 
 ORDER_ID = "0f1d4e0e-2222-4000-8000-000000000000"
+OTHER_ID = "0f1d4e0e-2222-4000-8000-000000000001"
+
+
+def _raise(e):
+    raise e
 
 
 def _order(**over):
@@ -59,7 +64,7 @@ def test_an_unreachable_ziina_changes_nothing(monkeypatch, acted):
     monkeypatch.setattr(rec, "get_payment_intent",
                         lambda pid: (_ for _ in ()).throw(HTTPException(502, "Could not verify the payment")))
     counts = rec.reconcile(apply=True)
-    assert counts == {"paid": 0, "cancelled": 0, "waiting": 0, "unreachable": 1}
+    assert counts == {"paid": 0, "cancelled": 0, "waiting": 0, "unreachable": 1, "failed": 0}
     assert acted["cancelled"] == []  # even though it is stale: we still have no answer
 
 
@@ -91,6 +96,34 @@ def test_does_not_cancel_an_order_that_is_already_cancelled(monkeypatch, acted):
     _intent(monkeypatch, "failed")
     rec.reconcile(apply=True)
     assert acted["cancelled"] == []
+
+
+# --- one bad order must not end the run --------------------------------------
+def test_an_answer_that_is_not_even_json_only_costs_that_one_order(monkeypatch, acted):
+    """ziina.get_payment_intent parses the body outside its own try, so a gateway
+    answering with an HTML error page raises ValueError, not HTTPException. Guarding
+    only HTTPException here left every later order unchecked: the paid ones unsettled
+    and the stale ones still holding stock."""
+    _rows(monkeypatch, _order(), _order(id=OTHER_ID, ziina_payment_id="pi_2"))
+    monkeypatch.setattr(rec, "get_payment_intent", lambda pid: (
+        {"status": "completed"} if pid == "pi_2" else _raise(ValueError("Expecting value"))))
+    counts = rec.reconcile(apply=True)
+    assert acted["paid"] == [OTHER_ID]  # the sweep carried on past the bad answer
+    assert (counts["unreachable"], counts["paid"]) == (1, 1)
+
+
+def test_an_order_that_cannot_be_settled_is_counted_rather_than_fatal(monkeypatch, acted):
+    """A dropped connection or a deadlock settling one order. It stays unresolved for
+    the next run — but the run has to finish, and say that one didn't."""
+    _rows(monkeypatch, _order(), _order(id=OTHER_ID, ziina_payment_id="pi_2"))
+    _intent(monkeypatch, "completed")
+    settled = rec.mark_paid
+    monkeypatch.setattr(rec, "mark_paid", lambda order, request=None: (
+        _raise(RuntimeError("the connection is closed")) if str(order["id"]) == ORDER_ID
+        else settled(order)))
+    counts = rec.reconcile(apply=True)
+    assert acted["paid"] == [OTHER_ID]
+    assert (counts["paid"], counts["failed"]) == (1, 1)  # not counted as settled
 
 
 # --- the safety rails --------------------------------------------------------

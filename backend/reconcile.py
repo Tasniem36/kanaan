@@ -28,8 +28,7 @@ WhatsApp confirmation is waiting on this:
 import os
 import sys
 
-from fastapi import HTTPException
-
+import background
 from db import fetch_all
 from ziina import get_payment_intent
 from routers.orders import FAILED_STATUSES, cancel_and_restore, mark_paid
@@ -71,41 +70,60 @@ def unresolved_orders(lookback_days: int = LOOKBACK_DAYS):
     )
 
 
+def _why(e) -> str:
+    """HTTPException carries its message in .detail; anything else prints as itself."""
+    return str(getattr(e, "detail", None) or e) or e.__class__.__name__
+
+
+def _act(what: str, oid: str, fn, *args) -> bool:
+    """Settle or release one order, without letting it take the run down with it.
+
+    A dropped connection or a deadlock on one order is not a reason to leave every
+    later order unchecked — the paid ones unsettled and the stale ones still holding
+    stock. The order keeps its state and the next run comes back to it.
+    """
+    try:
+        fn(*args)
+        return True
+    except Exception as e:  # noqa: BLE001 — one order must not end the sweep
+        print(f"✗ {oid[:8]} could not be {what}: {_why(e)}")
+        return False
+
+
 def reconcile(*, apply: bool = False) -> dict:
     """Ask Ziina about each unresolved order and act on the answer.
 
     Returns what it did (or would do), so a cron log is a record of the shop's
     payments and not just a heartbeat.
     """
-    counts = {"paid": 0, "cancelled": 0, "waiting": 0, "unreachable": 0}
+    counts = {"paid": 0, "cancelled": 0, "waiting": 0, "unreachable": 0, "failed": 0}
     for order in unresolved_orders():
         oid = str(order["id"])
         try:
             status = get_payment_intent(order["ziina_payment_id"]).get("status")
-        except HTTPException as e:
-            # Ziina is down or the key is wrong. Nothing is decided on silence — the
-            # order keeps its stock and the next run asks again.
+        except Exception as e:  # noqa: BLE001 — see _act: one bad answer, not a dead run
+            # Ziina is down, the key is wrong, or a gateway answered with a page that
+            # isn't JSON. Nothing is decided on silence — the order keeps its stock and
+            # the next run asks again.
             counts["unreachable"] += 1
-            print(f"· {oid[:8]} could not be checked: {e.detail}")
+            print(f"· {oid[:8]} could not be checked: {_why(e)}")
             continue
 
         if status == "completed":
-            counts["paid"] += 1
             was = " (had been cancelled)" if order["status"] == "cancelled" else ""
             print(f"{'✓ settling' if apply else '· would settle'} {oid[:8]} · {order['total']}{was}")
-            if apply:
-                mark_paid(order)
+            ok = _act("settled", oid, mark_paid, order) if apply else True
+            counts["paid" if ok else "failed"] += 1
             continue
 
         if order["status"] == "cancelled":
             continue  # already dealt with; Ziina agrees the money isn't coming
 
         if status in FAILED_STATUSES or order["stale"]:
-            counts["cancelled"] += 1
             why = status if status in FAILED_STATUSES else f"unresolved for over {_stale_minutes()}m"
             print(f"{'✓ releasing' if apply else '· would release'} {oid[:8]} · {why}")
-            if apply:
-                cancel_and_restore(oid)
+            ok = _act("released", oid, cancel_and_restore, oid) if apply else True
+            counts["cancelled" if ok else "failed"] += 1
             continue
 
         counts["waiting"] += 1  # young and undecided: ask again next run
@@ -116,6 +134,14 @@ if __name__ == "__main__":
     live = "--apply" in sys.argv[1:]
     c = reconcile(apply=live)
     print(f"\n{c['paid']} paid · {c['cancelled']} released · "
-          f"{c['waiting']} still waiting · {c['unreachable']} unreachable")
+          f"{c['waiting']} still waiting · {c['unreachable']} unreachable"
+          + (f" · {c['failed']} failed" if c["failed"] else ""))
+    # Settling an order starts the customer's WhatsApp confirmation and the managers'
+    # push on background threads. In the server they finish on their own; here the
+    # interpreter would shut down on the next line and kill them mid-request, throwing
+    # away the one message this whole job exists to send.
+    left = background.wait_all()
+    if left:
+        print(f"warning: {left} notification(s) did not finish in time")
     if not live and (c["paid"] or c["cancelled"]):
         print("nothing was changed — run with --apply to do it")

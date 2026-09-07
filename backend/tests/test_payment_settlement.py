@@ -133,3 +133,44 @@ def test_confirming_a_live_order_does_not_double_deduct(client, owner, monkeypat
     monkeypatch.setattr(orders_mod, "log_action", lambda **k: None)
     client.post(f"/api/orders/{ORDER_ID}/confirm-payment")
     assert taken == []  # its stock was taken at checkout and never given back
+
+
+# --- one settle per order, whoever gets there first --------------------------
+@pytest.fixture
+def raised(monkeypatch):
+    """Everything mark_paid sets off once an order becomes real."""
+    calls = []
+    monkeypatch.setattr(orders_mod, "fetch_all", lambda sql, params=None: [])
+    monkeypatch.setattr(orders_mod, "execute", lambda sql, params=None: calls.append("event"))
+    monkeypatch.setattr(orders_mod, "reserve_stock", lambda oid: calls.append("stock"))
+    monkeypatch.setattr(orders_mod, "notify_new_order", lambda order: calls.append("manager"))
+    monkeypatch.setattr(orders_mod, "_notify_new_order_admins", lambda order: calls.append("bell"))
+    monkeypatch.setattr(orders_mod, "_send_order_whatsapp", lambda order, request=None: calls.append("whatsapp"))
+    return calls
+
+
+def test_settling_an_order_that_was_already_paid_raises_nothing_twice(monkeypatch, raised):
+    """The return page's polling and the reconcile sweep can reach mark_paid for the
+    same order at the same moment, each having read payment_status in an earlier,
+    separate query. The write is what decides: no row means someone else settled it,
+    and the loser must not send a second billed WhatsApp template, ring the managers
+    again, or take the stock off the shelf twice.
+    """
+    monkeypatch.setattr(orders_mod, "fetch_one", lambda sql, params=None: None)
+    assert orders_mod.mark_paid(_order(status="cancelled")) is None
+    assert raised == []
+
+
+def test_settling_claims_the_order_in_the_write_itself(monkeypatch, raised):
+    seen = {}
+
+    def _fetch_one(sql, params=None):
+        seen["sql"] = " ".join(sql.split())
+        return _order(payment_status="paid", status="paid")
+
+    monkeypatch.setattr(orders_mod, "fetch_one", _fetch_one)
+    assert orders_mod.mark_paid(_order())["payment_status"] == "paid"
+    assert "payment_status is distinct from 'paid'" in seen["sql"], (
+        "the check has to be part of the update, or two settles both pass it"
+    )
+    assert raised == ["event", "manager", "bell", "whatsapp"]

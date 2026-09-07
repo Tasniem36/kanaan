@@ -1,10 +1,10 @@
 import os
 import secrets
-import threading
 import uuid
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 
+import background
 from db import pool, fetch_all, fetch_one, execute
 from messaging import send_email
 from ratelimit import rate_limit
@@ -48,23 +48,48 @@ def _notify_new_order_admins(order):
 # cancel_payment.
 FAILED_STATUSES = {"failed", "cancelled", "canceled", "expired"}
 
+# The two ways an order's stock moves, as exact inverses of each other. One statement
+# per order rather than a read plus an update per line item, and grouping by product
+# keeps the arithmetic right even if the same product somehow landed on two lines.
+# Both are written to run on a caller's cursor, so a status change can move the stock
+# inside the same transaction that changes the status.
+_STOCK_MOVE = """update products p set stock = p.stock {op} s.qty
+                 from (select product_id, sum(qty) as qty from order_items
+                       where order_id = %s and product_id is not null
+                       group by product_id) s
+                 where p.id = s.product_id"""
+_RESTORE_STOCK = _STOCK_MOVE.format(op="+")
+_RESERVE_STOCK = _STOCK_MOVE.format(op="-")
+
+# Statuses in which the order is holding stock that is still ours to give back. Once
+# it is fulfilled the goods have physically left the shop, so cancelling the paperwork
+# afterwards cannot put them back — a manager taking a real return restocks the
+# product itself.
+_HOLDS_STOCK = ("pending", "paid", "preparing")
+
 
 def cancel_and_restore(order_id):
-    """Restore reserved stock and mark an order cancelled (payment couldn't start/complete)."""
+    """Restore reserved stock and mark an order cancelled (payment couldn't start/complete).
+
+    Cancels once, whatever happens. Reloading /pay/return?…&cancel=1 on a genuinely
+    failed intent lands here twice, as does a return page racing the reconcile sweep,
+    and putting the same jars back twice invents stock the shelf does not have. So the
+    cancel is claimed first — the row lock holds the second caller until it can see the
+    first one's answer — and only the caller that won it restores anything.
+
+    Returns whether this call was the one that cancelled it.
+    """
     with pool.connection() as conn, conn.transaction(), conn.cursor() as cur:
-        # One statement puts every line's stock back — was a read plus an update
-        # per line item. Grouping by product keeps it correct even if the same
-        # product somehow landed on two lines.
         cur.execute(
-            """update products p set stock = p.stock + s.qty
-               from (select product_id, sum(qty) as qty from order_items
-                     where order_id = %s and product_id is not null
-                     group by product_id) s
-               where p.id = s.product_id""",
+            """update orders set status = 'cancelled'
+               where id = %s and status is distinct from 'cancelled' returning id""",
             [order_id],
         )
-        cur.execute("update orders set status = 'cancelled' where id = %s", [order_id])
+        if not cur.fetchone():
+            return False  # already cancelled; its stock is already back
+        cur.execute(_RESTORE_STOCK, [order_id])
         cur.execute("insert into order_status_events (order_id, status) values (%s, 'cancelled')", [order_id])
+    return True
 
 
 def reserve_stock(order_id):
@@ -74,14 +99,7 @@ def reserve_stock(order_id):
     count may go negative — that is the honest reading (the shelf owes a unit), and a
     manager can see it. Leaving it high would sell the same jar to someone else.
     """
-    execute(
-        """update products p set stock = p.stock - s.qty
-           from (select product_id, sum(qty) as qty from order_items
-                 where order_id = %s and product_id is not null
-                 group by product_id) s
-           where p.id = s.product_id""",
-        [order_id],
-    )
+    execute(_RESERVE_STOCK, [order_id])
 
 
 # Order-number alphabet: no 0/O/1/I, so a customer reading it out over the phone
@@ -170,7 +188,8 @@ def _send_order_whatsapp(order, request=None, *, status_label=None):
     Sent on a thread, like the device push in push.py. Meta's endpoint is a
     twenty-second timeout away, and a manager marking an order shipped shouldn't wait
     on it — measured at 20.9s for one status change before this was moved off the
-    request. Returns the thread so a test can wait for it; no request path does.
+    request. Returns the thread so a test can wait for it; no request path does, and a
+    script waits for every one of them at once through background.wait_all.
     """
     if not whatsapp.configured():
         return None
@@ -196,9 +215,7 @@ def _send_order_whatsapp(order, request=None, *, status_label=None):
         except Exception as e:  # noqa: BLE001 — never break an order over a message
             print("[order-whatsapp]", e)
 
-    thread = threading.Thread(target=_safe, daemon=True)
-    thread.start()
-    return thread
+    return background.spawn(_safe, name="order-whatsapp")
 
 
 def _checkout_failed(request, user, reason, **extra):
@@ -510,7 +527,11 @@ def track_order(oid: str, request: Request, t: str = Query(""), user=Depends(opt
     # the full number sitting behind a link that might be forwarded
     phone = order["phone"] or ""
     safe["phone_hint"] = (phone[:4] + "*" * (len(phone) - 8) + phone[-4:]) if len(phone) > 8 else phone
-    safe["items"] = fetch_all("select name, price, qty from order_items where order_id = %s", [oid])
+    # product_id is here for the basket, not the page: when a payment settles minutes
+    # later, services/awaitingPayment.js takes exactly these lines back out and leaves
+    # anything added since (a product id is public catalogue data either way).
+    safe["items"] = fetch_all(
+        "select product_id, name, price, qty from order_items where order_id = %s", [oid])
     safe["events"] = fetch_all(
         "select status, created_at from order_status_events where order_id = %s order by created_at", [oid])
     return {"order": safe}
@@ -518,19 +539,30 @@ def track_order(oid: str, request: Request, t: str = Query(""), user=Depends(opt
 
 def mark_paid(order, request=None):
     """The moment an order becomes real: flip it to paid and raise every alarm a real
-    order raises. Callers check payment_status first — this does not re-check.
+    order raises.
 
     Both return paths and the reconcile sweep land here, so a payment discovered ten
     minutes late by cron reaches the manager and the customer exactly like one seen
-    at the return URL.
+    at the return URL. Which is also why the flip has to be the thing that decides:
+    the return page's polling and a cron run can arrive for the same order at the same
+    moment, and each read payment_status earlier, separately, so both would pass a
+    check made before the write. Everything below the flip happens once — one paid
+    event, one manager alert, one billed WhatsApp template, one stock deduction.
+
+    Returns the paid order, or None if it had already been settled and this call did
+    nothing.
     """
     oid = str(order["id"])
+    upd = fetch_one("""update orders set payment_status = 'paid', status = 'paid'
+                       where id = %s and payment_status is distinct from 'paid'
+                       returning *""", [oid])
+    if not upd:
+        return None
     # An order cancelled while the money was still in flight had its stock put back.
     # The payment is real, so the order is real again, and the shelf has to reflect it
     # before that stock is sold to someone else.
     if order["status"] == "cancelled":
         reserve_stock(oid)
-    upd = fetch_one("update orders set payment_status = 'paid', status = 'paid' where id = %s returning *", [oid])
     execute("insert into order_status_events (order_id, status) values (%s, 'paid')", [oid])
     its = fetch_all("select name, price, qty from order_items where order_id = %s", [oid])
     notify_new_order({**upd, "items": its})
@@ -602,13 +634,27 @@ def set_status(oid: str, request: Request, _m=Depends(require_manager), payload:
     status = payload.get("status")
     if status not in ("pending", "paid", "preparing", "fulfilled", "delivered", "cancelled"):
         raise HTTPException(400, "Invalid status")
-    before = fetch_one("select status from orders where id = %s", [oid])
-    was = (before or {}).get("status")
-    row = fetch_one("update orders set status = %s where id = %s returning *", [status, oid])
-    if not row:
-        raise HTTPException(404, "Order not found")
-    # add the point the customer's tracking timeline reads
-    execute("insert into order_status_events (order_id, status) values (%s, %s)", [oid, status])
+    # One transaction, and the read that decides is locked. `was` is what says whether
+    # the goods are on the shelf right now, so two managers on the same order — or one
+    # double-tap — must not both read the old status and move the same stock twice.
+    with pool.connection() as conn, conn.transaction(), conn.cursor() as cur:
+        cur.execute("select status from orders where id = %s for update", [oid])
+        before = cur.fetchone()
+        if not before:
+            raise HTTPException(404, "Order not found")
+        was = before["status"]
+        cur.execute("update orders set status = %s where id = %s returning *", [status, oid])
+        row = cur.fetchone()
+        # add the point the customer's tracking timeline reads
+        cur.execute("insert into order_status_events (order_id, status) values (%s, %s)", [oid, status])
+        # A manager cancelling by hand is the shop deciding the order is dead, and the
+        # shelf has been holding its units since checkout — nothing else gives them
+        # back on this path. Reviving a cancelled order takes them off again, the same
+        # way settling a cancelled payment does (see mark_paid).
+        if status == "cancelled" and was in _HOLDS_STOCK:
+            cur.execute(_RESTORE_STOCK, [oid])
+        elif was == "cancelled" and status in _HOLDS_STOCK:
+            cur.execute(_RESERVE_STOCK, [oid])
     # notify the customer their order status changed. An account holder gets the
     # in-app notification and the push; a guest has neither, and until this was wired
     # to WhatsApp was never told anything at all.

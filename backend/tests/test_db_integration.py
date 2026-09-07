@@ -255,6 +255,88 @@ def test_cancel_restores_stock_in_one_statement(live_db):
     ), "cancelling should land on the timeline too"
 
 
+def test_cancelling_twice_restores_the_stock_once(live_db):
+    """A reloaded /pay/return?…&cancel=1 calls this twice, as does a return page racing
+    the reconcile sweep. Putting the same litre back a second time invents stock the
+    shelf hasn't got, and the shop oversells it."""
+    import routers.orders as o
+    from db import fetch_one
+
+    before = fetch_one("select stock from products where id = %s", [P_OIL])["stock"]
+    assert o.cancel_and_restore(O_PREP) is True
+    assert o.cancel_and_restore(O_PREP) is False, "the second call has nothing to cancel"
+    after = fetch_one("select stock from products where id = %s", [P_OIL])["stock"]
+    assert after == before + 1
+    assert fetch_one(
+        """select count(*) as n from order_status_events
+           where order_id = %s and status = 'cancelled'""", [O_PREP])["n"] == 1
+
+
+def test_settling_the_same_order_twice_pays_it_once(live_db, monkeypatch):
+    """The return page's polling and the cron sweep can both reach mark_paid for one
+    order, each having read payment_status earlier. Only the write can decide."""
+    import routers.orders as o
+    from db import execute, fetch_all, fetch_one
+
+    for quiet in ("notify_new_order", "_notify_new_order_admins", "_send_order_whatsapp"):
+        monkeypatch.setattr(o, quiet, lambda *a, **k: None)
+    # the abandoned order was cancelled while its payment was still in flight, so its
+    # two bags of za'atar went back on the shelf: settling it takes them off again
+    execute("""insert into order_items (order_id, product_id, name, price, qty)
+               values (%s, %s, 'زعتر', 20.00, 2)""", [O_ABANDONED, P_ZAATAR])
+    execute("update orders set status = 'cancelled' where id = %s", [O_ABANDONED])
+    order = fetch_one("select * from orders where id = %s", [O_ABANDONED])
+    before = fetch_one("select stock from products where id = %s", [P_ZAATAR])["stock"]
+
+    assert o.mark_paid(order)["payment_status"] == "paid"
+    assert o.mark_paid(order) is None, "the second settle finds nothing left to do"
+
+    after = fetch_one("select stock from products where id = %s", [P_ZAATAR])["stock"]
+    assert after == before - 2, "one deduction, not two"
+    events = fetch_all("select status from order_status_events where order_id = %s", [O_ABANDONED])
+    assert [e["status"] for e in events] == ["paid"]
+
+
+# --- a manager's status change moves the stock with it ----------------------
+@pytest.fixture
+def quiet_orders(monkeypatch):
+    """No WhatsApp, no bell — these tests are about the shelf."""
+    import routers.orders as o
+    monkeypatch.setattr(o, "_send_order_whatsapp", lambda *a, **k: None)
+    monkeypatch.setattr(o, "notify_users", lambda *a, **k: None)
+    return o
+
+
+def _stock(pid):
+    from db import fetch_one
+    return fetch_one("select stock from products where id = %s", [pid])["stock"]
+
+
+def test_a_manager_cancelling_an_order_puts_its_stock_back(live_db, quiet_orders):
+    """Nothing else does it on this path: the shelf has held that litre since checkout
+    and the order is now dead. Cancelling twice must not put it back twice."""
+    before = _stock(P_OIL)
+    quiet_orders.set_status(O_PREP, request=None, _m=None, payload={"status": "cancelled"})
+    assert _stock(P_OIL) == before + 1
+    quiet_orders.set_status(O_PREP, request=None, _m=None, payload={"status": "cancelled"})
+    assert _stock(P_OIL) == before + 1, "a second cancel is not a second litre"
+
+
+def test_reviving_a_cancelled_order_takes_its_stock_off_again(live_db, quiet_orders):
+    before = _stock(P_OIL)
+    quiet_orders.set_status(O_PREP, request=None, _m=None, payload={"status": "cancelled"})
+    quiet_orders.set_status(O_PREP, request=None, _m=None, payload={"status": "preparing"})
+    assert _stock(P_OIL) == before, "the order holds its stock again, or the shop oversells it"
+
+
+def test_cancelling_a_delivered_order_does_not_invent_stock(live_db, quiet_orders):
+    """The goods physically left the shop. Cancelling the paperwork afterwards cannot
+    put them back on the shelf — a real return is a manager restocking the product."""
+    oil, zaatar = _stock(P_OIL), _stock(P_ZAATAR)
+    quiet_orders.set_status(O_DONE, request=None, _m=None, payload={"status": "cancelled"})
+    assert (_stock(P_OIL), _stock(P_ZAATAR)) == (oil, zaatar)
+
+
 # --- dashboard arithmetic ---------------------------------------------------
 def test_revenue_counts_only_real_orders(live_db):
     """130 (delivered COD) + 55 (paid Ziina). The abandoned Ziina order and the
