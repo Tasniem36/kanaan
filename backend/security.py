@@ -10,7 +10,18 @@ from fastapi import HTTPException, Request
 from db import fetch_one
 
 SECRET = os.getenv("JWT_SECRET", "")
-EXPIRES_HOURS = 24
+
+# How long a sign-in lasts. A shopper keeps theirs for a month: the basket, the order
+# history and the saved addresses are most of the reason to have an account at all,
+# and a 24-hour token quietly took all of it away every single day. The length costs
+# nothing that matters, because it is not the only thing holding the session —
+# token_version below withdraws every token an account has issued the moment its
+# password changes, so a session can still be ended from the other side.
+CUSTOMER_EXPIRES_HOURS = 30 * 24
+# A manager's token opens the till: every order, stock, prices, customers' phone
+# numbers. That one stays short, and often it is on a device in the shop rather than
+# one person's phone.
+MANAGER_EXPIRES_HOURS = 24
 
 # A weak/missing signing key lets anyone forge a manager token. Refuse to start
 # rather than silently fall back to a guessable secret. Local dev sets JWT_SECRET
@@ -33,6 +44,12 @@ def verify_password(pw: str, hashed: str) -> bool:
         return False
 
 
+def token_lifetime(role) -> timedelta:
+    """A shopper's month, a manager's day. Anything that isn't a manager is a shopper —
+    an unknown role gets the harmless lifetime, not the privileged one."""
+    return timedelta(hours=MANAGER_EXPIRES_HOURS if role == "manager" else CUSTOMER_EXPIRES_HOURS)
+
+
 def sign_token(user) -> str:
     payload = {
         "sub": str(user["id"]),
@@ -41,7 +58,7 @@ def sign_token(user) -> str:
         # just read; a caller that forgets is caught immediately, because a token
         # stamped with the wrong number is refused on the very next request.
         "v": user.get("token_version", 0),
-        "exp": datetime.now(timezone.utc) + timedelta(hours=EXPIRES_HOURS),
+        "exp": datetime.now(timezone.utc) + token_lifetime(user["role"]),
     }
     return jwt.encode(payload, SECRET, algorithm="HS256")
 
