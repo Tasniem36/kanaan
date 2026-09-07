@@ -86,7 +86,15 @@ onMounted(async () => {
   // answer would show "payment failed", basket still full, to someone who has paid.
   let tries = TRIES
   if (route.query.cancel) {
-    const r = await ordersStore.cancelPayment(orderId, token).catch(() => null)
+    let r
+    try {
+      r = await ordersStore.cancelPayment(orderId, token)
+    } catch {
+      // We couldn't even ask — offline, or the server answered 500. That is not an
+      // answer about the money, so it must not read as one: treated exactly like an
+      // unresolved intent, which is what the request would have said.
+      r = { pending: true }
+    }
     if (r?.paid) { settle(); return }
     // Not cancelled either: Ziina hadn't resolved the intent, or couldn't be asked. The
     // order is still alive and the money may still be arriving, so poll it out like any
