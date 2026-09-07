@@ -168,9 +168,17 @@ Lets customers pay by card / Apple Pay / Google Pay at checkout (alongside cash 
 3. Re-deploy: `docker compose -f docker-compose.prod.yml up -d --build`
 4. **Add the payment sweep to cron — this one is not optional:**
    ```bash
+   # check the command works by hand first — report-only, changes nothing:
+   cd /root/app && docker compose -f docker-compose.prod.yml exec -T api python reconcile.py
    crontab -e                              # then add, with the lines above:
-   # */5 * * * * cd /root/app && docker compose -f docker-compose.prod.yml exec -T api python reconcile.py --apply
+   # */5 * * * * cd /root/app && docker compose -f docker-compose.prod.yml exec -T api python reconcile.py --apply >> /var/log/reconcile.log 2>&1
    ```
+   The redirect is the point of the tally: without it cron mails the output to root,
+   where nobody reads it. Five minutes later, `tail /var/log/reconcile.log` should show
+   a line per run — that is how you know the shop's payments are being watched. (A run
+   costs one line, so the file grows a few hundred lines a day; `truncate -s 0
+   /var/log/reconcile.log` whenever it bothers you.) If the log stays empty, cron has a
+   bare PATH — use `/usr/bin/docker` instead of `docker` in the line.
 
 Checkout then offers "Pay now with Ziina" and "Cash on delivery". Ziina orders are
 marked **paid** only after the payment is confirmed, and the WhatsApp alert is sent then.
