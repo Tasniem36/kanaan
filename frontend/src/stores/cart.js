@@ -89,6 +89,21 @@ export const useCartStore = defineStore('cart', {
       delete this.items[id]
       this.persist()
     },
+    // Take one paid order's lines back out, leaving everything else where it is.
+    // For a payment confirmed long after the fact (services/awaitingPayment.js): the
+    // basket may have moved on for days by then, and clearing it would throw away
+    // shopping that was never part of that order. Lines are {product_id, qty}.
+    removeOrdered(lines) {
+      let changed = false
+      for (const line of lines || []) {
+        const it = this.items[line?.product_id]
+        if (!it) continue
+        it.qty -= line.qty
+        if (it.qty <= 0) delete this.items[line.product_id]
+        changed = true
+      }
+      if (changed) this.persist()
+    },
     clear() {
       this.items = {}
       this.persist()

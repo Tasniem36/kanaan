@@ -6,9 +6,9 @@
 // later, but by then the browser is gone: the customer reads the WhatsApp confirmation
 // and comes back to a basket still holding what they have just paid for.
 //
-// So the order is noted here, and the next app load asks once how it ended. Paid
-// empties the basket — the same rule as everywhere else, applied to a success we
-// learned about late. Anything else leaves it exactly where it was.
+// So the order is noted here, and the next app load asks once how it ended. Paid takes
+// that order's lines out of the basket — the same rule as everywhere else, applied to a
+// success we learned about late. Anything else leaves it exactly where it was.
 import { api } from './api'
 
 const KEY = 'awaiting_payment'
@@ -56,7 +56,10 @@ export async function settleAwaited(cart) {
     return
   }
   if (order.payment_status === 'paid') {
-    cart.clear()
+    // Only what this order paid for. Up to a week can pass between the payment and
+    // this answer (MAX_AGE_MS), and emptying the basket wholesale would take out
+    // everything added in between.
+    cart.removeOrdered(order.items)
     forgetAwaited()
   } else if (order.status === 'cancelled') {
     forgetAwaited()  // the sweep released it; the basket stays, so they can try again
