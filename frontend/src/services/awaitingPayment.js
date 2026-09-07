@@ -56,6 +56,11 @@ export async function settleAwaited(cart) {
     return
   }
   if (order.payment_status === 'paid') {
+    // The boot pull of the server cart is in flight beside this one. It merges keeping
+    // the larger quantity per product, so removing these lines before it lands has
+    // them put right back — and saved to the server, leaving a signed-in customer
+    // staring at a basket full of what they have already paid for.
+    await cart.whenSynced()
     // Only what this order paid for. Up to a week can pass between the payment and
     // this answer (MAX_AGE_MS), and emptying the basket wholesale would take out
     // everything added in between.

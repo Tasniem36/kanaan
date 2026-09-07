@@ -62,10 +62,14 @@ const shortId = computed(() => orderId.slice(0, 8))
 // The basket is emptied here, not before the redirect to Ziina — so a payment that
 // was abandoned, refused, or simply backed out of leaves it intact to try again.
 // Only money actually arriving clears it.
-function settle() {
+async function settle() {
   state.value = 'success'
-  cart.clear()
   forgetAwaited()  // answered here; nothing for the next load to chase
+  // Ziina redirected here, so this is a fresh page load and the boot pull of the
+  // server cart is still in flight. Emptying the basket before it merges would only
+  // see it filled straight back in — see whenSynced in stores/cart.
+  await cart.whenSynced()
+  cart.clear()
 }
 
 // Ziina can take a moment to mark an intent completed, and a card being authorised
@@ -95,7 +99,7 @@ onMounted(async () => {
       // unresolved intent, which is what the request would have said.
       r = { pending: true }
     }
-    if (r?.paid) { settle(); return }
+    if (r?.paid) { await settle(); return }
     // Not cancelled either: Ziina hadn't resolved the intent, or couldn't be asked. The
     // order is still alive and the money may still be arriving, so poll it out like any
     // other return rather than telling someone mid-payment that it failed.
@@ -105,7 +109,7 @@ onMounted(async () => {
   for (let i = 0; i < tries; i++) {
     try {
       const r = await ordersStore.confirmPayment(orderId, token)
-      if (r.paid) { settle(); return }
+      if (r.paid) { await settle(); return }
       // Ziina said the money is not coming. That is an answer, and the only one that
       // earns the failure screen with its invitation to try again.
       if (r.status === 'failed') { state.value = 'failed'; return }

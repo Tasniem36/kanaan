@@ -6,6 +6,10 @@ import { track } from '../services/track'
 
 const KEY = 'cart'
 
+// The in-flight pull of the server cart, so anything that needs the basket settled
+// before it touches it can wait for that to land first — see whenSynced.
+let syncing = null
+
 // restore the basket from a previous session; tolerate corrupt/old data
 function loadItems() {
   if (import.meta.env.SSR) return {} // no localStorage during prerender
@@ -44,30 +48,47 @@ export const useCartStore = defineStore('cart', {
     },
     // debounced save to the server cart — only when signed in (so it syncs across devices)
     _pushToServer() {
+      // Cancelled before anything else, signed in or not: a save queued moments before
+      // a sign-out would otherwise still fire, carrying the basket as the sign-out
+      // emptied it. It reads the token at fire time, so once somebody else has signed
+      // in on this browser that stray save is addressed to THEIR cart, and writes an
+      // empty basket over what they had saved.
+      clearTimeout(this._t)
       const auth = useAuthStore()
       if (!auth.isAuthenticated) return
-      clearTimeout(this._t)
       this._t = setTimeout(() => {
         api('/cart', { method: 'PUT', body: { items: this.items } }).catch(() => {})
       }, 600)
     },
     // on login / app-boot: pull the server cart and merge (keep the larger qty per
     // product so nothing the customer added on either device is lost), then save back
-    async loadFromServer() {
+    loadFromServer() {
       const auth = useAuthStore()
-      if (!auth.isAuthenticated) return
-      try {
-        const { items } = await api('/cart')
-        if (items && typeof items === 'object') {
-          const merged = { ...items }
-          for (const [id, line] of Object.entries(this.items)) {
-            if (!merged[id]) merged[id] = line
-            else merged[id] = { product: merged[id].product || line.product, qty: Math.max(merged[id].qty, line.qty) }
+      if (!auth.isAuthenticated) return Promise.resolve()
+      syncing = (async () => {
+        try {
+          const { items } = await api('/cart')
+          if (items && typeof items === 'object') {
+            const merged = { ...items }
+            for (const [id, line] of Object.entries(this.items)) {
+              if (!merged[id]) merged[id] = line
+              else merged[id] = { product: merged[id].product || line.product, qty: Math.max(merged[id].qty, line.qty) }
+            }
+            this.items = merged
+            this.persist()
           }
-          this.items = merged
-          this.persist()
-        }
-      } catch { /* offline — keep the local cart */ }
+        } catch { /* offline — keep the local cart */ }
+      })()
+      return syncing
+    },
+    // Resolves once the pull above has been merged in, or straight away if there was
+    // none. Anything that takes lines OUT of the basket has to wait for it: keeping
+    // the larger quantity per product cannot express a removal, so a removal that
+    // lands first is simply undone — and then pushed back to the server as though the
+    // order had never been paid for. Both of the paths that empty a paid basket run
+    // on app boot, alongside this very request.
+    whenSynced() {
+      return syncing || Promise.resolve()
     },
     add(product) {
       if (this.items[product.id]) this.items[product.id].qty++
