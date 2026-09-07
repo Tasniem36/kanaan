@@ -166,10 +166,45 @@ Lets customers pay by card / Apple Pay / Google Pay at checkout (alongside cash 
    ```
    (`APP_URL` is set automatically from your DOMAIN in docker-compose.)
 3. Re-deploy: `docker compose -f docker-compose.prod.yml up -d --build`
+4. **Add the payment sweep to cron — this one is not optional:**
+   ```bash
+   crontab -e                              # then add, with the lines above:
+   # */5 * * * * cd /root/app && docker compose -f docker-compose.prod.yml exec -T api python reconcile.py --apply
+   ```
 
 Checkout then offers "Pay now with Ziina" and "Cash on delivery". Ziina orders are
 marked **paid** only after the payment is confirmed, and the WhatsApp alert is sent then.
 Test with `ZIINA_TEST=true` first, then flip to `false` for real payments.
+
+### Why step 4 matters more than it looks
+There is no Ziina webhook. An order becomes paid when the customer's browser comes
+back to `/pay/return` and says so — one page load, on one device. Every way that page
+load can go missing is money the shop has taken with no order to show for it: the
+phone died, the tab was closed, the app was backgrounded and killed, or Ziina hadn't
+finished marking the payment complete before the page gave up waiting.
+
+`reconcile.py` is what closes that gap. It asks Ziina about every recent unresolved
+order and finishes the job — sends the customer their confirmation, alerts the
+managers, and releases the stock still held by checkouts that were abandoned. Two
+things in the shop are built on the assumption that it runs:
+
+* the return page tells a customer whose payment hasn't resolved *"don't pay again —
+  if it went through we'll confirm your order and message you on WhatsApp"*. Only this
+  keeps that promise.
+* pressing cancel on a payment Ziina can't give an answer about deliberately does
+  **nothing**, rather than cancelling an order that may have been paid for. Only this
+  ever comes back to decide.
+
+Without the cron line, an abandoned checkout holds its stock forever and a customer
+whose browser never made it back is charged and never confirmed. Run it by hand to
+see what it would do — without `--apply` it only reports and changes nothing:
+```bash
+docker compose -f docker-compose.prod.yml exec -T api python reconcile.py
+```
+Runs are safe to overlap, so a slow run can't corrupt anything if the next one starts
+on top of it. Every settle and release it makes is recorded in the activity
+log, so **السجلّات** in the manager area shows which payments the sweep caught rather
+than the customer's browser (the row says `by: sweep`).
 
 ## Updating later
 ```bash
