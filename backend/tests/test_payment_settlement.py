@@ -42,9 +42,12 @@ def owner(as_user):
 @pytest.fixture
 def settled(monkeypatch):
     """Record what the endpoint decided, without touching a database."""
-    calls = {"cancelled": [], "paid": []}
-    monkeypatch.setattr(orders_mod, "cancel_and_restore", lambda oid: calls["cancelled"].append(oid))
-    monkeypatch.setattr(orders_mod, "mark_paid", lambda order, request=None: calls["paid"].append(str(order["id"])))
+    calls = {"cancelled": [], "paid": [], "why": []}
+    monkeypatch.setattr(orders_mod, "cancel_and_restore",
+                        lambda oid, *, why=None, request=None: calls["why"].append(why) or
+                        calls["cancelled"].append(oid))
+    monkeypatch.setattr(orders_mod, "mark_paid",
+                        lambda order, request=None, **k: calls["paid"].append(str(order["id"])))
     return calls
 
 
@@ -172,9 +175,8 @@ TAKE_OFF_SHELF = "stock = p.stock - s.qty"
 @pytest.fixture
 def quiet(monkeypatch):
     """mark_paid's alarms, silenced. They are their own tests."""
-    for name in ("notify_new_order", "_notify_new_order_admins", "_send_order_whatsapp"):
+    for name in ("notify_new_order", "_notify_new_order_admins", "_send_order_whatsapp", "log_action"):
         monkeypatch.setattr(orders_mod, name, lambda *a, **k: None)
-    monkeypatch.setattr(orders_mod, "log_action", lambda **k: None)
 
 
 # --- an order cancelled before the money landed comes back with its stock ----
@@ -206,6 +208,7 @@ def raised(monkeypatch):
     monkeypatch.setattr(orders_mod, "notify_new_order", lambda order: calls.append("manager"))
     monkeypatch.setattr(orders_mod, "_notify_new_order_admins", lambda order: calls.append("bell"))
     monkeypatch.setattr(orders_mod, "_send_order_whatsapp", lambda order, request=None: calls.append("whatsapp"))
+    monkeypatch.setattr(orders_mod, "log_action", lambda **k: None)
     return calls
 
 
@@ -277,6 +280,59 @@ def test_one_alarm_failing_does_not_silence_the_ones_after_it(monkeypatch, settl
                         lambda order: (_ for _ in ()).throw(RuntimeError("telegram is down")))
     monkeypatch.setattr(orders_mod, "_notify_new_order_admins", lambda order: calls.append("bell"))
     monkeypatch.setattr(orders_mod, "_send_order_whatsapp", lambda order, request=None: calls.append("whatsapp"))
+    monkeypatch.setattr(orders_mod, "log_action", lambda **k: calls.append("audit"))
     settling(**_claimed())
     assert orders_mod.mark_paid(_order())["payment_status"] == "paid", "still paid, whatever was said"
-    assert calls == ["bell", "whatsapp"]
+    assert calls == ["bell", "whatsapp", "audit"]
+
+
+# --- the shop's record of its own money --------------------------------------
+def _rows_logged(monkeypatch):
+    rows = []
+    monkeypatch.setattr(orders_mod, "log_action", lambda **k: rows.append(k))
+    return rows
+
+
+def test_a_settled_payment_is_recorded_with_who_noticed_it(monkeypatch, quiet, settling):
+    """Recorded inside mark_paid, so a payment the sweep found leaves the same row as
+    one the browser reported. The sweep has no other witness: before this, the only
+    trace of a cron settle was a line of stdout in a cron log."""
+    rows = _rows_logged(monkeypatch)
+    settling(**_claimed())
+    orders_mod.mark_paid(_order(), by="sweep")
+    assert rows[0]["action"] == "payment_confirmed"
+    assert rows[0]["user_id"] == "owner"
+    assert rows[0]["detail"] == {"order_id": ORDER_ID, "total": 100, "by": "sweep"}
+
+
+def test_a_settle_that_did_nothing_records_nothing(monkeypatch, quiet, settling):
+    """Two settles racing must not read afterwards as two payments."""
+    rows = _rows_logged(monkeypatch)
+    settling(**{"for update": {"status": "pending"}})  # the claim wins nothing
+    assert orders_mod.mark_paid(_order()) is None
+    assert rows == []
+
+
+def test_a_released_order_is_recorded_with_the_reason_it_was_released(monkeypatch, settling):
+    rows = _rows_logged(monkeypatch)
+    settling(**{"is distinct from 'cancelled'": {"user_id": "owner", "total": 90}})
+    assert orders_mod.cancel_and_restore(ORDER_ID, why="expired") is True
+    assert rows[0]["action"] == "payment_released"
+    assert rows[0]["detail"] == {"order_id": ORDER_ID, "total": 90, "why": "expired"}
+
+
+def test_releasing_an_order_that_was_already_cancelled_records_nothing(monkeypatch, settling):
+    """A reloaded return page, or one racing the sweep. One release, one row."""
+    rows = _rows_logged(monkeypatch)
+    settling()  # nothing left to cancel
+    assert orders_mod.cancel_and_restore(ORDER_ID, why="expired") is False
+    assert rows == []
+
+
+def test_a_failing_audit_row_cannot_fail_a_payment_that_went_through(monkeypatch, quiet, settling):
+    """The money is committed before the row is written. A shopper must never be shown
+    an error for a payment that succeeded, because a log insert didn't."""
+    monkeypatch.setattr(orders_mod, "log_action",
+                        lambda **k: (_ for _ in ()).throw(RuntimeError("audit is down")))
+    settling(**_claimed())
+    assert orders_mod.mark_paid(_order())["payment_status"] == "paid"

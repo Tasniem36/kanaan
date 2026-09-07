@@ -27,10 +27,25 @@ def _order(**over):
 
 @pytest.fixture
 def acted(monkeypatch):
-    """Capture the decisions instead of writing them."""
-    calls = {"paid": [], "cancelled": []}
-    monkeypatch.setattr(rec, "mark_paid", lambda order, request=None: calls["paid"].append(str(order["id"])))
-    monkeypatch.setattr(rec, "cancel_and_restore", lambda oid: calls["cancelled"].append(oid))
+    """Capture the decisions instead of writing them.
+
+    Both stand-ins answer the way the real ones do — "this call was the one that did
+    it" — because the sweep now counts on that answer to tell work it did from work
+    the return page had already done.
+    """
+    calls = {"paid": [], "cancelled": [], "why": []}
+
+    def _paid(order, request=None, *, by="return"):
+        calls["paid"].append(str(order["id"]))
+        return {**order, "payment_status": "paid"}
+
+    def _cancelled(oid, *, why=None, request=None):
+        calls["cancelled"].append(oid)
+        calls["why"].append(why)
+        return True
+
+    monkeypatch.setattr(rec, "mark_paid", _paid)
+    monkeypatch.setattr(rec, "cancel_and_restore", _cancelled)
     return calls
 
 
@@ -64,7 +79,8 @@ def test_an_unreachable_ziina_changes_nothing(monkeypatch, acted):
     monkeypatch.setattr(rec, "get_payment_intent",
                         lambda pid: (_ for _ in ()).throw(HTTPException(502, "Could not verify the payment")))
     counts = rec.reconcile(apply=True)
-    assert counts == {"paid": 0, "cancelled": 0, "waiting": 0, "unreachable": 1, "failed": 0}
+    assert counts == {"paid": 0, "cancelled": 0, "waiting": 0, "unreachable": 1,
+                      "already": 0, "failed": 0}
     assert acted["cancelled"] == []  # even though it is stale: we still have no answer
 
 
@@ -72,7 +88,7 @@ def test_a_young_undecided_payment_is_left_to_finish(monkeypatch, acted):
     _rows(monkeypatch, _order(stale=False))
     _intent(monkeypatch, "pending")
     assert rec.reconcile(apply=True)["waiting"] == 1
-    assert acted == {"paid": [], "cancelled": []}
+    assert not acted["paid"] and not acted["cancelled"]
 
 
 # --- releasing stock ---------------------------------------------------------
@@ -118,7 +134,7 @@ def test_an_order_that_cannot_be_settled_is_counted_rather_than_fatal(monkeypatc
     _rows(monkeypatch, _order(), _order(id=OTHER_ID, ziina_payment_id="pi_2"))
     _intent(monkeypatch, "completed")
     settled = rec.mark_paid
-    monkeypatch.setattr(rec, "mark_paid", lambda order, request=None: (
+    monkeypatch.setattr(rec, "mark_paid", lambda order, request=None, **k: (
         _raise(RuntimeError("the connection is closed")) if str(order["id"]) == ORDER_ID
         else settled(order)))
     counts = rec.reconcile(apply=True)
@@ -132,7 +148,7 @@ def test_reports_without_applying_by_default(monkeypatch, acted):
     _intent(monkeypatch, "completed")
     counts = rec.reconcile()
     assert counts["paid"] == 2                      # says what it found
-    assert acted == {"paid": [], "cancelled": []}   # and touches nothing
+    assert not acted["paid"] and not acted["cancelled"]  # and touches nothing
 
 
 def test_a_mistyped_stale_window_cannot_go_below_the_floor(monkeypatch):
@@ -140,3 +156,51 @@ def test_a_mistyped_stale_window_cannot_go_below_the_floor(monkeypatch):
     assert rec._stale_minutes() == rec.MIN_STALE_MINUTES
     monkeypatch.setenv("PAYMENT_STALE_MINUTES", "not-a-number")
     assert rec._stale_minutes() == rec.STALE_MINUTES
+
+
+# --- the log says what the run actually did -----------------------------------
+def test_a_payment_the_return_page_already_settled_is_not_counted_as_work(monkeypatch, acted):
+    """This run read the order, and the customer's browser came back and settled it in
+    the seconds before the run got there. mark_paid says so by returning nothing. A
+    log claiming nine settled payments should mean nine customers who would otherwise
+    still be waiting on one."""
+    _rows(monkeypatch, _order())
+    _intent(monkeypatch, "completed")
+    monkeypatch.setattr(rec, "mark_paid", lambda order, request=None, **k: None)
+    counts = rec.reconcile(apply=True)
+    assert (counts["paid"], counts["already"], counts["failed"]) == (0, 1, 0)
+
+
+def test_an_order_released_by_someone_else_is_not_counted_as_work_either(monkeypatch, acted):
+    _rows(monkeypatch, _order(stale=True))
+    _intent(monkeypatch, "pending")
+    monkeypatch.setattr(rec, "cancel_and_restore", lambda oid, **k: False)
+    counts = rec.reconcile(apply=True)
+    assert (counts["cancelled"], counts["already"]) == (0, 1)
+
+
+# --- what the sweep puts in the shop's record ---------------------------------
+def test_the_sweep_says_it_was_the_one_that_noticed(monkeypatch, acted):
+    """Whether the return page is doing its job or cron is quietly doing it for them
+    is only visible if the row says which."""
+    seen = {}
+    _rows(monkeypatch, _order())
+    _intent(monkeypatch, "completed")
+    monkeypatch.setattr(rec, "mark_paid",
+                        lambda order, request=None, *, by=None: seen.setdefault("by", by))
+    rec.reconcile(apply=True)
+    assert seen["by"] == "sweep"
+
+
+def test_an_order_released_for_going_stale_records_that_as_the_reason(monkeypatch, acted):
+    _rows(monkeypatch, _order(stale=True))
+    _intent(monkeypatch, "pending")
+    rec.reconcile(apply=True)
+    assert acted["why"] == [f"unresolved for over {rec._stale_minutes()}m"]
+
+
+def test_a_definite_failure_is_released_with_ziina_s_own_word_for_it(monkeypatch, acted):
+    _rows(monkeypatch, _order())
+    _intent(monkeypatch, "expired")
+    rec.reconcile(apply=True)
+    assert acted["why"] == ["expired"]

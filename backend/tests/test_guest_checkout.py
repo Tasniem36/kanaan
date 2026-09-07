@@ -160,7 +160,7 @@ def one_order(monkeypatch):
            "discount_amount": 0, "created_at": "2026-08-18T10:00:00Z", "track_token": "tok-abc"}
     monkeypatch.setattr(orders, "fetch_one", lambda sql, params=None: dict(row))
     monkeypatch.setattr(orders, "fetch_all", lambda sql, params=None: [])
-    monkeypatch.setattr(orders, "cancel_and_restore", lambda oid: None)  # no live pool in tests
+    monkeypatch.setattr(orders, "cancel_and_restore", lambda oid, **k: None)  # no live pool in tests
     return row
 
 

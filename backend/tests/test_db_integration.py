@@ -15,6 +15,7 @@ aim this at anything you care about.
 import datetime
 import os
 import pathlib
+import threading
 
 import pytest
 from fastapi import Response
@@ -295,6 +296,100 @@ def test_settling_the_same_order_twice_pays_it_once(live_db, monkeypatch):
     assert after == before - 2, "one deduction, not two"
     events = fetch_all("select status from order_status_events where order_id = %s", [O_ABANDONED])
     assert [e["status"] for e in events] == ["paid"]
+
+
+# --- two callers arriving at the same moment ---------------------------------
+def test_two_settles_at_once_pay_the_order_once(live_db, monkeypatch):
+    """The return page's polling and the cron sweep, arriving together on one order.
+
+    The scripted-cursor tests can show that mark_paid asks the right question; only
+    this can show that the answer holds when two callers ask it at the same instant.
+    Everything below the claim has to happen exactly once — one deduction, one paid
+    event, one row in the shop's record — and the caller that lost has to be told it
+    did nothing, so it doesn't go on to bill the customer for a second WhatsApp.
+    """
+    import background
+    import routers.orders as o
+    from db import execute, fetch_one
+
+    for quiet in ("notify_new_order", "_notify_new_order_admins", "_send_order_whatsapp"):
+        monkeypatch.setattr(o, quiet, lambda *a, **k: None)   # log_action stays real
+    # cancelled while the money was in flight, so settling has to take stock off too:
+    # the branch with the most to get wrong
+    execute("""insert into order_items (order_id, product_id, name, price, qty)
+               values (%s, %s, 'زعتر', 20.00, 2)""", [O_ABANDONED, P_ZAATAR])
+    execute("update orders set status = 'cancelled' where id = %s", [O_ABANDONED])
+    order = fetch_one("select * from orders where id = %s", [O_ABANDONED])
+    before = _stock(P_ZAATAR)
+
+    settled, ready = [], threading.Barrier(2)
+
+    def settle():
+        ready.wait(5)          # both callers past the gate before either writes
+        settled.append(o.mark_paid(order))
+
+    threads = [threading.Thread(target=settle) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(15)
+    assert not any(t.is_alive() for t in threads), "a settle never finished — a deadlock?"
+    background.wait_all(5)     # the audit rows go out on their own threads
+
+    assert sum(r is not None for r in settled) == 1, "one caller settled it, one was told it didn't"
+    assert _stock(P_ZAATAR) == before - 2, "one deduction, not two"
+    assert fetch_one("""select count(*) as n from order_status_events
+                        where order_id = %s and status = 'paid'""", [O_ABANDONED])["n"] == 1
+    assert fetch_one("""select count(*) as n from audit_logs
+                        where action = 'payment_confirmed'""")["n"] == 1
+
+
+def test_two_cancels_at_once_release_the_order_once(live_db):
+    """The same race on the other path: a reloaded /pay/return?…&cancel=1 against the
+    sweep. Putting the same litre back twice invents stock the shelf hasn't got."""
+    import background
+    import routers.orders as o
+    from db import fetch_one
+
+    before = _stock(P_OIL)
+    released, ready = [], threading.Barrier(2)
+
+    def release():
+        ready.wait(5)
+        released.append(o.cancel_and_restore(O_PREP, why="expired"))
+
+    threads = [threading.Thread(target=release) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(15)
+    assert not any(t.is_alive() for t in threads), "a cancel never finished — a deadlock?"
+    background.wait_all(5)
+
+    assert sorted(released) == [False, True], "one of them cancelled it, the other did not"
+    assert _stock(P_OIL) == before + 1, "one litre back, not two"
+    assert fetch_one("""select count(*) as n from audit_logs
+                        where action = 'payment_released'""")["n"] == 1
+
+
+# --- the shop's record reaches the table, not just the call ------------------
+def test_a_swept_payment_leaves_a_row_a_manager_can_read(live_db, monkeypatch):
+    """The sweep is the only settler with no other witness — before this its work
+    existed solely as a line of stdout in a cron log."""
+    import background
+    import routers.orders as o
+    from db import fetch_one
+
+    for quiet in ("notify_new_order", "_notify_new_order_admins", "_send_order_whatsapp"):
+        monkeypatch.setattr(o, quiet, lambda *a, **k: None)
+    order = fetch_one("select * from orders where id = %s", [O_ABANDONED])
+    assert o.mark_paid(order, by="sweep")
+    background.wait_all(5)
+
+    row = fetch_one("select * from audit_logs where action = 'payment_confirmed'")
+    assert row["detail"]["by"] == "sweep"
+    assert row["detail"]["order_id"] == O_ABANDONED
+    assert str(row["user_id"]) == U_CUST
 
 
 # --- a manager's status change moves the stock with it ----------------------

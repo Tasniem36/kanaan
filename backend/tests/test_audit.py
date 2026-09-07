@@ -11,8 +11,7 @@ def test_a_row_records_the_endpoint_not_just_the_page(monkeypatch):
     written = {}
     monkeypatch.setattr(audit, "execute", lambda sql, params=None: written.update(
         {"sql": " ".join(sql.split()), "params": list(params or [])}))
-    monkeypatch.setattr(audit.threading, "Thread",
-                        lambda target, daemon=None: type("T", (), {"start": staticmethod(target)})())
+    monkeypatch.setattr(audit.background, "spawn", lambda target, **k: target())
 
     class Req:
         method = "POST"
@@ -30,8 +29,7 @@ def test_browsing_does_not_bury_the_log(monkeypatch):
     """One shopper reloading the storefront must not write a row every time."""
     rows = []
     monkeypatch.setattr(audit, "execute", lambda sql, params=None: rows.append(params))
-    monkeypatch.setattr(audit.threading, "Thread",
-                        lambda target, daemon=None: type("T", (), {"start": staticmethod(target)})())
+    monkeypatch.setattr(audit.background, "spawn", lambda target, **k: target())
     audit._recent.clear()
     for _ in range(12):
         audit.log_action(user_id="u1", action="visit", request=None)
@@ -41,8 +39,7 @@ def test_browsing_does_not_bury_the_log(monkeypatch):
 def test_the_collapse_is_per_visitor_and_per_action(monkeypatch):
     rows = []
     monkeypatch.setattr(audit, "execute", lambda sql, params=None: rows.append(params))
-    monkeypatch.setattr(audit.threading, "Thread",
-                        lambda target, daemon=None: type("T", (), {"start": staticmethod(target)})())
+    monkeypatch.setattr(audit.background, "spawn", lambda target, **k: target())
     audit._recent.clear()
     audit.log_action(user_id="u1", action="visit")
     audit.log_action(user_id="u2", action="visit")        # a different shopper
@@ -53,8 +50,7 @@ def test_the_collapse_is_per_visitor_and_per_action(monkeypatch):
 def test_actions_worth_keeping_are_never_collapsed(monkeypatch):
     rows = []
     monkeypatch.setattr(audit, "execute", lambda sql, params=None: rows.append(params))
-    monkeypatch.setattr(audit.threading, "Thread",
-                        lambda target, daemon=None: type("T", (), {"start": staticmethod(target)})())
+    monkeypatch.setattr(audit.background, "spawn", lambda target, **k: target())
     audit._recent.clear()
     for action in ["login", "order_placed", "review_submitted", "product_view"]:
         for _ in range(3):
@@ -67,8 +63,7 @@ def test_the_shops_own_actions_are_never_recorded(monkeypatch):
     crowd out the ones the log exists for."""
     rows = []
     monkeypatch.setattr(audit, "execute", lambda sql, params=None: rows.append(params))
-    monkeypatch.setattr(audit.threading, "Thread",
-                        lambda target, daemon=None: type("T", (), {"start": staticmethod(target)})())
+    monkeypatch.setattr(audit.background, "spawn", lambda target, **k: target())
     monkeypatch.setattr(audit, "fetch_one",
                         lambda sql, params=None: {"role": "manager" if params[0] == "boss" else "customer"})
     audit._recent.clear()
@@ -82,8 +77,7 @@ def test_the_role_lookup_is_cached_per_user(monkeypatch):
     """It runs on the audit thread, but shouldn't hit the database on every row."""
     looked_up = []
     monkeypatch.setattr(audit, "execute", lambda sql, params=None: None)
-    monkeypatch.setattr(audit.threading, "Thread",
-                        lambda target, daemon=None: type("T", (), {"start": staticmethod(target)})())
+    monkeypatch.setattr(audit.background, "spawn", lambda target, **k: target())
     monkeypatch.setattr(audit, "fetch_one",
                         lambda sql, params=None: looked_up.append(params[0]) or {"role": "customer"})
     audit._recent.clear()
@@ -97,8 +91,7 @@ def test_a_db_hiccup_keeps_the_row(monkeypatch):
     """Losing customer activity is worse than an occasional staff row slipping in."""
     rows = []
     monkeypatch.setattr(audit, "execute", lambda sql, params=None: rows.append(params))
-    monkeypatch.setattr(audit.threading, "Thread",
-                        lambda target, daemon=None: type("T", (), {"start": staticmethod(target)})())
+    monkeypatch.setattr(audit.background, "spawn", lambda target, **k: target())
     monkeypatch.setattr(audit, "fetch_one",
                         lambda sql, params=None: (_ for _ in ()).throw(RuntimeError("db down")))
     audit._recent.clear()
@@ -149,8 +142,7 @@ def test_two_browsers_behind_one_address_are_two_visitors(monkeypatch):
     person. The label separates them without storing anything on their devices."""
     rows = []
     monkeypatch.setattr(audit, "execute", lambda sql, params=None: rows.append(params))
-    monkeypatch.setattr(audit.threading, "Thread",
-                        lambda target, daemon=None: type("T", (), {"start": staticmethod(target)})())
+    monkeypatch.setattr(audit.background, "spawn", lambda target, **k: target())
     audit._recent.clear()
 
     def req(ua):
@@ -194,8 +186,7 @@ def test_the_address_is_still_the_fallback(monkeypatch):
     """Requests without the cookie (or from before it existed) keep working."""
     rows = []
     monkeypatch.setattr(audit, "execute", lambda sql, params=None: rows.append(params))
-    monkeypatch.setattr(audit.threading, "Thread",
-                        lambda target, daemon=None: type("T", (), {"start": staticmethod(target)})())
+    monkeypatch.setattr(audit.background, "spawn", lambda target, **k: target())
     audit._recent.clear()
     audit.log_action(action="visit", request=None)
     assert len(rows) == 1 and rows[0][-1] is None

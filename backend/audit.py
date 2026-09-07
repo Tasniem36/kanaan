@@ -1,5 +1,7 @@
-"""Server-side audit trail. log_action() is called from inside route handlers
-(never from the frontend). Fire-and-forget: runs in a thread, never raises.
+"""Server-side audit trail. log_action() is called from inside route handlers and
+from the two functions that decide an order's payment (see routers/orders). It is
+fire-and-forget: the insert runs on a background thread and never raises, so nothing
+a customer is doing can fail over a row about it.
 
 Each row records the API call that produced it, which is the action the customer
 took; `page` (from the Referer) is only where they were standing at the time.
@@ -17,6 +19,7 @@ import threading
 import time
 from urllib.parse import parse_qsl, urlencode, urlparse
 
+import background
 from db import execute, fetch_one
 
 
@@ -228,4 +231,7 @@ def log_action(*, user_id=None, action, detail=None, request=None, dedupe=None):
         except Exception as e:  # never let auditing break a request
             print("[audit]", e)
 
-    threading.Thread(target=_insert, daemon=True).start()
+    # Through background, not a bare thread: reconcile.py settles payments from a
+    # script, and interpreter shutdown would kill this insert wherever it had got to
+    # — losing the row for the very settles that have no other witness.
+    return background.spawn(_insert, name="audit")

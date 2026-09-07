@@ -75,19 +75,37 @@ def _why(e) -> str:
     return str(getattr(e, "detail", None) or e) or e.__class__.__name__
 
 
-def _act(what: str, oid: str, fn, *args) -> bool:
+_FAILED = object()
+
+
+def _act(what: str, oid: str, do):
     """Settle or release one order, without letting it take the run down with it.
 
     A dropped connection or a deadlock on one order is not a reason to leave every
     later order unchecked — the paid ones unsettled and the stale ones still holding
     stock. The order keeps its state and the next run comes back to it.
+
+    Returns whatever the action returned, or _FAILED if it raised.
     """
     try:
-        fn(*args)
-        return True
+        return do()
     except Exception as e:  # noqa: BLE001 — one order must not end the sweep
         print(f"✗ {oid[:8]} could not be {what}: {_why(e)}")
-        return False
+        return _FAILED
+
+
+def _outcome(result, done: str) -> str:
+    """Which tally one action belongs in.
+
+    mark_paid and cancel_and_restore both answer "was this call the one that did it",
+    so a None or a False is not a failure — it is the return page having got there
+    first, in the seconds between this run reading the order and acting on it. Worth
+    telling apart from work this run actually did: a log that says it settled nine
+    payments should mean nine customers who would otherwise still be waiting.
+    """
+    if result is _FAILED:
+        return "failed"
+    return done if result else "already"
 
 
 def reconcile(*, apply: bool = False) -> dict:
@@ -96,7 +114,8 @@ def reconcile(*, apply: bool = False) -> dict:
     Returns what it did (or would do), so a cron log is a record of the shop's
     payments and not just a heartbeat.
     """
-    counts = {"paid": 0, "cancelled": 0, "waiting": 0, "unreachable": 0, "failed": 0}
+    counts = {"paid": 0, "cancelled": 0, "waiting": 0, "unreachable": 0,
+              "already": 0, "failed": 0}
     for order in unresolved_orders():
         oid = str(order["id"])
         try:
@@ -112,8 +131,10 @@ def reconcile(*, apply: bool = False) -> dict:
         if status == "completed":
             was = " (had been cancelled)" if order["status"] == "cancelled" else ""
             print(f"{'✓ settling' if apply else '· would settle'} {oid[:8]} · {order['total']}{was}")
-            ok = _act("settled", oid, mark_paid, order) if apply else True
-            counts["paid" if ok else "failed"] += 1
+            if not apply:
+                counts["paid"] += 1
+                continue
+            counts[_outcome(_act("settled", oid, lambda: mark_paid(order, by="sweep")), "paid")] += 1
             continue
 
         if order["status"] == "cancelled":
@@ -122,8 +143,11 @@ def reconcile(*, apply: bool = False) -> dict:
         if status in FAILED_STATUSES or order["stale"]:
             why = status if status in FAILED_STATUSES else f"unresolved for over {_stale_minutes()}m"
             print(f"{'✓ releasing' if apply else '· would release'} {oid[:8]} · {why}")
-            ok = _act("released", oid, cancel_and_restore, oid) if apply else True
-            counts["cancelled" if ok else "failed"] += 1
+            if not apply:
+                counts["cancelled"] += 1
+                continue
+            counts[_outcome(_act("released", oid, lambda: cancel_and_restore(oid, why=why)),
+                            "cancelled")] += 1
             continue
 
         counts["waiting"] += 1  # young and undecided: ask again next run
@@ -135,13 +159,16 @@ if __name__ == "__main__":
     c = reconcile(apply=live)
     print(f"\n{c['paid']} paid · {c['cancelled']} released · "
           f"{c['waiting']} still waiting · {c['unreachable']} unreachable"
+          + (f" · {c['already']} already done" if c["already"] else "")
           + (f" · {c['failed']} failed" if c["failed"] else ""))
-    # Settling an order starts the customer's WhatsApp confirmation and the managers'
-    # push on background threads. In the server they finish on their own; here the
-    # interpreter would shut down on the next line and kill them mid-request, throwing
-    # away the one message this whole job exists to send.
+    # Settling an order starts the customer's WhatsApp confirmation, the managers'
+    # push and the audit row on background threads. In the server they finish on their
+    # own; here the interpreter would shut down on the next line and kill them
+    # mid-request, throwing away the one message this whole job exists to send — and
+    # the only record that the sweep, rather than the customer's browser, took a
+    # payment the shop would otherwise never have known about.
     left = background.wait_all()
     if left:
-        print(f"warning: {left} notification(s) did not finish in time")
+        print(f"warning: {left} background task(s) did not finish in time")
     if not live and (c["paid"] or c["cancelled"]):
         print("nothing was changed — run with --apply to do it")
