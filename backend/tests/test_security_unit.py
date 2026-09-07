@@ -1,4 +1,6 @@
 """Unit tests for the auth primitives — no app, no DB."""
+from datetime import datetime, timezone
+
 import jwt
 import pytest
 from fastapi import HTTPException
@@ -43,6 +45,30 @@ def test_missing_token_is_401():
     with pytest.raises(HTTPException) as e:
         security.current_user(_request(None))
     assert e.value.status_code == 401
+
+
+# --- how long a sign-in lasts -------------------------------------------------
+def _days_valid(tok):
+    exp = jwt.decode(tok, security.SECRET, algorithms=["HS256"])["exp"]
+    return (exp - datetime.now(timezone.utc).timestamp()) / 86400
+
+
+def test_a_shopper_stays_signed_in_for_a_month():
+    """Their basket, orders and addresses are the account. Being signed out daily —
+    which a 24-hour token did — threw a shopper back to a stranger's storefront."""
+    assert round(_days_valid(security.sign_token({"id": "1", "role": "customer"}))) == 30
+
+
+def test_a_manager_session_is_still_a_day():
+    """That token opens the till, and often on a device in the shop rather than one
+    person's phone. A month of it is a different bargain entirely."""
+    assert round(_days_valid(security.sign_token({"id": "1", "role": "manager"}))) == 1
+
+
+def test_an_unknown_role_gets_the_shopper_lifetime_not_the_manager_one():
+    """Only 'manager' is the short one, so a role this code has never seen can never
+    be handed a long-lived privileged token by accident."""
+    assert round(_days_valid(security.sign_token({"id": "1", "role": "shopper"}))) == 30
 
 
 # --- retiring the sessions on other devices -----------------------------------
