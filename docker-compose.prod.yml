@@ -49,11 +49,27 @@ services:
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+      # WhatsApp updates to the CUSTOMER (Meta Cloud API). Distinct from the
+      # WHATSAPP_PHONE/APIKEY pair above, which messages the shop's own managers:
+      # this is the only channel that reaches a guest, who has no account and may
+      # have given no e-mail. Without these listed here the container never sees
+      # them, however carefully they are set in .env, and nothing is ever sent.
+      WA_CLOUD_TOKEN: ${WA_CLOUD_TOKEN:-}
+      WA_CLOUD_PHONE_ID: ${WA_CLOUD_PHONE_ID:-}
+      WA_TEMPLATE_PLACED: ${WA_TEMPLATE_PLACED:-}
+      WA_TEMPLATE_STATUS: ${WA_TEMPLATE_STATUS:-}
+      WA_TEMPLATE_LANG: ${WA_TEMPLATE_LANG:-}
+      WA_NOTIFY_ALL: ${WA_NOTIFY_ALL:-}
       # Ziina online payments (optional)
       ZIINA_API_KEY: ${ZIINA_API_KEY:-}
       ZIINA_TEST: ${ZIINA_TEST:-false}
       APP_URL: https://${DOMAIN}
       MEDIA_DIR: /app/media
+      # Tuning, all optional — each falls back to its own default when left empty.
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-}
+      SMTP_REPLY_TO: ${SMTP_REPLY_TO:-}
+      PAYMENT_STALE_MINUTES: ${PAYMENT_STALE_MINUTES:-}
+      AUDIT_RETENTION_DAYS: ${AUDIT_RETENTION_DAYS:-}
     volumes:
       - media:/app/media   # persisted product images (served at /media)
     depends_on:
