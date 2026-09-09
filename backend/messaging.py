@@ -26,7 +26,9 @@ def _from_header(sender: str) -> str:
     name, addr = parseaddr(sender or "")
     if name or not addr:
         return sender
-    return formataddr((os.getenv("SMTP_FROM_NAME", BRAND), addr))
+    # `or`, not a getenv default: docker-compose passes an unset optional variable
+    # through as an empty string, which would put a blank name on every e-mail.
+    return formataddr((os.getenv("SMTP_FROM_NAME") or BRAND, addr))
 
 
 def _warn_if_misaligned(sender: str, user: str) -> None:
