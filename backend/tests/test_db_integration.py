@@ -119,6 +119,11 @@ def fresh_data(live_db):
     products — without this each would inherit the previous one's mutations and
     start failing in whatever order pytest happened to pick.
     """
+    # Settling and releasing write their audit row on a background thread. One still
+    # in flight when the truncate below reaches for its lock deadlocks against it —
+    # which surfaces as a random earlier test erroring, nowhere near the cause.
+    import background
+    background.wait_all(5)
     with live_db.connection() as conn:
         # cascades clear order_items, events, wishlists, stock_alerts, notifications.
         # discount_codes hangs off nothing (an order keeps the code as text), so it has
@@ -242,21 +247,46 @@ def test_order_list_attaches_items_and_timeline_events(live_db):
     )
 
 
-def test_cancel_restores_stock_in_one_statement(live_db):
+@pytest.fixture
+def unpaid_order(live_db):
+    """O_ABANDONED with one litre of oil on it. cancel_and_restore is the payment
+    path, and the only order it is ever right to release is one nobody has paid for —
+    so a paid fixture cannot stand in for one here."""
+    from db import execute
+    execute("""insert into order_items (order_id, product_id, name, price, qty)
+               values (%s, %s, 'زيت زيتون', 55.00, 1)""", [O_ABANDONED, P_OIL])
+    return O_ABANDONED
+
+
+def test_a_paid_order_is_never_released_by_the_payment_path(live_db):
+    """The mirror image of the settle race. The sweep reads an order as unresolved,
+    the customer's browser settles it a second later, and the stale snapshot comes
+    back to release it — putting stock back for an order that was paid for and
+    burying it as cancelled. Only the locked row knows, so the claim asks it."""
+    import routers.orders as o
+    from db import fetch_one
+
+    before = _stock(P_OIL)
+    assert o.cancel_and_restore(O_PREP, why="expired") is False
+    assert _stock(P_OIL) == before, "its stock stays where a paid order needs it"
+    assert fetch_one("select status from orders where id = %s", [O_PREP])["status"] == "preparing"
+
+
+def test_cancel_restores_stock_in_one_statement(live_db, unpaid_order):
     import routers.orders as o
     from db import fetch_one
 
     before = fetch_one("select stock from products where id = %s", [P_OIL])["stock"]
-    o.cancel_and_restore(O_PREP)   # this order holds 1 unit of the oil
+    o.cancel_and_restore(unpaid_order)   # this order holds 1 unit of the oil
     after = fetch_one("select stock from products where id = %s", [P_OIL])["stock"]
     assert after == before + 1
-    assert fetch_one("select status from orders where id = %s", [O_PREP])["status"] == "cancelled"
+    assert fetch_one("select status from orders where id = %s", [unpaid_order])["status"] == "cancelled"
     assert fetch_one(
-        "select 1 as x from order_status_events where order_id = %s and status = 'cancelled'", [O_PREP]
+        "select 1 as x from order_status_events where order_id = %s and status = 'cancelled'", [unpaid_order]
     ), "cancelling should land on the timeline too"
 
 
-def test_cancelling_twice_restores_the_stock_once(live_db):
+def test_cancelling_twice_restores_the_stock_once(live_db, unpaid_order):
     """A reloaded /pay/return?…&cancel=1 calls this twice, as does a return page racing
     the reconcile sweep. Putting the same litre back a second time invents stock the
     shelf hasn't got, and the shop oversells it."""
@@ -264,13 +294,13 @@ def test_cancelling_twice_restores_the_stock_once(live_db):
     from db import fetch_one
 
     before = fetch_one("select stock from products where id = %s", [P_OIL])["stock"]
-    assert o.cancel_and_restore(O_PREP) is True
-    assert o.cancel_and_restore(O_PREP) is False, "the second call has nothing to cancel"
+    assert o.cancel_and_restore(unpaid_order) is True
+    assert o.cancel_and_restore(unpaid_order) is False, "the second call has nothing to cancel"
     after = fetch_one("select stock from products where id = %s", [P_OIL])["stock"]
     assert after == before + 1
     assert fetch_one(
         """select count(*) as n from order_status_events
-           where order_id = %s and status = 'cancelled'""", [O_PREP])["n"] == 1
+           where order_id = %s and status = 'cancelled'""", [unpaid_order])["n"] == 1
 
 
 def test_settling_the_same_order_twice_pays_it_once(live_db, monkeypatch):
@@ -344,7 +374,7 @@ def test_two_settles_at_once_pay_the_order_once(live_db, monkeypatch):
                         where action = 'payment_confirmed'""")["n"] == 1
 
 
-def test_two_cancels_at_once_release_the_order_once(live_db):
+def test_two_cancels_at_once_release_the_order_once(live_db, unpaid_order):
     """The same race on the other path: a reloaded /pay/return?…&cancel=1 against the
     sweep. Putting the same litre back twice invents stock the shelf hasn't got."""
     import background
@@ -356,7 +386,7 @@ def test_two_cancels_at_once_release_the_order_once(live_db):
 
     def release():
         ready.wait(5)
-        released.append(o.cancel_and_restore(O_PREP, why="expired"))
+        released.append(o.cancel_and_restore(unpaid_order, why="expired"))
 
     threads = [threading.Thread(target=release) for _ in range(2)]
     for t in threads:
@@ -370,6 +400,53 @@ def test_two_cancels_at_once_release_the_order_once(live_db):
     assert _stock(P_OIL) == before + 1, "one litre back, not two"
     assert fetch_one("""select count(*) as n from audit_logs
                         where action = 'payment_released'""")["n"] == 1
+
+
+def test_the_sweep_does_not_release_a_payment_that_landed_while_it_asked(live_db, monkeypatch):
+    """The same race end to end, through reconcile() itself rather than the helper.
+
+    This is how it actually reaches the shop: the sweep asks Ziina about a stale order
+    and is told it is still undecided, the customer's browser settles the payment while
+    that answer is on the wire, and the sweep then acts on what it was told. Its
+    decision is a snapshot; only the claim inside cancel_and_restore sees the order as
+    it is by then.
+
+    Left unguarded this is the worst outcome the shop can produce — charged, confirmed
+    on WhatsApp, then cancelled behind the customer with the goods they paid for back
+    on the shelf, and no second chance: unresolved_orders stops looking at a paid order.
+    """
+    import background
+    import reconcile as rec
+    import routers.orders as o
+    from db import execute, fetch_all, fetch_one
+
+    for quiet in ("notify_new_order", "_notify_new_order_admins",
+                  "_send_order_whatsapp", "_send_order_email"):
+        monkeypatch.setattr(o, quiet, lambda *a, **k: None)   # log_action stays real
+    # an abandoned ziina checkout, old enough that the sweep reads it as given up on,
+    # still holding the two bags of za'atar it reserved
+    execute("""insert into order_items (order_id, product_id, name, price, qty)
+               values (%s, %s, 'زعتر', 20.00, 2)""", [O_ABANDONED, P_ZAATAR])
+    execute("""update orders set created_at = now() - interval '45 minutes',
+                                 ziina_payment_id = 'pi_race' where id = %s""", [O_ABANDONED])
+    before = _stock(P_ZAATAR)
+
+    def ziina_still_deciding(pid):
+        # the return page gets its answer first, while this one is still in flight
+        o.mark_paid(fetch_one("select * from orders where id = %s", [O_ABANDONED]))
+        return {"status": "pending"}
+
+    monkeypatch.setattr(rec, "get_payment_intent", ziina_still_deciding)
+    counts = rec.reconcile(apply=True)
+    background.wait_all(5)
+
+    row = fetch_one("select status, payment_status from orders where id = %s", [O_ABANDONED])
+    assert row["payment_status"] == "paid"
+    assert row["status"] != "cancelled", "the sweep buried an order that had just been paid for"
+    assert _stock(P_ZAATAR) == before, "stock the customer paid for went back on the shelf"
+    assert (counts["cancelled"], counts["already"]) == (0, 1), \
+        "the sweep should report it found nothing left to release, not a release"
+    assert [r["action"] for r in fetch_all("select action from audit_logs")] == ["payment_confirmed"]
 
 
 # --- the shop's record reaches the table, not just the call ------------------
@@ -633,3 +710,54 @@ def test_sitemap_renders_from_the_live_catalogue(live_db):
     xml = seo.sitemap(Req()).body.decode()
     assert xml.count("<loc>") == 4 + len(seo.STATIC_PATHS)
     assert f"/product/{P_OIL}" in xml
+
+
+# --- the follow-up panel, against real SQL ----------------------------------
+def test_an_abandoned_basket_is_reported_with_what_was_left_in_it(live_db):
+    """The panel showed a column of identical "زائر" rows: a guest has no name, no
+    e-mail and no phone, and last_at came only from the failures CTE, so a person who
+    merely abandoned a basket had no time against their name either. Everything worth
+    chasing them for — when, how much, how many — was already in the table.
+    """
+    from db import execute
+    from routers.audit import struggling
+
+    execute("""insert into audit_logs (action, detail, ip, visitor, page, created_at)
+               values ('checkout_opened', '{"items": 3, "total": 285}'::jsonb,
+                       '2.3.4.5', 'vis-abc', '/', now() - interval '10 minutes')""")
+
+    rows = struggling(Req(hours="24"), _m=None)["customers"]
+    row = next(r for r in rows if r["who"] == "v:vis-abc")
+    assert (row["abandoned"], row["failures"]) == (1, 0)
+    assert (row["basket_items"], row["basket_total"]) == (3, "285"), "the money at stake"
+    assert row["last_at"] is not None, "an abandoned basket needs a time too"
+    assert row["ip"] == "2.3.4.5", "so one anonymous visitor can be told from the next"
+    assert row["events"] == 1
+
+
+def test_a_basket_that_was_paid_for_is_not_chased(live_db):
+    """An order placed after the checkout opened settles it."""
+    from db import execute
+    from routers.audit import struggling
+
+    execute("""insert into audit_logs (action, detail, visitor, created_at) values
+               ('checkout_opened', '{"items": 1}'::jsonb, 'vis-ok', now() - interval '9 minutes'),
+               ('order_placed', '{}'::jsonb, 'vis-ok', now() - interval '8 minutes')""")
+    assert not [r for r in struggling(Req(hours="24"), _m=None)["customers"]
+                if r["who"] == "v:vis-ok"]
+
+
+def test_repeated_failures_are_reported_with_the_reason(live_db):
+    """"محاولة دخولٍ فاشلة" twice says nothing a manager can act on. Whether the
+    e-mail has no account or the password is wrong is two different conversations."""
+    from db import execute
+    from routers.audit import struggling
+
+    execute("""insert into audit_logs (action, detail, visitor, created_at) values
+               ('login_failed', '{"reason": "no_account"}'::jsonb, 'vis-f', now() - interval '5 minutes'),
+               ('verify_failed', '{"reason": "too_many"}'::jsonb, 'vis-f', now() - interval '4 minutes')""")
+
+    row = next(r for r in struggling(Req(hours="24"), _m=None)["customers"] if r["who"] == "v:vis-f")
+    assert row["failures"] == 2
+    assert sorted(row["kinds"]) == ["login_failed", "verify_failed"]
+    assert sorted(row["reasons"]) == ["no_account", "too_many"]

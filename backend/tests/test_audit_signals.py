@@ -117,7 +117,10 @@ def test_the_follow_up_window_is_bounded(client, monkeypatch):
     client.get("/api/audit/struggling?hours=999999", headers=headers)
     assert seen[0][0] == 24 * 30, "clamped to a month"
     client.get("/api/audit/struggling?hours=nonsense", headers=headers)
-    assert seen[-1][0] == 24, "falls back to a day"
+    assert seen[-1][0] == A.DEFAULT_STRUGGLE_HOURS, "falls back to the default window"
+    assert A.DEFAULT_STRUGGLE_HOURS == 24 * 7, (
+        "a week: a quiet Tuesday with no abandoned basket must not read as reassurance"
+    )
 
 
 def test_the_struggle_actions_are_defined_in_one_place():

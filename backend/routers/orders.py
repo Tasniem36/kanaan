@@ -80,6 +80,18 @@ def cancel_and_restore(order_id, *, why=None, request=None):
     cancel is claimed first — the row lock holds the second caller until it can see the
     first one's answer — and only the caller that won it restores anything.
 
+    Never a paid order. Every caller decides to release on an answer read BEFORE it
+    gets here — the sweep asks Ziina about each order and then acts, the return page
+    asks and then acts — and the money can land in that window. The claim below is the
+    only thing that sees the order as it is now, so it is where that has to be caught:
+    without the payment_status guard the sweep releases an order the return page has
+    just settled, and the customer is charged, sent their confirmation, and then has
+    the order cancelled behind them with its stock put back for someone else to buy.
+    Nothing would revisit it either — unresolved_orders stops looking at an order the
+    moment it is paid. mark_paid guards the mirror image of this race; this is the
+    other half. A manager cancelling a paid order is a different path (set_status),
+    which moves the stock itself.
+
     `why` is what Ziina said, or what the shop concluded from its silence. It is the
     one thing the audit row cannot work out for itself.
 
@@ -89,12 +101,15 @@ def cancel_and_restore(order_id, *, why=None, request=None):
         cur.execute(
             """update orders set status = 'cancelled'
                where id = %s and status is distinct from 'cancelled'
+                 and payment_status is distinct from 'paid'
                returning user_id, total""",
             [order_id],
         )
         row = cur.fetchone()
         if not row:
-            return False  # already cancelled; its stock is already back
+            # Already cancelled (its stock is already back), or paid while this caller
+            # was deciding — in which case the order is real and keeps what it holds.
+            return False
         cur.execute(_RESTORE_STOCK, [order_id])
         cur.execute("insert into order_status_events (order_id, status) values (%s, 'cancelled')", [order_id])
     # Every release of an order and its stock leaves a row, wherever it was decided:

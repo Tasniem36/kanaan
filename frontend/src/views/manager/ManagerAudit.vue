@@ -31,11 +31,29 @@
         <li v-for="c in struggling" :key="c.who">
           <div class="stuck-who">
             <b>{{ c.full_name || c.email || t('manager.guestVisitor') }}</b>
+            <!-- A guest has no name, no e-mail and no phone, so the row used to be
+                 the word "زائر" and nothing else — eight of them looked like one
+                 person eight times. Where they were and when is what tells them
+                 apart, and it is already in the table. -->
             <span v-if="c.email" class="a-muted" dir="ltr">{{ c.email }}</span>
+            <span v-else-if="geo[c.ip]" class="a-muted">{{ geo[c.ip] }}</span>
+            <span v-else-if="c.ip" class="a-muted" dir="ltr">{{ c.ip }}</span>
           </div>
           <div class="stuck-why">
             <span v-for="k in c.kinds" :key="k" class="a-pill pill-bad">{{ actionLabel(k) }}</span>
-            <span v-if="c.abandoned" class="a-pill pill-warn">{{ t('manager.abandonedCheckout') }}</span>
+            <span v-if="c.abandoned" class="a-pill pill-warn">
+              {{ t('manager.abandonedCheckout') }}<template v-if="c.abandoned > 1"> ×{{ c.abandoned }}</template>
+            </span>
+            <!-- the reason, where the action recorded one: a mistyped phone is a
+                 different conversation from an e-mail with no account -->
+            <span v-for="r in c.reasons" :key="r" class="a-pill pill-bad">{{ reasonLabel(r) }}</span>
+          </div>
+          <!-- What they were about to spend. The one number that says whether this
+               row is worth a message, and it was being thrown away. -->
+          <div class="stuck-basket">
+            <b v-if="c.basket_total">{{ t('manager.basketLeft', { total: c.basket_total }) }}</b>
+            <span v-if="c.basket_items" class="a-muted">{{ t('manager.basketItems', { n: c.basket_items }) }}</span>
+            <span v-if="c.last_at" class="a-muted">{{ fmtDateTime(c.last_at) }}</span>
           </div>
           <div class="stuck-acts">
             <button v-if="c.user_id" class="a-btn" @click="message(c)">{{ t('manager.messageThem') }}</button>
@@ -200,6 +218,10 @@ const fmtDateTime = (d) =>
   new Date(d).toLocaleString(locale.value, { dateStyle: 'medium', timeStyle: 'short' })
 
 const actionLabel = (a) => (te(`audit.${a}`) ? t(`audit.${a}`) : a)
+// the `reason` a failure recorded, in words — the same manager.fail_* labels the
+// log's detail column already uses. An untranslated reason shows as itself rather
+// than vanishing: it still tells a manager more than nothing does.
+const reasonLabel = (r) => (te(`manager.fail_${r}`) ? t(`manager.fail_${r}`) : r)
 
 function roleLabel(a) {
   if (!a.email) return t('manager.guestVisitor')
@@ -280,6 +302,7 @@ async function loadTopProducts() {
     const { customers, funnel: f } = await api('/audit/struggling')
     struggling.value = customers || []
     funnel.value = f || { opened: 0, ordered: 0 }
+    loadGeo(struggling.value)   // so a guest reads as a place, not a bare address
   } catch { topProducts.value = [] }
 }
 
@@ -346,6 +369,8 @@ h1 { font-family: 'Amiri', serif; color: var(--green); font-size: 1.9rem; margin
 .stuck-who b { display: block; color: var(--green); font-size: .9rem; }
 .stuck-who span { font-size: .76rem; }
 .stuck-why { display: flex; gap: .3rem; flex-wrap: wrap; flex: 1; }
+.stuck-basket { display: flex; flex-direction: column; align-items: flex-end; gap: .1rem; font-size: .78rem; }
+.stuck-basket b { color: var(--green); font-size: .88rem; white-space: nowrap; }
 .stuck-acts { display: flex; gap: .4rem; }
 .stuck-acts .a-btn { font-size: .8rem; padding: .35rem .7rem; }
 .src-list li { display: flex; justify-content: space-between; gap: .8rem; font-size: .88rem; padding: .2rem 0; }

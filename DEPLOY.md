@@ -60,16 +60,23 @@ SEED_MANAGER email/password from `.env`).
 ## 8. Backups (recommended)
 ```bash
 ./scripts/backup.sh                     # manual backup → backups/
-crontab -e                              # then add:
-# 0 3 * * * cd $HOME/app && ./scripts/backup.sh
+crontab -e
+```
+Add this line to the file it opens. Paste it without a leading `#` — cron reads a
+line starting with `#` as a comment and the job silently never runs:
+```
+0 3 * * * cd $HOME/app && ./scripts/backup.sh
 ```
 
 ## 8b. Housekeeping (optional)
 The customer activity log grows forever. `python migrate.py` trims it on every deploy,
 so this is only needed if you deploy rarely:
 ```bash
-crontab -e                              # then add, after the backup line:
-# 30 3 * * * cd $HOME/app && docker compose -f docker-compose.prod.yml exec -T api python maintenance.py --apply
+crontab -e
+```
+Add this after the backup line — again with no leading `#`:
+```
+30 3 * * * cd $HOME/app && docker compose -f docker-compose.prod.yml exec -T api python maintenance.py --apply
 ```
 Without `--apply` it only reports what it would remove, which is the safe way to check
 it. It never touches any other table.
@@ -87,6 +94,36 @@ same rows, so they can only look back as far as the window.
    git branch --set-upstream-to=origin/main main
    ```
    (After this, plain `git push` works from your Mac.)
+
+## Telegram order alerts (optional, free)
+Get a Telegram message whenever a customer places an order:
+1. In Telegram, talk to **@BotFather** → `/newbot` → it gives you a **token** that looks
+   like `123456789:AAH8y…`. The whole string is the token, both sides of the colon.
+2. Message your new bot once (press **Start**), then ask **@userinfobot** for your
+   numeric **chat id**.
+3. On the server, edit `.env` and set:
+   ```
+   TELEGRAM_BOT_TOKEN=123456789:AAH8y…
+   TELEGRAM_CHAT_ID=812345678
+   ```
+4. Re-deploy: `docker compose -f docker-compose.prod.yml up -d --build`
+
+**Alerting more than one person.** `TELEGRAM_CHAT_ID` accepts several ids separated by
+commas, and each one gets its own copy:
+```
+TELEGRAM_CHAT_ID=812345678,987654321
+```
+Every person has to press **Start** on the bot first — Telegram refuses messages to
+anyone who hasn't, and that recipient is skipped (logged as `[notify] telegram failed
+for <id>: 403`) while the others still receive the order.
+
+A **channel** works as a recipient too, and is the easier option once more than two
+people need the alerts: add the bot to the channel as an administrator with *Post
+Messages*, post anything in it, then open
+`https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates` and copy `channel_post.chat.id` —
+a negative number like `-1001234567890`. Put that in `TELEGRAM_CHAT_ID` and from then
+on adding a colleague is just inviting them to the channel, with no re-deploy. Note
+that every subscriber sees the customer's name, phone, and full address.
 
 ## WhatsApp order alerts (optional, free)
 Get a WhatsApp message whenever a customer places an order, using CallMeBot (free):
@@ -170,8 +207,13 @@ Lets customers pay by card / Apple Pay / Google Pay at checkout (alongside cash 
    ```bash
    # check the command works by hand first — report-only, changes nothing:
    cd $HOME/app && docker compose -f docker-compose.prod.yml exec -T api python reconcile.py
-   crontab -e                              # then add, with the lines above:
-   # */5 * * * * cd $HOME/app && docker compose -f docker-compose.prod.yml exec -T api python reconcile.py --apply >> $HOME/reconcile.log 2>&1
+   crontab -e
+   ```
+   Add this with the lines above. **No leading `#`** — cron treats a line starting
+   with `#` as a comment, so pasting one leaves the sweep switched off while looking
+   exactly as though it were set up:
+   ```
+   */5 * * * * cd $HOME/app && docker compose -f docker-compose.prod.yml exec -T api python reconcile.py --apply >> $HOME/reconcile.log 2>&1
    ```
    The redirect is the point of the tally: without it cron mails the output to root,
    where nobody reads it. Five minutes later, `tail ~/reconcile.log` should show

@@ -23,7 +23,7 @@ here should be able to move money-adjacent state just by being run to see what i
 Cron it every few minutes — this is not a nightly job. A customer waiting on a
 WhatsApp confirmation is waiting on this:
 
-    */5 * * * * cd /root/app && docker compose -f docker-compose.prod.yml exec -T api python reconcile.py --apply
+    */5 * * * * cd $HOME/app && docker compose -f docker-compose.prod.yml exec -T api python reconcile.py --apply >> $HOME/reconcile.log 2>&1
 """
 import os
 import sys

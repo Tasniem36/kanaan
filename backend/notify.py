@@ -1,5 +1,6 @@
 """New-order notifications. Sends to every configured channel:
-  - Telegram: TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID (reliable, free)
+  - Telegram: TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID (reliable, free).
+    TELEGRAM_CHAT_ID takes one id or several, comma-separated.
   - WhatsApp via CallMeBot: WHATSAPP_PHONE + WHATSAPP_APIKEY (free, best-effort)
 Never raises."""
 import os
@@ -13,11 +14,18 @@ except Exception:
     _DUBAI_TZ = None
 
 
-def _send_telegram(text: str) -> dict:
-    token = os.getenv("TELEGRAM_BOT_TOKEN")
-    chat_id = os.getenv("TELEGRAM_CHAT_ID")
-    if not token or not chat_id:
-        return {"configured": False, "ok": False, "error": "TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not set"}
+def _telegram_chat_ids() -> list:
+    """The recipients in TELEGRAM_CHAT_ID: one id, or several separated by commas.
+    A repeated id is dropped — it would only alert the same person twice per order."""
+    ids = []
+    for part in (os.getenv("TELEGRAM_CHAT_ID") or "").split(","):
+        chat_id = part.strip()
+        if chat_id and chat_id not in ids:
+            ids.append(chat_id)
+    return ids
+
+
+def _send_telegram_to(token: str, chat_id: str, text: str) -> dict:
     try:
         res = requests.post(
             f"https://api.telegram.org/bot{token}/sendMessage",
@@ -25,12 +33,28 @@ def _send_telegram(text: str) -> dict:
             timeout=20,
         )
         if not res.ok:
-            print("[notify] telegram failed:", res.status_code, res.text[:200])
-            return {"configured": True, "ok": False, "error": f"HTTP {res.status_code}", "detail": res.text[:300]}
-        return {"configured": True, "ok": True}
+            print(f"[notify] telegram failed for {chat_id}:", res.status_code, res.text[:200])
+            return {"ok": False, "error": f"HTTP {res.status_code}", "detail": res.text[:300]}
+        return {"ok": True}
     except Exception as e:
-        print("[notify] telegram error:", e)
-        return {"configured": True, "ok": False, "error": str(e)}
+        print(f"[notify] telegram error for {chat_id}:", e)
+        return {"ok": False, "error": str(e)}
+
+
+def _send_telegram(text: str) -> dict:
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    chat_ids = _telegram_chat_ids()
+    if not token or not chat_ids:
+        return {"configured": False, "ok": False, "error": "TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not set"}
+    # Every recipient is tried, whatever the ones before them did: a single bad id
+    # (someone who never pressed Start, a bot removed from the channel) must not
+    # swallow the alert for everyone else.
+    recipients = {cid: _send_telegram_to(token, cid, text) for cid in chat_ids}
+    failed = {cid: r for cid, r in recipients.items() if not r["ok"]}
+    out = {"configured": True, "ok": len(failed) < len(recipients), "recipients": recipients}
+    if failed:
+        out["error"] = "; ".join(f"{cid}: {r['error']}" for cid, r in failed.items())
+    return out
 
 
 def _send_whatsapp(text: str) -> dict:

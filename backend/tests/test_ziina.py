@@ -93,6 +93,17 @@ def test_an_intent_without_a_payment_page_is_refused(monkeypatch):
     assert "payment page" in e.value.detail
 
 
+def test_an_intent_the_shop_cannot_name_is_refused(monkeypatch):
+    """A real payment page with no id is the one failure the sweep cannot clean up
+    after. unresolved_orders only looks at orders whose ziina_payment_id is not null,
+    so the shopper would pay against a page nothing can ask about again — the order
+    never settles, never releases, and holds its stock for good."""
+    _answers(monkeypatch, "post", _Res(json={"redirect_url": "https://pay.ziina/x"}))
+    with pytest.raises(HTTPException) as e:
+        _create()
+    assert "identify the payment" in e.value.detail
+
+
 def test_a_created_intent_comes_back_whole(monkeypatch):
     _answers(monkeypatch, "post", _Res(json={"id": "pi_1", "redirect_url": "https://pay.ziina/x"}))
     assert _create() == {"id": "pi_1", "redirect_url": "https://pay.ziina/x"}

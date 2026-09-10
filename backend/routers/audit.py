@@ -32,6 +32,9 @@ _CLIENT_DEDUPE = {"cart_add": "product_id", "search": "q"}
 
 # The failures that mean a customer is stuck. Kept in one place: the dashboard's
 # follow-up list and the drop-off figure both read from it.
+# How far back the follow-up panel looks when nobody says otherwise.
+DEFAULT_STRUGGLE_HOURS = 24 * 7
+
 STRUGGLE_ACTIONS = ("login_failed", "verify_failed", "password_reset_failed",
                     "promo_invalid", "checkout_failed", "out_of_stock",
                     # a shopper sent away from a full basket to sign in, and one who
@@ -185,20 +188,27 @@ def client_event(request: Request, user=Depends(optional_user), payload: dict = 
 @router.get("/struggling")
 def struggling(request: Request, _m=Depends(require_manager)):
     q = request.query_params
+    # A week, not a day. A shop this size can go a quiet Tuesday without a single
+    # abandoned basket, and a panel that says "nobody is stuck" because it only looked
+    # at yesterday is worse than no panel — it reads as reassurance. Someone who left
+    # a full basket on Friday is still worth a message on Monday.
     try:
-        hours = min(max(int(q.get("hours", 24)), 1), 24 * 30)
+        hours = min(max(int(q.get("hours", DEFAULT_STRUGGLE_HOURS)), 1), 24 * 30)
     except ValueError:
-        hours = 24
+        hours = DEFAULT_STRUGGLE_HOURS
     rows = fetch_all(
         """with recent as (
                select coalesce(a.user_id::text, 'v:' || a.visitor, 'ip:' || a.ip) as who,
-                      a.user_id, a.action, a.detail, a.created_at
+                      a.user_id, a.action, a.detail, a.created_at, a.ip, a.page
                  from audit_logs a
                 where a.created_at > now() - (%s || ' hours')::interval
            ),
            -- a checkout opened with no order from the same person afterwards
            abandoned as (
-               select r.who, count(*)::int as n
+               select r.who, count(*)::int as n, max(r.created_at) as last_at,
+                      -- the newest of them: what was actually left sitting in the
+                      -- basket, which is the whole reason to chase this person
+                      (array_agg(r.detail order by r.created_at desc))[1] as basket
                  from recent r
                 where r.action = 'checkout_opened'
                   and not exists (select 1 from recent o
@@ -209,23 +219,40 @@ def struggling(request: Request, _m=Depends(require_manager)):
            failures as (
                select r.who, count(*)::int as n,
                       array_agg(distinct r.action) as kinds,
+                      -- why it failed, where the action bothered to say: a wrong
+                      -- phone format is a different conversation from a dead card
+                      array_remove(array_agg(distinct r.detail->>'reason'), null) as reasons,
                       max(r.created_at) as last_at
                  from recent r
                 where r.action = any(%s)
                 group by r.who
+           ),
+           -- something to tell one 'زائر' from the next, and to place them on a map
+           seen as (
+               select r.who, (array_agg(r.ip order by r.created_at desc))[1] as ip,
+                      (array_agg(r.page order by r.created_at desc))[1] as last_page,
+                      count(*)::int as events
+                 from recent r group by r.who
            )
            select coalesce(f.who, ab.who)                as who,
                   coalesce(f.n, 0)                      as failures,
                   coalesce(f.kinds, '{}')               as kinds,
+                  coalesce(f.reasons, '{}')             as reasons,
                   coalesce(ab.n, 0)                     as abandoned,
-                  f.last_at,
+                  -- GREATEST ignores nulls, so a person with only an abandoned
+                  -- basket finally has a time against their name
+                  greatest(f.last_at, ab.last_at)       as last_at,
+                  (ab.basket->>'items')::int            as basket_items,
+                  (ab.basket->>'total')                 as basket_total,
+                  s.ip, s.last_page, s.events,
                   u.id as user_id, u.email, u.full_name, u.phone
              from failures f
              full outer join abandoned ab on ab.who = f.who
+             left join seen s on s.who = coalesce(f.who, ab.who)
              left join users u on u.id::text = coalesce(f.who, ab.who)
             where u.role is distinct from 'manager'
               and (coalesce(f.n, 0) >= 2 or coalesce(ab.n, 0) >= 1)
-            order by coalesce(f.last_at, now()) desc
+            order by greatest(f.last_at, ab.last_at) desc nulls last
             limit 50""",
         [hours, list(STRUGGLE_ACTIONS)],
     )

@@ -71,6 +71,14 @@ def create_payment_intent(*, amount_fils, success_url, cancel_url, message):
         # caller cancels the order on this and the shopper sees the error, basket
         # intact, which is the truth.
         raise HTTPException(status_code=502, detail="Ziina did not return a payment page")
+    if not data.get("id"):
+        # A payment page we cannot name is worse than none at all. The id is the only
+        # handle the shop keeps on this payment: reconcile.py looks for orders whose
+        # ziina_payment_id is not null, so an order stored without one can never be
+        # asked about again. The shopper would reach a real payment page, pay, and
+        # sit outside every mechanism that settles or releases an order — holding its
+        # stock for good. Refusing here cancels the order and gives them the error.
+        raise HTTPException(status_code=502, detail="Ziina did not identify the payment")
     return data
 
 
