@@ -1,5 +1,5 @@
 <template>
-  <PortalBar :scrolled="scrolled" search>
+  <PortalBar :scrolled="scrolled" search shop>
     <nav class="tabs store-nav" aria-label="nav">
       <a href="#home" :class="{ active: activeSection === 'home' }">{{ t('nav.home') }}</a><a href="#shop" :class="{ active: activeSection === 'shop' && shopCat === 'pantry' }" @click.prevent="goShop('pantry')">{{ t('nav.pantry') }}</a><a href="#shop" :class="{ active: activeSection === 'shop' && shopCat === 'pottery' }" @click.prevent="goShop('pottery')">{{ t('nav.pottery') }}</a><a href="#story" :class="{ active: activeSection === 'story' }">{{ t('nav.story') }}</a><a v-if="reviews.visible" href="#reviews" :class="{ active: activeSection === 'reviews' }">{{ t('nav.reviews') }}</a><a href="#contact" :class="{ active: activeSection === 'contact' }">{{ t('nav.contact') }}</a>
     </nav>

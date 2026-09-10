@@ -10,6 +10,10 @@ export const useSettingsStore = defineStore('settings', {
     // allows guests, so a failed fetch can't accidentally open checkout up
     checkout: { guest_allowed: false },
     checkoutLoaded: false,
+    // free_threshold above is a guess at the server's default. Until the real one
+    // lands, anything quoting it to a customer is quoting a number the shop may not
+    // actually offer — so the delivery nudge waits for this.
+    deliveryLoaded: false,
   }),
   actions: {
     async fetchCheckout() {
@@ -28,10 +32,16 @@ export const useSettingsStore = defineStore('settings', {
       return checkout
     },
     async fetchDelivery() {
-      try {
-        const { delivery } = await api('/settings/delivery')
-        if (delivery) this.delivery = { zones: [], ...delivery }
-      } catch { /* keep defaults */ }
+      // Several places want this on the same page load (the header nudge, the cart
+      // drawer, the home page). One request between them.
+      if (this._deliveryReq) return this._deliveryReq
+      this._deliveryReq = (async () => {
+        try {
+          const { delivery } = await api('/settings/delivery')
+          if (delivery) this.delivery = { zones: [], ...delivery }
+        } catch { /* keep defaults */ } finally { this.deliveryLoaded = true }
+      })()
+      return this._deliveryReq
     },
     async updateDelivery(patch) {
       const { delivery } = await api('/settings/delivery', { method: 'PATCH', body: patch })

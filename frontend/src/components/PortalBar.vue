@@ -1,4 +1,7 @@
 <template>
+  <!-- The header and the delivery band stick as one block. Two separately-sticky
+       siblings would both pin to top:0 and sit on top of each other. -->
+  <div class="pb-stick" :class="{ scrolled }">
   <header class="portal-bar" :class="{ scrolled, 'has-drawer': drawer }">
     <div class="pb-lead">
       <UserMenu />
@@ -13,6 +16,8 @@
       <button v-if="drawer" class="burger" @click="open = true" aria-label="menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
     </div>
   </header>
+  <FreeDeliveryBar v-if="shop" variant="strip" />
+  </div>
 
   <!-- mobile sidebar for the nav tabs (opt-in via the `drawer` prop) -->
   <template v-if="drawer">
@@ -33,6 +38,7 @@ import { RouterLink } from 'vue-router'
 import UserMenu from './UserMenu.vue'
 import NotificationBell from './NotificationBell.vue'
 import SearchBox from './SearchBox.vue'
+import FreeDeliveryBar from './FreeDeliveryBar.vue'
 import { useAuthStore } from '../stores/auth'
 
 defineProps({
@@ -40,6 +46,10 @@ defineProps({
   drawer: { type: Boolean, default: false },
   // storefront pages show the search box; the account/manager portals don't
   search: { type: Boolean, default: false },
+  // a page someone shops on, so the free-delivery band belongs under the header.
+  // Separate from `search` on purpose: what a page puts in its toolbar and whether
+  // it is a place to fill a basket are two different questions.
+  shop: { type: Boolean, default: false },
 })
 const open = ref(false)
 const auth = useAuthStore()
@@ -52,12 +62,11 @@ const auth = useAuthStore()
   gap: 1rem;
   padding: 0.55rem 1.4rem;
   background: var(--cream, #f5efe3);
-  position: sticky;
-  top: 0;
-  z-index: 60;
-  transition: box-shadow 0.3s;
 }
-.portal-bar.scrolled { box-shadow: 0 10px 30px -18px rgba(44, 55, 25, 0.5); }
+/* sticky and the scrolled shadow moved out here, so the shadow falls below the
+   band rather than between the band and the bar */
+.pb-stick { position: sticky; top: 0; z-index: 60; transition: box-shadow 0.3s; }
+.pb-stick.scrolled { box-shadow: 0 10px 30px -18px rgba(44, 55, 25, 0.5); }
 .pb-lead { flex: 1; display: flex; align-items: center; gap: 0.7rem; }
 .pbrand { font-family: 'Aref Ruqaa', 'Amiri', serif; font-size: 1.6rem; color: var(--green, #3c4a27); white-space: nowrap; }
 .pbrand .g { color: var(--gold, #b8902f); }

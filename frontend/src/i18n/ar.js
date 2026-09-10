@@ -193,6 +193,7 @@ export default {
     total: 'المجموع',
     checkout: 'إتمام الطلب',
     freeNoteAdd: 'أضِف {amount} درهم للحصول على توصيلٍ مجّاني 🚚',
+    freeNoteFrom: 'توصيلٌ مجّاني للطلبات فوق {amount} درهم 🚚',
     freeNoteQualified: '🎉 رائع! حصلت على توصيلٍ مجّاني',
     added: 'أُضيفت «{name}» إلى السلّة',
   },

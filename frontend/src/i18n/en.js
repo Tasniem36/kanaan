@@ -191,6 +191,7 @@ export default {
     total: 'Total',
     checkout: 'Checkout',
     freeNoteAdd: 'Add {amount} AED more for free delivery 🚚',
+    freeNoteFrom: 'Free delivery on orders over {amount} AED 🚚',
     freeNoteQualified: '🎉 You’ve unlocked free delivery!',
     added: '“{name}” added to cart',
   },
