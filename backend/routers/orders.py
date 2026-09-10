@@ -132,11 +132,18 @@ def _order_email_body(order, track_url):
     """Plain-text confirmation. Deliberately no prices per line — the total and the
     live status live on the tracking page, which can't go stale the way an e-mail can."""
     number = display_ref(order.get("ref"), order["id"])
+    # What actually happened to the money, not how it was meant to arrive. Reading
+    # this off payment_method alone told a guest their order was "مدفوع إلكترونياً"
+    # while they were still looking at Ziina's payment page — and went on saying it
+    # after an abandoned checkout had been cancelled and its stock put back.
+    how = ("الدفع عند الاستلام" if order["payment_method"] == "cod"
+           else "مدفوع إلكترونياً" if order.get("payment_status") == "paid"
+           else "بانتظار الدفع")
     return (
         f"مرحباً {order['customer_name']},\n\n"
         f"استلمنا طلبك رقم {number} في دكّان كنعان.\n"
         f"الإجمالي: {order['total']} درهم\n"
-        f"طريقة الدفع: {'الدفع عند الاستلام' if order['payment_method'] == 'cod' else 'مدفوع إلكترونياً'}\n\n"
+        f"طريقة الدفع: {how}\n\n"
         f"تابع حالة طلبك من هنا:\n{track_url}\n\n"
         f"احفظ هذا الرابط — يفتح صفحة طلبك دون تسجيل دخول.\n"
         f"وإن فقدته، ابحث عن طلبك برقمه ({number}) ورقم هاتفك أو بريدك من صفحة تتبّع الطلب.\n\n"
@@ -178,6 +185,26 @@ def _can_sign_in(user_id) -> bool:
         print("[order-whatsapp] account lookup failed:", e)
         return False
     return bool(row and (row.get("password_hash") or "").strip())
+
+
+def _guest_email_for(order):
+    """The address a guest left at checkout, or None for anybody else.
+
+    A customer who can sign in has حسابي to find the order in and was never sent this
+    mail; only the shadow account _guest_account opens gets one. That rule is
+    unchanged — it is asked of the order now rather than of the request that created
+    it, because a card order's mail is sent when the payment settles, long after that
+    request has gone.
+    """
+    uid = order.get("user_id")
+    if not uid or _can_sign_in(uid):
+        return None
+    try:
+        row = fetch_one("select email from users where id = %s", [uid])
+    except Exception as e:  # noqa: BLE001 — a missing e-mail must not fail a payment
+        print("[order-email] account lookup failed:", e)
+        return None
+    return (row or {}).get("email")
 
 
 def _send_order_whatsapp(order, request=None, *, status_label=None):
@@ -406,7 +433,10 @@ def create_order(request: Request, user=Depends(optional_user), payload: dict = 
                 message=f"دكّان كنعان — طلب #{oid[:8]}",
             )
             execute("update orders set ziina_payment_id = %s where id = %s", [intent.get("id"), oid])
-            _send_order_email(order, guest_email, request)
+            # No confirmation e-mail here. Nothing has been paid yet — the shopper is
+            # about to be redirected to Ziina and may never arrive, in which case the
+            # sweep cancels this order within the half hour. mark_paid sends it if and
+            # when the money lands, which is also when it can honestly say so.
             return {"order": order, "redirect_url": intent.get("redirect_url")}
         except HTTPException:
             cancel_and_restore(oid, why="the payment could not be started", request=request)
@@ -614,6 +644,11 @@ def mark_paid(order, request=None, *, by="return"):
     # the customer's own confirmation: here, not at the hand-off to Ziina, because
     # this is the point the order became real
     _after_commit(oid, "customer confirmation", lambda: _send_order_whatsapp(upd, request))
+    # The guest's copy of the order, held back until now for the same reason: an
+    # e-mail headed "تأكيد طلبك" belongs to an order that exists, not to one still
+    # being paid for. A payment the sweep found ten minutes late is mailed exactly
+    # like one the browser reported.
+    _after_commit(oid, "customer e-mail", lambda: _send_order_email(upd, _guest_email_for(upd), request))
     # The shop's record that this money arrived. Here rather than at the three call
     # sites, so a payment the sweep found is recorded exactly like one the browser
     # reported, and only when this call was the one that settled it.

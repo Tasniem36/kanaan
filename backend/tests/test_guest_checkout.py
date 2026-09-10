@@ -454,3 +454,18 @@ def test_expired_attempts_for_that_address_are_cleared(client, monkeypatch):
         "email": "shared@example.com", "password": "Abcdef12", "phone": "0501234567"})
     assert any("delete from signup_verifications where lower(email) = %s and expires_at < now()" in s
                for s in statements)
+
+
+def test_a_card_paying_guest_is_not_e_mailed_before_they_pay(client, stub_order, monkeypatch):
+    """The hand-off to Ziina is not a confirmation: the shopper has not even seen the
+    payment page yet. They may never arrive, or may cancel on it — and the sweep
+    releases an abandoned checkout within the half hour, by which time a mail headed
+    "تأكيد طلبك" telling them it was paid electronically is simply untrue. Nothing can
+    unsend it, which is why it now waits for the money (see mark_paid)."""
+    _, sent, _ = stub_order
+    monkeypatch.setattr(orders, "create_payment_intent",
+                        lambda **k: {"id": "pi-1", "redirect_url": "https://pay.ziina/x"})
+    res = client.post("/api/orders", json={**GUEST, "payment_method": "ziina"})
+    assert res.status_code == 200, res.text
+    assert res.json()["redirect_url"] == "https://pay.ziina/x"
+    assert sent == [], "no confirmation may go out before the payment does"

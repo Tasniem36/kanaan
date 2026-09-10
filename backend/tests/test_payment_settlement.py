@@ -336,3 +336,61 @@ def test_a_failing_audit_row_cannot_fail_a_payment_that_went_through(monkeypatch
                         lambda **k: (_ for _ in ()).throw(RuntimeError("audit is down")))
     settling(**_claimed())
     assert orders_mod.mark_paid(_order())["payment_status"] == "paid"
+
+
+# --- the guest's e-mail follows the money, not the button --------------------
+def test_the_guest_who_cannot_sign_in_is_the_one_e_mailed(monkeypatch):
+    monkeypatch.setattr(orders_mod, "_can_sign_in", lambda uid: False)
+    monkeypatch.setattr(orders_mod, "fetch_one", lambda sql, params=None: {"email": "guest@example.com"})
+    assert orders_mod._guest_email_for(_order()) == "guest@example.com"
+
+
+def test_a_customer_with_a_real_account_is_not(monkeypatch):
+    """They read the order in حسابي. This mail was only ever the guest's substitute
+    for having somewhere to read it."""
+    monkeypatch.setattr(orders_mod, "_can_sign_in", lambda uid: True)
+    monkeypatch.setattr(orders_mod, "fetch_one",
+                        lambda sql, params=None: pytest.fail("no address needs looking up"))
+    assert orders_mod._guest_email_for(_order()) is None
+
+
+def test_an_order_with_no_account_behind_it_is_not():
+    """A guest who left no e-mail has no shadow account, and nothing to write to."""
+    assert orders_mod._guest_email_for(_order(user_id=None)) is None
+
+
+def test_settling_is_what_sends_the_guest_their_confirmation(monkeypatch, quiet, settling):
+    """Not the hand-off to Ziina. Nothing is paid at that point, and an abandoned
+    checkout is released within the half hour — leaving the customer holding an
+    e-mail that says their order was paid for."""
+    sent = []
+    monkeypatch.setattr(orders_mod, "_guest_email_for", lambda order: "guest@example.com")
+    monkeypatch.setattr(orders_mod, "_send_order_email",
+                        lambda order, email, request: sent.append(email))
+    settling(**_claimed())
+    orders_mod.mark_paid(_order())
+    assert sent == ["guest@example.com"]
+
+
+def test_a_settle_that_did_nothing_sends_no_e_mail(monkeypatch, quiet, settling):
+    """Two settles racing must not mean two confirmations."""
+    sent = []
+    monkeypatch.setattr(orders_mod, "_guest_email_for", lambda order: "guest@example.com")
+    monkeypatch.setattr(orders_mod, "_send_order_email",
+                        lambda order, email, request: sent.append(email))
+    settling(**{"for update": {"status": "pending"}})   # the claim wins nothing
+    assert orders_mod.mark_paid(_order()) is None
+    assert sent == []
+
+
+@pytest.mark.parametrize("order,expected", [
+    ({"payment_method": "cod", "payment_status": "unpaid"}, "الدفع عند الاستلام"),
+    ({"payment_method": "ziina", "payment_status": "paid"}, "مدفوع إلكترونياً"),
+    ({"payment_method": "ziina", "payment_status": "unpaid"}, "بانتظار الدفع"),
+])
+def test_the_e_mail_never_claims_money_that_has_not_arrived(order, expected):
+    """Read off payment_method alone, it told a guest their order was paid while they
+    were still looking at the payment page."""
+    body = orders_mod._order_email_body(
+        {"id": ORDER_ID, "customer_name": "تسنيم", "total": 90, **order}, "https://x/track/1")
+    assert expected in body
