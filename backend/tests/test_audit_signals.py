@@ -74,6 +74,25 @@ def test_a_client_cannot_choose_the_size_of_what_it_stores(client, monkeypatch):
     assert d["qty"] == 100_000, "a quantity is capped, not taken at its word"
 
 
+def test_a_customer_shown_the_help_panel_reaches_the_follow_up_list(client, monkeypatch):
+    """The one struggle signal that comes from a screen rather than a request. A
+    payment nobody can get an answer about never reaches an endpoint, so without this
+    the shop's only news of it is a customer persistent enough to write in."""
+    logged = []
+    monkeypatch.setattr(A, "log_action", lambda **k: logged.append(k))
+    r = client.post("/api/audit/event", json={
+        "event": "help_needed", "detail": {"reason": "pay_unresolved"}})
+
+    assert r.json() == {"ok": True}
+    assert logged[0]["action"] == "help_needed"
+    assert logged[0]["detail"] == {"reason": "pay_unresolved"}, \
+        "as `reason`, which is the field the follow-up panel actually renders"
+    # collapsed per dead end, so reloading a stuck payment page is one row and a
+    # different dead end is still its own
+    assert logged[0]["dedupe"] == "pay_unresolved"
+    assert "help_needed" in A.STRUGGLE_ACTIONS, "or it never reaches the follow-up panel"
+
+
 def test_client_events_are_rate_limited(client, monkeypatch):
     monkeypatch.setattr(A, "log_action", lambda **k: None)
     codes = {client.post("/api/audit/event", json={"event": "checkout_opened"}).status_code
@@ -170,7 +189,7 @@ def test_the_struggle_actions_are_defined_in_one_place():
     assert set(A.STRUGGLE_ACTIONS) == {
         "login_failed", "verify_failed", "password_reset_failed", "promo_invalid",
         "checkout_failed", "out_of_stock", "checkout_login_required",
-        "track_lookup_failed"}
+        "track_lookup_failed", "help_needed"}
 
 
 # --- the interest trail ------------------------------------------------------

@@ -1,5 +1,27 @@
 import { defineStore } from 'pinia'
 import { api } from '../services/api'
+import { reportError } from '../services/report'
+
+// Hiding the band protects the customer from a threshold the shop may not honour,
+// but it also means the offer can stop appearing and nobody would ever notice. So
+// the shop is told, in the السجلّات error list, what actually broke for a shopper.
+//
+// Once a visit. api() already reports a 5xx by itself, and one customer on a bad
+// connection must not fill the log with the same line — the manager only needs
+// telling once to go and look.
+let _deliveryOffReported = false
+
+function _reportDeliveryOff(why) {
+  if (_deliveryOffReported) return
+  _deliveryOffReported = true
+  reportError(
+    'The free-delivery offer is not being shown to customers',
+    `${why}. The band can only quote a threshold once /settings/delivery has loaded, `
+    + 'so until it does it stays hidden rather than advertise a number the shop may '
+    + 'have changed. Check that the API is reachable and that GET /api/settings/delivery '
+    + 'answers with a "delivery" object.',
+  )
+}
 
 // Admin-editable shop config: delivery (threshold, fees, zones) and the checkout
 // policy (whether someone may order without an account).
@@ -38,8 +60,27 @@ export const useSettingsStore = defineStore('settings', {
       this._deliveryReq = (async () => {
         try {
           const { delivery } = await api('/settings/delivery')
-          if (delivery) this.delivery = { zones: [], ...delivery }
-        } catch { /* keep defaults */ } finally { this.deliveryLoaded = true }
+          if (delivery) {
+            this.delivery = { zones: [], ...delivery }
+            // Marked loaded only here. free_threshold above is the store's guess at
+            // the server default until this lands, and setting the flag whatever
+            // happened would have the delivery nudge quote that guess — a shop that
+            // has moved its threshold would advertise the old number and then charge
+            // for delivery at checkout, where the server uses the real one. Silent is
+            // recoverable; wrong out loud is not.
+            this.deliveryLoaded = true
+            return
+          }
+          // A 200 with nothing in it is the API answering in a shape this store does
+          // not know — a real fault, and the one api() cannot see for itself.
+          _reportDeliveryOff('the server answered without a delivery config')
+        } catch (e) {
+          _reportDeliveryOff(`the request failed (${e?.status || 'no response'})`)
+        }
+        // Anything but success: left unloaded so nothing quotes a number, and the
+        // shared request is dropped so the next page that wants it asks again. One
+        // blip should not switch the nudge off for the rest of the visit.
+        this._deliveryReq = null
       })()
       return this._deliveryReq
     },

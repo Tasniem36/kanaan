@@ -832,3 +832,23 @@ def test_cancelling_does_not_report_a_failure_for_money_that_landed(settling_rac
     res = settling_race.cancel_payment(O_ABANDONED, Req(), t="", user=_MGR_USER)
     assert res == {"cancelled": False, "paid": True}
     assert _stock(P_ZAATAR) == before
+
+
+def test_one_request_for_help_is_enough_to_reach_the_follow_up_list(live_db):
+    """Two failures, or one abandoned basket, is the bar for the rest of this panel —
+    a single mistyped password is noise. Being shown the help panel is not: it is a
+    dead end the shop put in front of somebody, and they may already have messaged
+    about it. One is enough, and the pill has to say which dead end it was.
+    """
+    from db import execute
+    from routers.audit import struggling
+
+    execute("""insert into audit_logs (action, detail, ip, visitor, page, created_at)
+               values ('help_needed', '{"reason": "pay_unresolved"}'::jsonb,
+                       '2.3.4.5', 'vis-help', '/pay/return', now() - interval '3 minutes')""")
+
+    row = next(r for r in struggling(Req(hours="24"), _m=None)["customers"]
+               if r["who"] == "v:vis-help")
+    assert row["failures"] == 1, "one on its own, where the rest of the panel needs two"
+    assert row["kinds"] == ["help_needed"]
+    assert row["reasons"] == ["pay_unresolved"], "or the manager never learns which screen"

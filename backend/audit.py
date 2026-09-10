@@ -46,7 +46,11 @@ def _client_ip(request):
 # The drop-off figure it feeds compares sittings that reached the form against orders
 # placed, so one row per sitting is what it wants anyway.
 _COLLAPSE = {"visit": 1800, "cart_add": 1800, "wishlist_add": 1800, "search": 600,
-             "checkout_opened": 1800}
+             "checkout_opened": 1800,
+             # someone stuck reloads. One row per dead end per sitting, not one per
+             # attempt — and per dead end (see _CLIENT_DEDUPE), so a payment they
+             # cannot resolve and an order they cannot open stay two separate rows.
+             "help_needed": 1800}
 _recent: dict[str, float] = {}
 _recent_lock = threading.Lock()
 

@@ -25,6 +25,10 @@
         <h1>{{ t('pay.unresolved') }}</h1>
         <p class="muted">{{ t('pay.unresolvedMsg') }}</p>
         <RouterLink to="/" class="btn btn-green">{{ t('pay.backHome') }}</RouterLink>
+        <!-- The one screen where somebody may be out of pocket with nothing to show
+             for it. Telling them not to pay again is only half an answer; this is the
+             other half, and it puts them in the follow-up list either way. -->
+        <NeedHelp where="pay_unresolved" :subject="t('help.paymentSubject')" />
       </template>
 
       <template v-else>
@@ -34,6 +38,9 @@
         <h1>{{ t('pay.failed') }}</h1>
         <p class="muted">{{ t('pay.failedMsg') }}</p>
         <RouterLink to="/" class="btn btn-green">{{ t('pay.backHome') }}</RouterLink>
+        <!-- "You can try again" is enough once. Somebody whose card keeps being
+             refused needs a person, and the shop needs to know it is happening. -->
+        <NeedHelp where="pay_failed" :subject="t('help.paymentSubject')" />
       </template>
     </div>
   </div>
@@ -46,6 +53,7 @@ import { useI18n } from 'vue-i18n'
 import { useOrdersStore } from '../stores/orders'
 import { useCartStore } from '../stores/cart'
 import { rememberAwaited, forgetAwaited } from '../services/awaitingPayment'
+import NeedHelp from '../components/NeedHelp.vue'
 
 const { t } = useI18n()
 const route = useRoute()

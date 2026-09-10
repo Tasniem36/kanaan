@@ -18,7 +18,12 @@ from security import optional_user, require_manager
 # is indistinguishable from browsing. Being told by the page is the only way to record
 # them for every shopper, guests included, which is the same reason checkout_opened
 # has always come from here.
-CLIENT_EVENTS = {"checkout_opened", "cart_add", "search", "checkout_login_required"}
+CLIENT_EVENTS = {"checkout_opened", "cart_add", "search", "checkout_login_required",
+                 # a customer who was shown the "contact us" help panel: they hit a
+                 # dead end the shop caused, not one they made. It is the only
+                 # struggle signal that comes from a screen rather than a request —
+                 # nothing reaches an endpoint when a payment answer never arrives.
+                 "help_needed"}
 # What each event may carry. Anything else a page sends is dropped rather than trusted:
 # this is the one place the log takes client input.
 CLIENT_EVENT_DETAIL = {
@@ -26,6 +31,10 @@ CLIENT_EVENT_DETAIL = {
     "cart_add": ("product_id", "name", "qty"),
     "search": ("q", "results"),
     "checkout_login_required": ("items", "total"),
+    # Which dead end they were looking at. Called `reason` because that is the field
+    # the follow-up panel already reads and renders as a pill — a name of its own
+    # would have been stored faithfully and shown to nobody.
+    "help_needed": ("reason",),
 }
 
 
@@ -79,10 +88,11 @@ CLIENT_EVENT_FIELD = {
     "q": _as_text(80),
     "name": _as_text(120),
     "product_id": _as_text(64),
+    "reason": _as_text(40),
 }
 # Events collapsed per subject rather than per visitor, so one row is kept for each
 # distinct product or search term instead of one for the whole sitting.
-_CLIENT_DEDUPE = {"cart_add": "product_id", "search": "q"}
+_CLIENT_DEDUPE = {"cart_add": "product_id", "search": "q", "help_needed": "reason"}
 
 # The failures that mean a customer is stuck. Kept in one place: the dashboard's
 # follow-up list and the drop-off figure both read from it.
@@ -93,7 +103,11 @@ STRUGGLE_ACTIONS = ("login_failed", "verify_failed", "password_reset_failed",
                     "promo_invalid", "checkout_failed", "out_of_stock",
                     # a shopper sent away from a full basket to sign in, and one who
                     # can't find the order they were e-mailed a link to
-                    "checkout_login_required", "track_lookup_failed")
+                    "checkout_login_required", "track_lookup_failed",
+                    # shown the help panel: a payment with no answer, an order they
+                    # cannot open. Worth a follow-up more than most of this list,
+                    # because the shop caused it.
+                    "help_needed")
 
 router = APIRouter()
 
@@ -313,7 +327,12 @@ def struggling(request: Request, _m=Depends(require_manager)):
              left join seen s on s.who = coalesce(f.who, ab.who)
              left join users u on u.id::text = coalesce(f.who, ab.who)
             where u.role is distinct from 'manager'
-              and (coalesce(f.n, 0) >= 2 or coalesce(ab.n, 0) >= 1)
+              -- Two failures, or one abandoned basket: a single mistyped password is
+              -- noise. But being shown the help panel is not a customer's slip, it is
+              -- a dead end the shop put in front of them and a contact panel they may
+              -- already have acted on — one of those is worth a follow-up on its own.
+              and (coalesce(f.n, 0) >= 2 or coalesce(ab.n, 0) >= 1
+                   or 'help_needed' = any(f.kinds))
             order by greatest(f.last_at, ab.last_at) desc nulls last
             limit 50""",
         [hours, list(STRUGGLE_ACTIONS)],

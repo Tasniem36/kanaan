@@ -88,6 +88,10 @@
         </form>
 
         <p class="a-muted help">{{ t('track.lookupHint') }}</p>
+        <!-- They have an order number and still cannot reach their order: a lost
+             e-mail, a typo, or the wrong phone on the order. Only the shop can fix
+             any of those, so stop asking them to guess and put them in touch. -->
+        <NeedHelp v-if="lookupErr" where="track_lookup" :subject="t('help.orderSubject')" />
         <RouterLink to="/" class="back">{{ t('pay.backHome') }}</RouterLink>
       </template>
     </div>
@@ -101,6 +105,7 @@ import { useI18n } from 'vue-i18n'
 import { api } from '../services/api'
 import Loader from '../components/Loader.vue'
 import OrderTimeline from '../components/OrderTimeline.vue'
+import NeedHelp from '../components/NeedHelp.vue'
 import { useMyOrdersStore } from '../stores/myOrders'
 
 // Public order status page. The token in the URL is the credential — no account

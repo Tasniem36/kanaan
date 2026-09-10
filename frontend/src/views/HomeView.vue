@@ -146,10 +146,10 @@
       <div><h5>{{ t('footer.shop') }}</h5><a href="#shop" @click.prevent="goShop('pantry')">{{ t('nav.pantry') }}</a><a href="#shop" @click.prevent="goShop('pottery')">{{ t('nav.pottery') }}</a></div>
       <div><h5>{{ t('footer.links') }}</h5><a href="#story">{{ t('nav.story') }}</a><a href="#" @click.prevent="contactUs">{{ t('footer.contactUs') }}</a><RouterLink to="/track">{{ t('track.findOrder') }}</RouterLink><RouterLink to="/account">{{ t('nav.account') }}</RouterLink></div>
       <div><h5>{{ t('footer.contact') }}</h5>
-        <a href="https://wa.me/971522981187" target="_blank" rel="noopener">{{ t('footer.whatsapp') }}: <span dir="ltr">+971 52 298 1187</span></a>
-        <a href="mailto:dukkan.kanaan@gmail.com">dukkan.kanaan@gmail.com</a>
-        <a href="https://www.instagram.com/dukkan_kanaan" target="_blank" rel="noopener">{{ t('footer.instagram') }} @dukkan_kanaan</a>
-        <a class="ig-qr" href="https://www.instagram.com/dukkan_kanaan" target="_blank" rel="noopener" :aria-label="t('footer.followQr')">
+        <a :href="whatsappLink()" target="_blank" rel="noopener">{{ t('footer.whatsapp') }}: <span dir="ltr">{{ WHATSAPP_DISPLAY }}</span></a>
+        <a :href="emailLink()">{{ EMAIL }}</a>
+        <a :href="`https://www.instagram.com/${INSTAGRAM}`" target="_blank" rel="noopener">{{ t('footer.instagram') }} @{{ INSTAGRAM }}</a>
+        <a class="ig-qr" :href="`https://www.instagram.com/${INSTAGRAM}`" target="_blank" rel="noopener" :aria-label="t('footer.followQr')">
           <img src="/images/instagram-qr.svg" alt="Instagram QR">
           <span>{{ t('footer.followQr') }}</span>
         </a>
@@ -364,6 +364,7 @@ import { useReviewsStore } from '../stores/reviews'
 import { useSettingsStore } from '../stores/settings'
 import { useInboxStore } from '../stores/inbox'
 import { deliveryFee, EMIRATES } from '../utils/delivery'
+import { EMAIL, INSTAGRAM, WHATSAPP_DISPLAY, whatsappLink, emailLink } from '../utils/contact'
 import { useCatalogStore } from '../stores/catalog'
 import { useMyOrdersStore } from '../stores/myOrders'
 import ProductFeed from '../components/ProductFeed.vue'
