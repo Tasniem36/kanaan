@@ -3,15 +3,24 @@
     TELEGRAM_CHAT_ID takes one id or several, comma-separated.
   - WhatsApp via CallMeBot: WHATSAPP_PHONE + WHATSAPP_APIKEY (free, best-effort)
 Never raises."""
+import datetime
 import os
 
 import requests
 
+# Order times are shown in the shop's own time, not the server's. python:3.12-slim
+# carries no system timezone database, so ZoneInfo("Asia/Dubai") raises there and this
+# used to fall back to leaving the timestamp alone — which is UTC out of Postgres, and
+# put every alert four hours behind the shop for as long as nobody checked a clock.
+# The tzdata wheel in requirements.txt is what makes the first branch work in the
+# container; the fallback is exact anyway, because the UAE has never observed DST.
+_UAE_OFFSET = datetime.timezone(datetime.timedelta(hours=4), "GST")
 try:
     from zoneinfo import ZoneInfo
-    _DUBAI_TZ = ZoneInfo("Asia/Dubai")   # order times shown in the shop's local time
-except Exception:
-    _DUBAI_TZ = None
+    _DUBAI_TZ = ZoneInfo("Asia/Dubai")
+except Exception as e:  # noqa: BLE001
+    print("[notify] no timezone database, using a fixed +04:00 for the shop:", e)
+    _DUBAI_TZ = _UAE_OFFSET
 
 
 def _telegram_chat_ids() -> list:
@@ -101,7 +110,7 @@ def _order_time(order: dict) -> str:
     try:
         if isinstance(t, str):
             return t
-        dt = t.astimezone(_DUBAI_TZ) if _DUBAI_TZ else t
+        dt = t.astimezone(_DUBAI_TZ)
         return dt.strftime("%Y-%m-%d %H:%M")
     except Exception:
         return str(t)

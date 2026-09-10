@@ -147,6 +147,7 @@ import NeedHelp from '../components/NeedHelp.vue'
 import { whatsappLink } from '../utils/contact'
 import { useMyOrdersStore } from '../stores/myOrders'
 import { useCartStore } from '../stores/cart'
+import { dateTime } from '../utils/datetime'
 
 // Public order status page. The token in the URL is the credential — no account
 // needed, which is the whole point for a guest who checked out without one.
@@ -271,7 +272,7 @@ async function load(id, token) {
 
 const money = (n) => new Intl.NumberFormat(locale.value === 'ar' ? 'ar-AE' : 'en-AE',
   { maximumFractionDigits: 2 }).format(Number(n || 0))
-const fmtDate = (d) => new Date(d).toLocaleString(locale.value, { dateStyle: 'medium', timeStyle: 'short' })
+const fmtDate = (d) => dateTime(d, locale.value)
 // whatsappLink encodes it, so this is the plain sentence
 const waText = computed(() => t('track.whatsappText', { id: order.value?.number || '' }))
 

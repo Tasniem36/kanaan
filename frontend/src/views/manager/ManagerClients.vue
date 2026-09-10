@@ -50,6 +50,7 @@ import { useToastStore } from '../../stores/toast'
 import { useConfirmStore } from '../../stores/confirm'
 import Loader from '../../components/Loader.vue'
 import Dialog from '../../components/Dialog.vue'
+import { longDate } from '../../utils/datetime'
 
 const { t, locale } = useI18n()
 const inbox = useInboxStore()
@@ -59,7 +60,7 @@ const clients = ref([])
 const loading = ref(false)
 const { visible: visibleClients, sentinel, hasMore } = useInfiniteScroll(() => clients.value, 10)
 
-const fmtDate = (d) => new Date(d).toLocaleDateString(locale.value, { year: 'numeric', month: 'long', day: 'numeric' })
+const fmtDate = (d) => longDate(d, locale.value)
 
 // message a customer
 const composeFor = ref(null)

@@ -37,6 +37,7 @@ import { useOrdersStore } from '../../stores/orders'
 import Loader from '../../components/Loader.vue'
 import OrderTimeline from '../../components/OrderTimeline.vue'
 import { useInfiniteScroll } from '../../composables/useInfiniteScroll'
+import { longDate } from '../../utils/datetime'
 
 const { t, locale } = useI18n()
 const ordersStore = useOrdersStore()
@@ -55,7 +56,7 @@ const payLabel = (o) => {
   if (o.payment_method === 'ziina') return o.payment_status === 'paid' ? t('account.paidOnline') : t('account.awaitingPayment')
   return o.status === 'delivered' ? t('account.paidOnDelivery') : t('checkout.cod')
 }
-const fmtDate = (d) => new Date(d).toLocaleDateString(locale.value, { year: 'numeric', month: 'long', day: 'numeric' })
+const fmtDate = (d) => longDate(d, locale.value)
 
 onMounted(() => ordersStore.fetch())
 </script>

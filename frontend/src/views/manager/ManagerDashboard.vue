@@ -111,6 +111,7 @@ import { ref, computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '../../services/api'
+import { dayMonth } from '../../utils/datetime'
 
 const { t, locale } = useI18n()
 
@@ -142,7 +143,7 @@ const barHeight = (v) => {
   return `${Math.max(3, (n / peak.value) * 100)}%`
 }
 
-const fmtDay = (d) => new Date(d).toLocaleDateString(locale.value, { day: 'numeric', month: 'short' })
+const fmtDay = (d) => dayMonth(d, locale.value)
 const dayNum = (d) => new Date(d).getDate()
 const statusClass = (s) =>
   ({ pending: 'pill-warn', paid: 'pill-ok', preparing: 'pill-warn', fulfilled: 'pill-ok', delivered: 'pill-ok', cancelled: 'pill-low' }[s] || '')

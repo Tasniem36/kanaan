@@ -135,6 +135,7 @@ import { useConfirmStore } from '../../stores/confirm'
 import Loader from '../../components/Loader.vue'
 import Dialog from '../../components/Dialog.vue'
 import { useInfiniteScroll } from '../../composables/useInfiniteScroll'
+import { dateTime } from '../../utils/datetime'
 
 const { t, locale } = useI18n()
 const ordersStore = useOrdersStore()
@@ -225,7 +226,7 @@ const { visible: visibleGroups, sentinel, hasMore, reset } = useInfiniteScroll((
 watch([activeTab, payFilter], reset)
 
 // date + time of the order, in the manager's local timezone
-const fmtDate = (d) => new Date(d).toLocaleString(locale.value, { dateStyle: 'medium', timeStyle: 'short' })
+const fmtDate = (d) => dateTime(d, locale.value)
 
 async function changeStatus(o, e) {
   const status = e.target.value

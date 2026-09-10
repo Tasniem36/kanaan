@@ -34,13 +34,14 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '../../services/api'
 import Loader from '../../components/Loader.vue'
+import { dateTime } from '../../utils/datetime'
 
 const { t, locale } = useI18n()
 const router = useRouter()
 function goPage(p) { try { router.push(p) } catch { /* not an in-app route */ } }
 const errors = ref([])
 const loading = ref(false)
-const fmt = (d) => new Date(d).toLocaleString(locale.value, { dateStyle: 'medium', timeStyle: 'short' })
+const fmt = (d) => dateTime(d, locale.value)
 
 async function load() {
   loading.value = true

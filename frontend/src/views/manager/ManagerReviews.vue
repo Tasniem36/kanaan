@@ -48,6 +48,7 @@ import { useToastStore } from '../../stores/toast'
 import { useConfirmStore } from '../../stores/confirm'
 import Loader from '../../components/Loader.vue'
 import Stars from '../../components/Stars.vue'
+import { dateTime } from '../../utils/datetime'
 
 const FILTERS = [
   { value: 'pending', label: 'manager.revPending' },
@@ -69,7 +70,7 @@ const busy = ref('')
 const rows = computed(() => (filter.value ? reviews.queue.filter((r) => r.status === filter.value) : reviews.queue))
 
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1)
-const fmt = (d) => new Date(d).toLocaleString(locale.value, { dateStyle: 'medium', timeStyle: 'short' })
+const fmt = (d) => dateTime(d, locale.value)
 
 async function setStatus(r, status) {
   busy.value = r.id

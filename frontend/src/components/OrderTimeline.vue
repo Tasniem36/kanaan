@@ -20,6 +20,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { dayTime } from '../utils/datetime'
 
 // The happy path a customer's order walks.
 //
@@ -66,8 +67,7 @@ const steps = computed(() =>
 // how far the connecting line is filled, 0–1
 const doneRatio = computed(() => (STEPS.length < 2 ? 0 : activeIndex.value / (STEPS.length - 1)))
 
-const fmt = (d) =>
-  new Date(d).toLocaleString(locale.value, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+const fmt = (d) => dayTime(d, locale.value)
 </script>
 
 <style scoped>

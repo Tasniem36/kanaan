@@ -78,6 +78,7 @@ import { useI18n } from 'vue-i18n'
 import { useInboxStore } from '../stores/inbox'
 import { useAuthStore } from '../stores/auth'
 import { pushSupported, isPushOn, enablePush, disablePush } from '../services/push'
+import { dayTime } from '../utils/datetime'
 
 const { t, locale } = useI18n()
 const router = useRouter()
@@ -117,7 +118,7 @@ async function togglePush() {
   finally { pushBusy.value = false }
 }
 
-const fmt = (d) => new Date(d).toLocaleString(locale.value, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+const fmt = (d) => dayTime(d, locale.value)
 
 function scrollDown() {
   nextTick(() => { if (chatBox.value) chatBox.value.scrollTop = chatBox.value.scrollHeight })

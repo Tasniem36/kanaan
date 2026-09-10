@@ -141,6 +141,7 @@ import { api } from '../../services/api'
 import { EMIRATES } from '../../utils/delivery'
 import { useInboxStore } from '../../stores/inbox'
 import Loader from '../../components/Loader.vue'
+import { dateTime } from '../../utils/datetime'
 
 const { t, te, locale } = useI18n()
 const inbox = useInboxStore()
@@ -214,8 +215,7 @@ watch(visibleLogs, () => { if (page.value > pageCount.value) page.value = pageCo
 // links to the page the action came from. Opens in a new tab so the manager
 // never loses their place in the log.
 
-const fmtDateTime = (d) =>
-  new Date(d).toLocaleString(locale.value, { dateStyle: 'medium', timeStyle: 'short' })
+const fmtDateTime = (d) => dateTime(d, locale.value)
 
 const actionLabel = (a) => (te(`audit.${a}`) ? t(`audit.${a}`) : a)
 // the `reason` a failure recorded, in words — the same manager.fail_* labels the
