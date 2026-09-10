@@ -48,7 +48,7 @@ def test_confirm_payment_rejects_non_owner(client, as_user, monkeypatch):
 
 def test_cancel_payment_rejects_non_owner(client, as_user, monkeypatch):
     monkeypatch.setattr(orders_mod, "fetch_one", lambda sql, params=None: _order(user_id="someone-else"))
-    monkeypatch.setattr(orders_mod, "cancel_and_restore", lambda oid: (_ for _ in ()).throw(AssertionError("should not cancel")))
+    monkeypatch.setattr(orders_mod, "cancel_and_restore", lambda oid, **k: (_ for _ in ()).throw(AssertionError("should not cancel")))
     as_user({"id": "attacker", "role": "shopper"})
     r = client.post(f"/api/orders/{ORDER_ID}/cancel-payment")
     assert r.status_code == 404

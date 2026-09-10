@@ -6,8 +6,8 @@ Configure:  VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY (base64url raw keys), VAPID_SUBJ
 """
 import json
 import os
-import threading
 
+import background
 from db import fetch_all, execute
 
 _SUBJECT = os.getenv("VAPID_SUBJECT", "mailto:admin@dukkan-kanaan.com")
@@ -59,7 +59,7 @@ def push_to_users(user_ids, *, title, body=None, url="/", tag="dukkan"):
     if not ids:
         return
     payload = json.dumps({"title": title, "body": body or "", "url": url, "tag": tag})
-    threading.Thread(target=_safe, args=(ids, payload), daemon=True).start()
+    return background.spawn(_safe, name="push", args=(ids, payload))
 
 
 def _safe(ids, payload):
