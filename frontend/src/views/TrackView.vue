@@ -49,6 +49,9 @@
         <section v-if="releasedUnpaid" class="released" aria-labelledby="rel-h">
           <h2 id="rel-h">{{ t('track.releasedTitle') }}</h2>
           <p class="a-muted">{{ t('track.releasedMsg') }}</p>
+          <!-- Said separately and plainly: the first thing somebody thinks on
+               reading "cancelled" is whether they have been charged for it. -->
+          <p class="a-muted">{{ t('track.releasedReassure') }}</p>
           <RouterLink to="/" class="btn btn-green">{{ t('track.orderAgain') }}</RouterLink>
         </section>
 
@@ -57,7 +60,13 @@
              used to be building the whole basket again. -->
         <section v-if="awaitingPayment" class="paynow" aria-labelledby="paynow-h">
           <h2 id="paynow-h">{{ t('track.awaitingTitle') }}</h2>
-          <p class="a-muted">{{ t('track.awaitingMsg', { amount: money(order.total) }) }}</p>
+          <p class="a-muted">{{ t('track.awaitingMsg') }}</p>
+          <!-- The amount stands on its own rather than inside the sentence: it is
+               the one thing they need to recognise before choosing, and the same
+               figure as the total above. -->
+          <p class="paynow-amount">
+            {{ money(order.total) }} <span class="dh" role="img" aria-label="درهم"></span>
+          </p>
           <p v-if="payErr" class="err">{{ payErr }}</p>
           <div class="paynow-acts">
             <button class="btn btn-green" :disabled="!!paying" @click="choosePayment('ziina')">
@@ -295,6 +304,8 @@ watch(() => [route.params.id, String(route.query.t || '')], ([id, tok]) => {
   background: rgba(184,144,47,.10); border: 1px solid rgba(184,144,47,.38); }
 .paynow h2 { font-family: 'Amiri', serif; color: var(--green, #3c4a27); font-size: 1.05rem; margin: 0 0 .3rem; }
 .paynow .a-muted { font-size: .84rem; line-height: 1.5; margin: 0 0 .7rem; }
+.paynow-amount { font-family: 'Amiri', serif; font-size: 1.5rem; font-weight: 700;
+  color: var(--green, #3c4a27); margin: 0 0 .7rem; }
 .paynow-acts { display: flex; gap: .5rem; flex-wrap: wrap; }
 .paynow-acts .btn { flex: 1 1 auto; font-size: .86rem; padding: .6rem 1rem; }
 .btn-ghost { background: #fff; color: var(--green, #3c4a27); border: 1px solid rgba(60,74,39,.3); }
