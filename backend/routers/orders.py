@@ -65,11 +65,26 @@ def _notify_new_order_admins(order):
     )
 
 
-# Ziina statuses that mean the money is definitely not coming. Anything else —
-# pending, an instrument not yet chosen, a status this code has never seen — means
-# "not resolved yet", and an unresolved payment never destroys an order: see
-# cancel_payment.
-FAILED_STATUSES = {"failed", "cancelled", "canceled", "expired"}
+# Ziina statuses that mean the money is not coming, in two kinds.
+#
+# REFUSED is a decision: the card was declined, or the customer withdrew. Nothing is
+# going to change, so the order can be released and its stock freed at once.
+#
+# EXPIRED is only a clock running out on one attempt. It used to sit in the same set,
+# which meant an order died the moment Ziina timed its intent out — however long the
+# shop had said to wait. That was fair enough when there was no way back in, but the
+# tracking page and حسابي now hand out a fresh payment page, so an expired attempt is
+# recoverable and releasing on it throws away an order the customer may still finish.
+# The sweep lets PAYMENT_STALE_MINUTES decide that one instead.
+#
+# Anything else — pending, an instrument not yet chosen, a status this code has never
+# seen — means "not resolved yet", and an unresolved payment never destroys an order:
+# see cancel_payment.
+REFUSED_STATUSES = {"failed", "cancelled", "canceled"}
+EXPIRED_STATUSES = {"expired"}
+# The two together: what the customer-facing endpoints act on, where somebody is
+# waiting on an answer right now rather than a sweep deciding policy in the background.
+FAILED_STATUSES = REFUSED_STATUSES | EXPIRED_STATUSES
 
 # The two ways an order's stock moves, as exact inverses of each other. One statement
 # per order rather than a read plus an update per line item, and grouping by product

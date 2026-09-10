@@ -92,8 +92,8 @@ def test_a_young_undecided_payment_is_left_to_finish(monkeypatch, acted):
 
 
 # --- releasing stock ---------------------------------------------------------
-@pytest.mark.parametrize("status", sorted(rec.FAILED_STATUSES))
-def test_releases_stock_on_a_definite_failure(monkeypatch, acted, status):
+@pytest.mark.parametrize("status", sorted(rec.REFUSED_STATUSES))
+def test_releases_stock_on_a_definite_refusal(monkeypatch, acted, status):
     _rows(monkeypatch, _order(stale=False))
     _intent(monkeypatch, status)
     assert rec.reconcile(apply=True)["cancelled"] == 1
@@ -199,8 +199,34 @@ def test_an_order_released_for_going_stale_records_that_as_the_reason(monkeypatc
     assert acted["why"] == [f"unresolved for over {rec._stale_minutes()}m"]
 
 
-def test_a_definite_failure_is_released_with_ziina_s_own_word_for_it(monkeypatch, acted):
+def test_a_definite_refusal_is_released_with_ziina_s_own_word_for_it(monkeypatch, acted):
+    """"failed", not "unresolved for over 1440m": the log should say what the shop
+    was told, so a run of declines reads differently from a run of people wandering
+    off. ("expired" no longer belongs here — see below, it is not a refusal.)"""
     _rows(monkeypatch, _order())
-    _intent(monkeypatch, "expired")
+    _intent(monkeypatch, "failed")
     rec.reconcile(apply=True)
-    assert acted["why"] == ["expired"]
+    assert acted["why"] == ["failed"]
+
+
+# --- a timed-out attempt is not a refusal ------------------------------------
+def test_an_expired_intent_waits_out_the_window_like_any_other(monkeypatch, acted):
+    """Expired used to sit with failed and cancelled, so an order died the moment
+    Ziina timed its intent out — however long the shop had said to wait, which made
+    PAYMENT_STALE_MINUTES close to decorative for anyone who took their time.
+
+    It is not a refusal. Nobody declined anything; one attempt ran out of clock, and
+    the tracking page hands out a fresh payment page for exactly this. So it waits.
+    """
+    _rows(monkeypatch, _order(stale=False))
+    _intent(monkeypatch, "expired")
+    assert rec.reconcile(apply=True)["waiting"] == 1
+    assert acted["cancelled"] == [], "the customer can still come back and pay"
+
+
+def test_an_expired_intent_is_released_once_the_window_is_up(monkeypatch, acted):
+    """It waits, it does not linger for ever: the shelf is still owed its stock."""
+    _rows(monkeypatch, _order(stale=True))
+    _intent(monkeypatch, "expired")
+    assert rec.reconcile(apply=True)["cancelled"] == 1
+    assert acted["cancelled"] == [ORDER_ID]

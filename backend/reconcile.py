@@ -31,7 +31,7 @@ import sys
 import background
 from db import fetch_all
 from ziina import get_payment_intent
-from routers.orders import FAILED_STATUSES, cancel_and_restore, mark_paid
+from routers.orders import REFUSED_STATUSES, cancel_and_restore, mark_paid
 
 # How long an order may sit with an unresolved intent before that is read as
 # abandoned and its stock goes back on the shelf. Pressing cancel on Ziina's page
@@ -143,8 +143,11 @@ def reconcile(*, apply: bool = False) -> dict:
         if order["status"] == "cancelled":
             continue  # already dealt with; Ziina agrees the money isn't coming
 
-        if status in FAILED_STATUSES or order["stale"]:
-            why = status if status in FAILED_STATUSES else f"unresolved for over {_stale_minutes()}m"
+        # A refusal is acted on at once; an intent that merely expired waits out the
+        # window like any other unfinished payment, because the shop offers a fresh
+        # payment page and the customer may still come back and use it.
+        if status in REFUSED_STATUSES or order["stale"]:
+            why = status if status in REFUSED_STATUSES else f"unresolved for over {_stale_minutes()}m"
             print(f"{'✓ releasing' if apply else '· would release'} {oid[:8]} · {why}")
             if not apply:
                 counts["cancelled"] += 1
