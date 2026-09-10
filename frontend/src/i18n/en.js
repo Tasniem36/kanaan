@@ -653,6 +653,9 @@ export default {
     review_deleted: 'Review deleted',
   },
   track: {
+    codConfirmTitle: 'Pay cash on delivery?',
+    codConfirmMsg: "We'll prepare your order and you pay the driver in cash when it arrives.",
+    codConfirmYes: 'Yes, cash on delivery',
     notPaid: 'Not paid',
     releasedTitle: 'It looks like the payment window has closed',
     releasedMsg: "The payment wasn't completed in time, so the order was cancelled and the items went back into stock.",

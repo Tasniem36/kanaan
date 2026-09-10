@@ -147,6 +147,7 @@ import NeedHelp from '../components/NeedHelp.vue'
 import { whatsappLink } from '../utils/contact'
 import { useMyOrdersStore } from '../stores/myOrders'
 import { useCartStore } from '../stores/cart'
+import { useConfirmStore } from '../stores/confirm'
 import { dateTime } from '../utils/datetime'
 
 // Public order status page. The token in the URL is the credential — no account
@@ -163,6 +164,7 @@ const finding = ref(false)
 const lookupErr = ref('')
 const myOrders = useMyOrdersStore()
 const cart = useCartStore()
+const confirm = useConfirmStore()
 
 // 'pending' means two different things: a cash order being processed, and a card
 // order still waiting to be paid. OrderTimeline draws the same distinction.
@@ -202,6 +204,20 @@ const payErr = ref('')
 // sweep that would otherwise cancel it. Either way the page reloads and says what
 // the order now is, rather than assuming the answer.
 async function choosePayment(method) {
+  // Cash commits: the order goes to the shop to prepare, and these buttons go away
+  // because there is no longer a payment waiting to be finished. Card does not — a
+  // payment page nobody completes changes nothing — so only this one asks.
+  // (Switching a cash order back to card is deliberately not offered yet; the
+  // endpoint would take it, but an unpaid card order is on the sweep's clock and a
+  // customer who tapped it out of curiosity would lose an order the shop had.)
+  if (method === 'cod') {
+    const ok = await confirm.ask({
+      title: t('track.codConfirmTitle'),
+      message: t('track.codConfirmMsg'),
+      confirmText: t('track.codConfirmYes'),
+    })
+    if (!ok) return
+  }
   paying.value = method
   payErr.value = ''
   try {

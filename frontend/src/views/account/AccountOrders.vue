@@ -52,6 +52,7 @@ import { useInfiniteScroll } from '../../composables/useInfiniteScroll'
 import { longDate } from '../../utils/datetime'
 import { api } from '../../services/api'
 import { useCartStore } from '../../stores/cart'
+import { useConfirmStore } from '../../stores/confirm'
 import { takeOutOfBasket } from '../../services/awaitingPayment'
 
 const { t, locale } = useI18n()
@@ -79,10 +80,22 @@ const awaiting = (o) => o.payment_method === 'ziina'
   && o.payment_status !== 'paid' && o.status !== 'cancelled'
 
 const cart = useCartStore()
+const confirm = useConfirmStore()
 const paying = ref('')          // "<order id>:<method>", so one row's spinner is its own
 const payErr = reactive({})
 
 async function choosePayment(o, method) {
+  // Cash commits: the order goes to the shop to prepare, and these buttons go away
+  // because there is no longer a payment waiting to be finished. Card does not — a
+  // payment page nobody completes changes nothing — so only this one asks.
+  if (method === 'cod') {
+    const ok = await confirm.ask({
+      title: t('track.codConfirmTitle'),
+      message: t('track.codConfirmMsg'),
+      confirmText: t('track.codConfirmYes'),
+    })
+    if (!ok) return
+  }
   paying.value = `${o.id}:${method}`
   payErr[o.id] = ''
   try {

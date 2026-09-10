@@ -655,6 +655,9 @@ export default {
     review_deleted: 'حذف تقييم',
   },
   track: {
+    codConfirmTitle: 'الدفع نقداً عند الاستلام؟',
+    codConfirmMsg: 'سنجهّز طلبك وتدفع نقداً للمندوب عند وصوله.',
+    codConfirmYes: 'نعم، الدفع عند الاستلام',
     notPaid: 'غير مدفوع',
     releasedTitle: 'يبدو أن وقت الدفع انتهى',
     releasedMsg: 'لم يكتمل الدفع في الوقت المحدّد، لذلك أُلغي الطلب وعادت المنتجات للمخزون.',
