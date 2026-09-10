@@ -41,6 +41,8 @@ O_ABANDONED = "bbbbbbbb-0000-0000-0000-000000000003"
 O_CANCELLED = "bbbbbbbb-0000-0000-0000-000000000004"
 # a manager opens any order, so these tests need no tracking token
 _MGR_USER = {"id": U_MGR, "role": "manager"}
+# a real account that owns nothing in the seed
+U_MGR_OTHER = "33333333-3333-3333-3333-333333333333"
 
 SEED = f"""
 insert into users (id, email, password_hash, full_name, role) values
@@ -944,3 +946,40 @@ def test_paying_for_an_order_that_is_not_yours_is_a_404(unpaid_ziina):
     with pytest.raises(HTTPException) as e:
         o.resume_payment(O_ABANDONED, Req(), t="wrong-token", user=None, payload={})
     assert e.value.status_code == 404
+
+
+def test_the_owner_can_pay_from_their_account_without_a_tracking_token(unpaid_ziina, live_db):
+    """حسابي is behind a session, so there is no token in the URL to authorise with —
+    the order being theirs is the whole credential. Same endpoint as the tracking
+    page, which a guest reaches the other way."""
+    from db import execute, fetch_one
+    o, _ = unpaid_ziina
+    execute("update orders set user_id = %s where id = %s", [U_CUST, O_ABANDONED])
+
+    res = o.resume_payment(O_ABANDONED, Req(), t="",
+                           user={"id": U_CUST, "role": "customer"}, payload={"method": "cod"})
+
+    assert res == {"method": "cod"}
+    assert fetch_one("select payment_method from orders where id = %s",
+                     [O_ABANDONED])["payment_method"] == "cod"
+
+
+def test_somebody_elses_order_is_a_404_even_when_signed_in(unpaid_ziina, live_db):
+    from fastapi import HTTPException
+    from db import execute
+    o, _ = unpaid_ziina
+    execute("update orders set user_id = %s where id = %s", [U_CUST, O_ABANDONED])
+
+    with pytest.raises(HTTPException) as e:
+        o.resume_payment(O_ABANDONED, Req(), t="",
+                         user={"id": U_MGR_OTHER, "role": "customer"}, payload={})
+    assert e.value.status_code == 404
+
+
+def test_the_orders_list_carries_what_the_basket_needs(live_db):
+    """Paying from حسابي takes that order's lines out of the basket, and removeOrdered
+    matches on product_id — which this query did not return."""
+    import routers.orders as o
+    rows = o.list_orders(user={"id": U_CUST, "role": "customer"})["orders"]
+    items = [i for r in rows for i in r["items"]]
+    assert items and all("product_id" in i for i in items)

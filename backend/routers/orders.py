@@ -506,7 +506,12 @@ def list_orders(user=Depends(current_user)):
         # Two batched lookups for the whole page (items + tracking events), rather
         # than a pair of queries per order.
         ids = [o["id"] for o in orders]
-        items = fetch_all("select order_id, name, price, qty from order_items where order_id = any(%s::uuid[])", [ids])
+        # product_id is here for the basket, not the page: paying for an order from
+        # حسابي takes exactly these lines back out of it (a product id is public
+        # catalogue data either way — see track_order, which does the same).
+        items = fetch_all(
+            "select order_id, product_id, name, price, qty from order_items where order_id = any(%s::uuid[])",
+            [ids])
         events = fetch_all(
             """select order_id, status, created_at from order_status_events
                where order_id = any(%s::uuid[]) order by created_at""", [ids])

@@ -17,6 +17,18 @@
         </div>
         <OrderTimeline :status="o.status" :events="o.events || []" />
         <p class="a-muted pay-line">{{ payLabel(o) }}</p>
+        <!-- Saying "awaiting payment" and offering nothing to do about it leaves the
+             customer to rebuild the basket from scratch. Same two ways out as the
+             tracking page, and the same wording, so they cannot drift apart. -->
+        <div v-if="awaiting(o)" class="pay-acts">
+          <button class="a-btn pay-card" :disabled="!!paying" @click="choosePayment(o, 'ziina')">
+            {{ paying === o.id + ':ziina' ? t('common.loading') : t('track.payNow') }}
+          </button>
+          <button class="a-btn" :disabled="!!paying" @click="choosePayment(o, 'cod')">
+            {{ paying === o.id + ':cod' ? t('common.loading') : t('track.payOnDelivery') }}
+          </button>
+        </div>
+        <p v-if="payErr[o.id]" class="pay-err">{{ payErr[o.id] }}</p>
         <div style="margin-top:.4rem;border-top:1px solid rgba(60,74,39,.1);padding-top:.4rem">
           <div class="a-row" v-for="(it, ix) in o.items" :key="ix" style="font-size:.88rem;padding:.1rem 0">
             <span>{{ it.name }} × {{ it.qty }}</span><span class="a-muted">{{ it.price * it.qty }} <span class='dh' role='img' aria-label='درهم'></span></span>
@@ -30,7 +42,7 @@
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useOrdersStore } from '../../stores/orders'
@@ -38,6 +50,9 @@ import Loader from '../../components/Loader.vue'
 import OrderTimeline from '../../components/OrderTimeline.vue'
 import { useInfiniteScroll } from '../../composables/useInfiniteScroll'
 import { longDate } from '../../utils/datetime'
+import { api } from '../../services/api'
+import { useCartStore } from '../../stores/cart'
+import { takeOutOfBasket } from '../../services/awaitingPayment'
 
 const { t, locale } = useI18n()
 const ordersStore = useOrdersStore()
@@ -58,6 +73,34 @@ const payLabel = (o) => {
 }
 const fmtDate = (d) => longDate(d, locale.value)
 
+// An online order nobody has paid for, and still alive. Cash is unpaid by definition
+// until it is handed over, and a cancelled order has had its stock put back.
+const awaiting = (o) => o.payment_method === 'ziina'
+  && o.payment_status !== 'paid' && o.status !== 'cancelled'
+
+const cart = useCartStore()
+const paying = ref('')          // "<order id>:<method>", so one row's spinner is its own
+const payErr = reactive({})
+
+async function choosePayment(o, method) {
+  paying.value = `${o.id}:${method}`
+  payErr[o.id] = ''
+  try {
+    // no tracking token needed: this page is behind a session, and the order is theirs
+    const r = await api(`/orders/${o.id}/pay`, { method: 'POST', body: { method }, auth: true })
+    if (r.redirect_url) { window.location.href = r.redirect_url; return }
+    // Cash: the order is real now, so its lines come out of the basket — which has
+    // been holding them since the payment was abandoned.
+    await takeOutOfBasket(cart, o.items)
+    await ordersStore.fetch()
+  } catch (e) {
+    payErr[o.id] = e.message
+    if (e.status === 409) await ordersStore.fetch()   // released or settled meanwhile
+  } finally {
+    paying.value = ''
+  }
+}
+
 onMounted(() => ordersStore.fetch())
 </script>
 
@@ -65,4 +108,9 @@ onMounted(() => ordersStore.fetch())
 .panel { background: #fff; border-radius: 18px; padding: 1.4rem; margin-top: 1.4rem; box-shadow: 0 8px 30px rgba(60,74,39,.06); }
 .panel-head h2 { font-family: 'Amiri', serif; color: var(--green); font-size: 1.35rem; margin-bottom: .8rem; }
 .pay-line { margin-top: .5rem; font-size: .8rem; }
+.pay-acts { display: flex; gap: .45rem; flex-wrap: wrap; margin-top: .5rem; }
+.pay-acts .a-btn { font-size: .8rem; padding: .4rem .85rem; border-radius: 999px;
+  background: #fff; color: var(--green); border: 1px solid rgba(60,74,39,.3); font-weight: 700; }
+.pay-acts .pay-card { background: var(--green); color: #fff; border-color: var(--green); }
+.pay-err { color: var(--red, #9c2b2b); font-size: .78rem; margin-top: .35rem; }
 </style>
