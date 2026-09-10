@@ -32,6 +32,48 @@ def test_a_client_event_keeps_only_the_fields_we_expect(client, monkeypatch):
     assert logged[0]["detail"] == {"items": 3, "total": 180}
 
 
+def test_a_value_that_is_not_what_its_key_means_is_dropped(client, monkeypatch):
+    """The key whitelist was never enough. `items` is read back through an ::int cast
+    in the follow-up panel, so one visitor posting {"items": "abc"} — no account
+    needed — took the panel down with a 500 for every manager until the row aged out
+    of the window, which is a week. The event is still worth keeping without it."""
+    logged = []
+    monkeypatch.setattr(A, "log_action", lambda **k: logged.append(k))
+    client.post("/api/audit/event", json={
+        "event": "checkout_opened",
+        "detail": {"items": "abc", "total": "not a number"}})
+    assert logged[0]["detail"] is None, "nothing storable was sent, but the event stands"
+
+    logged.clear()
+    client.post("/api/audit/event", json={
+        "event": "checkout_opened", "detail": {"items": "3", "total": "285.50"}})
+    assert logged[0]["detail"] == {"items": 3, "total": 285.5}, "a number as a string is still a number"
+
+
+def test_a_basket_total_reaches_the_manager_the_way_it_was_written(client, monkeypatch):
+    """Stored as a number, not the text the browser happened to send: a whole amount
+    has to read as 285, not "285.0", on the panel that shows it."""
+    logged = []
+    monkeypatch.setattr(A, "log_action", lambda **k: logged.append(k))
+    client.post("/api/audit/event", json={
+        "event": "checkout_opened", "detail": {"items": 2, "total": 285.0}})
+    assert logged[0]["detail"]["total"] == 285
+    assert str(logged[0]["detail"]["total"]) == "285"
+
+
+def test_a_client_cannot_choose_the_size_of_what_it_stores(client, monkeypatch):
+    """Every value the log takes from a page is bounded — it is written to a jsonb
+    column and rendered on a manager's screen."""
+    logged = []
+    monkeypatch.setattr(A, "log_action", lambda **k: logged.append(k))
+    client.post("/api/audit/event", json={
+        "event": "cart_add",
+        "detail": {"product_id": "p" * 500, "name": "n" * 500, "qty": 10 ** 9}})
+    d = logged[0]["detail"]
+    assert len(d["product_id"]) == 64 and len(d["name"]) == 120
+    assert d["qty"] == 100_000, "a quantity is capped, not taken at its word"
+
+
 def test_client_events_are_rate_limited(client, monkeypatch):
     monkeypatch.setattr(A, "log_action", lambda **k: None)
     codes = {client.post("/api/audit/event", json={"event": "checkout_opened"}).status_code

@@ -46,6 +46,9 @@ MIN_STALE_MINUTES = 10
 # Older than this and it is not this job's business — a months-old pending order is a
 # question for a human, and Ziina won't have much to say about the intent either.
 LOOKBACK_DAYS = 7
+# How long the sweep waits, on its way out, for the messages a settle started. See the
+# note at the bottom of this file.
+SEND_GRACE_SECONDS = 120
 
 
 def _stale_minutes() -> int:
@@ -162,12 +165,19 @@ if __name__ == "__main__":
           + (f" · {c['already']} already done" if c["already"] else "")
           + (f" · {c['failed']} failed" if c["failed"] else ""))
     # Settling an order starts the customer's WhatsApp confirmation, the managers'
-    # push and the audit row on background threads. In the server they finish on their
+    # alert and the audit row on background threads. In the server they finish on their
     # own; here the interpreter would shut down on the next line and kill them
     # mid-request, throwing away the one message this whole job exists to send — and
     # the only record that the sweep, rather than the customer's browser, took a
     # payment the shop would otherwise never have known about.
-    left = background.wait_all()
+    #
+    # Longer than the default wait, because the managers' alert is the slow one:
+    # notify.py works through TELEGRAM_CHAT_ID a recipient at a time, each twenty
+    # seconds away if Telegram is unreachable, and CallMeBot is another. A shop
+    # alerting three phones needs more than thirty seconds to get its messages out,
+    # and cutting them off here loses exactly the alerts the sweep exists to send.
+    # Costs nothing when the sends are quick, and runs are safe to overlap anyway.
+    left = background.wait_all(SEND_GRACE_SECONDS)
     if left:
         print(f"warning: {left} background task(s) did not finish in time")
     if not live and (c["paid"] or c["cancelled"]):

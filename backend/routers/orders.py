@@ -32,6 +32,29 @@ STATUS_LABELS = {
 }
 
 
+def _alert_managers(order):
+    """The managers' new-order alert (Telegram, CallMeBot), off the request path.
+
+    Each channel is a twenty-second timeout away, and TELEGRAM_CHAT_ID may now hold
+    several recipients, which notify.py sends to one after another — so this is up to
+    twenty seconds per recipient, and it was being held open by the request that takes
+    the customer's money: the COD checkout, and the settle that follows a card payment.
+    A shop that alerts three phones would have added a minute to a checkout the first
+    time Telegram was unreachable.
+
+    The device push and the customer's WhatsApp were moved off for exactly this reason
+    (see push.py and _send_order_whatsapp, measured at 20.9s); this was the last sender
+    still on the request. Returns the thread so a test can wait for it.
+    """
+    def _safe():
+        try:
+            notify_new_order(order)
+        except Exception as e:  # noqa: BLE001 — never break an order over an alert
+            print("[order-alert]", e)
+
+    return background.spawn(_safe, name="order-alert")
+
+
 def _notify_new_order_admins(order):
     oid = str(order["id"])
     notify_managers(
@@ -457,7 +480,7 @@ def create_order(request: Request, user=Depends(optional_user), payload: dict = 
             cancel_and_restore(oid, why="the payment could not be started", request=request)
             raise
 
-    notify_new_order(order)  # COD: alert the manager now (Ziina alerts once paid)
+    _alert_managers(order)  # COD: alert the manager now (Ziina alerts once paid)
     _notify_new_order_admins(order)  # in-app bell for managers
     # A guest has no order history to come back to, so the tracking link is their
     # only route to the order. Signed-in customers find it in حسابي. The e-mail is
@@ -654,7 +677,7 @@ def mark_paid(order, request=None, *, by="return"):
     # Past the commit the order is paid for good and nothing passes this way again, so
     # one alarm failing must not cost the others: the managers still hear about a real
     # order if the customer's WhatsApp template is refused, and the other way round.
-    _after_commit(oid, "manager alert", lambda: notify_new_order({**upd, "items": its}))
+    _after_commit(oid, "manager alert", lambda: _alert_managers({**upd, "items": its}))
     _after_commit(oid, "manager bell", lambda: _notify_new_order_admins(upd))
     # the customer's own confirmation: here, not at the hand-off to Ziina, because
     # this is the point the order became real
@@ -673,6 +696,15 @@ def mark_paid(order, request=None, *, by="return"):
     return upd
 
 
+def _is_paid(oid) -> bool:
+    """Whether the money is in, asked of the row now rather than of a copy read
+    earlier. The two endpoints below both hold an `order` they fetched before a Ziina
+    call that can take twenty seconds, which is long enough for the answer to change.
+    """
+    row = fetch_one("select payment_status from orders where id = %s", [oid])
+    return bool(row and row["payment_status"] == "paid")
+
+
 @router.post("/{oid}/confirm-payment")
 def confirm_payment(oid: str, request: Request, t: str = Query(""), user=Depends(optional_user)):
     if not user and not t:
@@ -687,7 +719,12 @@ def confirm_payment(oid: str, request: Request, t: str = Query(""), user=Depends
         mark_paid(order, request)  # which records the payment_confirmed row itself
         return {"paid": True, "status": "paid"}
     if status in FAILED_STATUSES:
-        cancel_and_restore(oid, why=status, request=request)
+        # A refused release means the order was already cancelled, or the money landed
+        # while we were asking Ziina. Only the row can say which, and telling somebody
+        # who has just paid that it failed puts a "try again" button in front of them —
+        # the one mistake this whole path exists to avoid.
+        if not cancel_and_restore(oid, why=status, request=request) and _is_paid(oid):
+            return {"paid": True, "status": "paid"}
         return {"paid": False, "status": "failed"}
     return {"paid": False, "status": status}
 
@@ -718,7 +755,11 @@ def cancel_payment(oid: str, request: Request, t: str = Query(""), user=Depends(
         mark_paid(order, request, by="cancel")
         return {"cancelled": False, "paid": True}
     if status in FAILED_STATUSES:
-        cancel_and_restore(oid, why=status, request=request)
+        # Same as confirm-payment: the release can be refused because the payment
+        # landed in the seconds this request spent asking, and a customer who has paid
+        # must not be shown the failure screen and invited to pay again.
+        if not cancel_and_restore(oid, why=status, request=request) and _is_paid(oid):
+            return {"cancelled": False, "paid": True}
         return {"cancelled": True}
     # Pressing cancel on Ziina's page does not itself fail the intent, so the usual
     # abandoned checkout lands here, unresolved — indistinguishable, right now, from a

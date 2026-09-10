@@ -39,6 +39,8 @@ O_DONE = "bbbbbbbb-0000-0000-0000-000000000001"
 O_PREP = "bbbbbbbb-0000-0000-0000-000000000002"
 O_ABANDONED = "bbbbbbbb-0000-0000-0000-000000000003"
 O_CANCELLED = "bbbbbbbb-0000-0000-0000-000000000004"
+# a manager opens any order, so these tests need no tracking token
+_MGR_USER = {"id": U_MGR, "role": "manager"}
 
 SEED = f"""
 insert into users (id, email, password_hash, full_name, role) values
@@ -761,3 +763,72 @@ def test_repeated_failures_are_reported_with_the_reason(live_db):
     assert row["failures"] == 2
     assert sorted(row["kinds"]) == ["login_failed", "verify_failed"]
     assert sorted(row["reasons"]) == ["no_account", "too_many"]
+
+
+def test_a_basket_size_the_panel_cannot_read_costs_only_that_number(live_db):
+    """/audit/event coerces this now, but rows written before it did are still in the
+    table — and the panel casts the value with ::int. One unreadable basket size used
+    to fail the whole query, so a single visitor could 500 the follow-up panel for
+    every manager until the row aged out of a week-long window.
+
+    The row still has to appear: what it was worth is lost, who was stuck is not.
+    """
+    from db import execute
+    from routers.audit import struggling
+
+    execute("""insert into audit_logs (action, detail, ip, visitor, page, created_at)
+               values ('checkout_opened', '{"items": "abc", "total": 285}'::jsonb,
+                       '2.3.4.5', 'vis-bad', '/', now() - interval '10 minutes')""")
+
+    row = next(r for r in struggling(Req(hours="24"), _m=None)["customers"]
+               if r["who"] == "v:vis-bad")
+    assert row["basket_items"] is None, "unreadable, so not reported"
+    assert row["basket_total"] == "285", "the rest of the row still stands"
+    assert row["abandoned"] == 1
+
+
+# --- the money landing mid-request --------------------------------------------
+@pytest.fixture
+def settling_race(live_db, monkeypatch):
+    """An unresolved ziina order, and a Ziina that settles it while answering.
+
+    Both endpoints read the order, then spend up to twenty seconds asking Ziina about
+    it. This is what happens when the payment completes inside that window and Ziina's
+    answer is a failed one: the release is refused, and the endpoint has to notice.
+    """
+    import routers.orders as o
+    from db import execute, fetch_one
+
+    for quiet in ("notify_new_order", "_notify_new_order_admins",
+                  "_send_order_whatsapp", "_send_order_email"):
+        monkeypatch.setattr(o, quiet, lambda *a, **k: None)
+    execute("""insert into order_items (order_id, product_id, name, price, qty)
+               values (%s, %s, 'زعتر', 20.00, 2)""", [O_ABANDONED, P_ZAATAR])
+    # the seed leaves this null, and without it both endpoints answer "no intent to
+    # ask about" long before the race they are here to exercise
+    execute("update orders set ziina_payment_id = 'pi_race' where id = %s", [O_ABANDONED])
+
+    def settles_then_denies(pid):
+        o.mark_paid(fetch_one("select * from orders where id = %s", [O_ABANDONED]))
+        return {"status": "expired"}
+    monkeypatch.setattr(o, "get_payment_intent", settles_then_denies)
+    return o
+
+
+def test_confirming_does_not_report_a_failure_for_money_that_landed(settling_race):
+    """"Payment failed — you can try again" put in front of somebody who has just
+    paid is how a shop takes the same money twice. The order survives the race (see
+    cancel_and_restore); the answer has to survive it too."""
+    before = _stock(P_ZAATAR)
+    res = settling_race.confirm_payment(O_ABANDONED, Req(), t="", user=_MGR_USER)
+    assert res == {"paid": True, "status": "paid"}
+    assert _stock(P_ZAATAR) == before, "a paid order keeps the stock it reserved"
+
+
+def test_cancelling_does_not_report_a_failure_for_money_that_landed(settling_race):
+    """Same race on the cancel button, which is the likelier one: they pressed cancel
+    on Ziina's page having already paid."""
+    before = _stock(P_ZAATAR)
+    res = settling_race.cancel_payment(O_ABANDONED, Req(), t="", user=_MGR_USER)
+    assert res == {"cancelled": False, "paid": True}
+    assert _stock(P_ZAATAR) == before

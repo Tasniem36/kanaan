@@ -1,4 +1,5 @@
 import ipaddress
+import math
 import threading
 
 import requests
@@ -25,6 +26,59 @@ CLIENT_EVENT_DETAIL = {
     "cart_add": ("product_id", "name", "qty"),
     "search": ("q", "results"),
     "checkout_login_required": ("items", "total"),
+}
+
+
+def _as_count(v):
+    """A whole number, or nothing at all.
+
+    A whitelisted key was never a trusted value. `items` is read back by the follow-up
+    panel through an ::int cast, so a page sending {"items": "abc"} took the panel down
+    with a 500 for every manager, for as long as that row stayed in the window — and
+    the window is a week. One request from anyone, no account needed.
+
+    Coerced here, at the one place the log takes client input, rather than guarded at
+    each reader: the next query to read one of these values would have to remember the
+    same thing. Bounded as well — a basket is not a number the browser gets to choose
+    the size of.
+    """
+    try:
+        n = int(float(str(v).strip()))
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return min(max(n, 0), 100_000)
+
+
+def _as_amount(v):
+    """A basket total, or nothing. Stored as a number so the panel can show it as one,
+    and a whole amount stays whole — 285 should not reach a manager as "285.0"."""
+    try:
+        n = float(str(v).strip())
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(n) or n < 0:
+        return None
+    n = round(min(n, 1_000_000), 2)
+    return int(n) if n == int(n) else n
+
+
+def _as_text(limit):
+    """Free text from a shopper, trimmed to something loggable. Empty is nothing."""
+    return lambda v: " ".join(str(v).split())[:limit] or None
+
+
+# How each whitelisted value is actually read. CLIENT_EVENT_DETAIL says what a page
+# MAY send; this says what the log will store, because a value that ends up in SQL or
+# on a manager's screen cannot be taken on trust either. A value that will not coerce
+# is dropped, not stored — the event is still worth recording without it.
+CLIENT_EVENT_FIELD = {
+    "items": _as_count,
+    "qty": _as_count,
+    "results": _as_count,
+    "total": _as_amount,
+    "q": _as_text(80),
+    "name": _as_text(120),
+    "product_id": _as_text(64),
 }
 # Events collapsed per subject rather than per visitor, so one row is kept for each
 # distinct product or search term instead of one for the whole sitting.
@@ -170,12 +224,15 @@ def client_event(request: Request, user=Depends(optional_user), payload: dict = 
                key=(user or {}).get("id"))
     detail = payload.get("detail") if isinstance(payload.get("detail"), dict) else None
     allowed = CLIENT_EVENT_DETAIL.get(event, ())
-    kept = {k: v for k, v in (detail or {}).items() if k in allowed}
-    # a search term is free text from a shopper: trimmed to something loggable
-    if "q" in kept:
-        kept["q"] = " ".join(str(kept["q"]).split())[:80]
-    if "name" in kept:
-        kept["name"] = str(kept["name"])[:120]
+    # the key has to be one this event may carry, AND the value has to survive being
+    # read as what that key means — see CLIENT_EVENT_FIELD
+    kept = {}
+    for key, raw in (detail or {}).items():
+        if key not in allowed:
+            continue
+        value = CLIENT_EVENT_FIELD[key](raw)
+        if value is not None:
+            kept[key] = value
     field = _CLIENT_DEDUPE.get(event)
     log_action(user_id=(user or {}).get("id"), action=event, detail=kept or None,
                request=request, dedupe=str(kept.get(field, "")) if field else None)
@@ -242,7 +299,12 @@ def struggling(request: Request, _m=Depends(require_manager)):
                   -- GREATEST ignores nulls, so a person with only an abandoned
                   -- basket finally has a time against their name
                   greatest(f.last_at, ab.last_at)       as last_at,
-                  (ab.basket->>'items')::int            as basket_items,
+                  -- These two came from a browser. /audit/event coerces them now, but
+                  -- rows written before it did are still in the table, and a single
+                  -- unparseable basket size would fail this cast and take the whole
+                  -- panel down with it rather than just losing one row's number.
+                  case when ab.basket->>'items' ~ '^[0-9]{1,9}$'
+                       then (ab.basket->>'items')::int end as basket_items,
                   (ab.basket->>'total')                 as basket_total,
                   s.ip, s.last_page, s.events,
                   u.id as user_id, u.email, u.full_name, u.phone

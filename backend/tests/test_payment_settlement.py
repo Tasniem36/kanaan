@@ -15,6 +15,7 @@ from contextlib import contextmanager
 import pytest
 from fastapi import HTTPException
 
+import background
 import routers.orders as orders_mod
 
 ORDER_ID = "0f1d4e0e-2222-4000-8000-000000000000"
@@ -238,7 +239,10 @@ def test_settling_claims_the_order_in_the_write_itself(raised, settling):
     assert cur.ran("payment_status is distinct from 'paid'"), (
         "the check has to be part of the update, or two settles both pass it"
     )
-    assert raised == ["manager", "bell", "whatsapp"]
+    # the managers' alert is on its own thread now (see _alert_managers), so it has no
+    # fixed place in this list — only that it went out
+    background.wait_all(5)
+    assert sorted(raised) == ["bell", "manager", "whatsapp"]
 
 
 def test_the_whole_settle_happens_in_one_transaction(raised, settling):
@@ -283,6 +287,7 @@ def test_one_alarm_failing_does_not_silence_the_ones_after_it(monkeypatch, settl
     monkeypatch.setattr(orders_mod, "log_action", lambda **k: calls.append("audit"))
     settling(**_claimed())
     assert orders_mod.mark_paid(_order())["payment_status"] == "paid", "still paid, whatever was said"
+    background.wait_all(5)   # let the alert thread fail where the test can see it
     assert calls == ["bell", "whatsapp", "audit"]
 
 
@@ -394,3 +399,27 @@ def test_the_e_mail_never_claims_money_that_has_not_arrived(order, expected):
     body = orders_mod._order_email_body(
         {"id": ORDER_ID, "customer_name": "تسنيم", "total": 90, **order}, "https://x/track/1")
     assert expected in body
+
+
+# --- what the customer is made to wait for -----------------------------------
+def test_the_managers_alert_is_not_on_the_customers_request(monkeypatch, settling):
+    """Telegram and CallMeBot are each a twenty-second timeout away, and
+    TELEGRAM_CHAT_ID may now name several recipients that notify.py works through one
+    at a time. None of that belongs on the request taking the money: a shop alerting
+    three phones would have added a minute to a checkout the first time Telegram was
+    unreachable. Pinned by the thread it runs on rather than by a stopwatch.
+    """
+    import threading
+
+    ran_on = {}
+    monkeypatch.setattr(orders_mod, "notify_new_order",
+                        lambda order: ran_on.setdefault("thread", threading.current_thread().name))
+    for quiet in ("_notify_new_order_admins", "_send_order_whatsapp", "_send_order_email"):
+        monkeypatch.setattr(orders_mod, quiet, lambda *a, **k: None)
+    monkeypatch.setattr(orders_mod, "log_action", lambda **k: None)
+    settling(**_claimed())
+
+    assert orders_mod.mark_paid(_order())["payment_status"] == "paid"
+    background.wait_all(5)
+    assert ran_on.get("thread") == "order-alert", "the alert must go out on its own thread"
+    assert ran_on["thread"] != threading.current_thread().name
