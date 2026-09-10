@@ -24,10 +24,14 @@ export const useOrdersStore = defineStore('orders', {
     async cancelPayment(orderId, token = '') {
       return api(`/orders/${orderId}/cancel-payment?t=${encodeURIComponent(token)}`, { method: 'POST' })
     },
-    async fetch() {
+    // `mine` asks for the caller's own orders even when the caller is a manager.
+    // حسابي and the manager area share this store, and the endpoint widens to the
+    // whole shop for a manager — which is right for the till and very wrong for
+    // طلباتي, where it filed every customer's order under the manager's own name.
+    async fetch({ mine = false } = {}) {
       this.loading = true
       try {
-        const { orders } = await api('/orders')
+        const { orders } = await api(mine ? '/orders?mine=1' : '/orders')
         this.orders = orders
       } finally {
         this.loading = false

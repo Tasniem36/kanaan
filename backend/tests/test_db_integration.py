@@ -243,7 +243,7 @@ def test_translations_round_trip_and_blank_becomes_null(live_db):
 # --- orders -----------------------------------------------------------------
 def test_order_list_attaches_items_and_timeline_events(live_db):
     import routers.orders as o
-    orders = o.list_orders(user={"id": U_CUST, "role": "customer"})["orders"]
+    orders = o.list_orders(Req(), user={"id": U_CUST, "role": "customer"})["orders"]
     done = next(x for x in orders if str(x["id"]) == O_DONE)
     assert len(done["items"]) == 2
     assert [e["status"] for e in done["events"]] == ["pending", "preparing", "delivered"], (
@@ -980,6 +980,31 @@ def test_the_orders_list_carries_what_the_basket_needs(live_db):
     """Paying from حسابي takes that order's lines out of the basket, and removeOrdered
     matches on product_id — which this query did not return."""
     import routers.orders as o
-    rows = o.list_orders(user={"id": U_CUST, "role": "customer"})["orders"]
+    rows = o.list_orders(Req(), user={"id": U_CUST, "role": "customer"})["orders"]
     items = [i for r in rows for i in r["items"]]
     assert items and all("product_id" in i for i in items)
+
+
+def test_a_managers_own_account_page_shows_only_their_own_orders(live_db):
+    """One endpoint serves two pages. Widening to the whole shop is right for the
+    till and wrong for حسابي, where it filed every customer's order — their name,
+    address and phone — under the manager's own طلباتي."""
+    import routers.orders as o
+
+    mgr = {"id": U_MGR, "role": "manager"}
+    shop = o.list_orders(Req(), user=mgr)["orders"]
+    own = o.list_orders(Req(mine="1"), user=mgr)["orders"]
+
+    assert len(shop) > 0, "the till still sees the shop"
+    assert own == [], "the manager placed none of these orders"
+    assert all(str(r["user_id"]) == U_CUST for r in shop), "and the seed's are the customer's"
+
+
+def test_mine_does_not_widen_anything_for_a_customer(live_db):
+    """A customer asking for ?mine=1 gets exactly what they got before — the flag
+    narrows, it can never open anything up."""
+    import routers.orders as o
+
+    cust = {"id": U_CUST, "role": "customer"}
+    assert (o.list_orders(Req(), user=cust)["orders"]
+            == o.list_orders(Req(mine="1"), user=cust)["orders"])

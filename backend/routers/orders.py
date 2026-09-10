@@ -491,8 +491,16 @@ def create_order(request: Request, user=Depends(optional_user), payload: dict = 
 
 
 @router.get("")
-def list_orders(user=Depends(current_user)):
-    is_manager = user["role"] == "manager"
+def list_orders(request: Request, user=Depends(current_user)):
+    """Orders for the caller. A manager gets the shop's; anyone else gets their own.
+
+    `?mine=1` asks for the caller's own either way. حسابي and the manager area are
+    two different pages built on this one endpoint, and without the flag a manager
+    opening their own account page was shown every order in the shop — their
+    customers' names, addresses and phone numbers, filed under طلباتي.
+    """
+    mine = request.query_params.get("mine") == "1"
+    is_manager = user["role"] == "manager" and not mine
     if is_manager:
         # the manager's order card also shows the account e-mail, so they can
         # reach the customer when the phone doesn't answer

@@ -69,7 +69,12 @@ const statusClass = (s) => ({ pending: 'pill-warn', paid: 'pill-ok', preparing: 
 // Payment shown from the payment fields alone — never derived from how far the
 // order has travelled.
 const payLabel = (o) => {
-  if (o.payment_method === 'ziina') return o.payment_status === 'paid' ? t('account.paidOnline') : t('account.awaitingPayment')
+  if (o.payment_method === 'ziina') {
+    if (o.payment_status === 'paid') return t('account.paidOnline')
+    // Nobody is awaiting payment for an order that was released — the shop took the
+    // goods back. Saying otherwise next to a red ملغى pill reads as a bill still owed.
+    return o.status === 'cancelled' ? t('track.notPaid') : t('account.awaitingPayment')
+  }
   return o.status === 'delivered' ? t('account.paidOnDelivery') : t('checkout.cod')
 }
 const fmtDate = (d) => longDate(d, locale.value)
@@ -105,7 +110,7 @@ async function choosePayment(o, method) {
     // Cash: the order is real now, so its lines come out of the basket — which has
     // been holding them since the payment was abandoned.
     await takeOutOfBasket(cart, o.items)
-    await ordersStore.fetch()
+    await ordersStore.fetch({ mine: true })
   } catch (e) {
     payErr[o.id] = e.message
     if (e.status === 409) await ordersStore.fetch()   // released or settled meanwhile
@@ -114,7 +119,7 @@ async function choosePayment(o, method) {
   }
 }
 
-onMounted(() => ordersStore.fetch())
+onMounted(() => ordersStore.fetch({ mine: true }))
 </script>
 
 <style scoped>
