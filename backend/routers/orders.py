@@ -769,6 +769,89 @@ def cancel_payment(oid: str, request: Request, t: str = Query(""), user=Depends(
     return {"cancelled": False, "paid": False, "pending": True}
 
 
+def _payment_urls(oid, tok, request):
+    base = os.getenv("APP_URL") or (request and request.headers.get("origin")) or ""
+    return (f"{base}/pay/return?order={oid}&t={tok}",
+            f"{base}/pay/return?order={oid}&t={tok}&cancel=1")
+
+
+# POST /api/orders/{oid}/pay — finish paying for an order that was never paid for.
+#
+# A card checkout that was abandoned leaves a real order sitting unpaid, and the only
+# page its customer can reach is the tracking link. Until now that page showed them
+# "الدفع الإلكتروني" and no way to act on it: their way back in was to build the whole
+# basket again. This is the way back in — the same payment page they walked away from,
+# or cash on delivery instead, which is often what they actually wanted.
+@router.post("/{oid}/pay")
+def resume_payment(oid: str, request: Request, t: str = Query(""),
+                   user=Depends(optional_user), payload: dict = Body(default={})):
+    if not user and not t:
+        raise HTTPException(401, "Authentication required")
+    rate_limit(request, bucket="resume_payment", limit=10, window=60)
+    order = _own_order_or_404(oid, user, token=t)
+    method = "cod" if (payload or {}).get("method") == "cod" else "ziina"
+
+    if order["payment_status"] == "paid":
+        return {"paid": True}   # nothing owing; the page will show it as paid
+    if order["status"] == "cancelled":
+        # The sweep released it and put its stock back on the shelf. Reviving it here
+        # would take units this code cannot know are still there, so the page offers
+        # the basket again instead — that path checks stock properly.
+        raise HTTPException(409, "This order was released. Please order again.")
+
+    if method == "cod":
+        # Switching off ziina is what saves the order: unresolved_orders only looks at
+        # payment_method = 'ziina', so from here the sweep leaves it alone and it stops
+        # being half an hour from cancellation. It becomes exactly the order it would
+        # have been had they chosen cash at checkout, and is announced the same way.
+        row = fetch_one(
+            """update orders set payment_method = 'cod'
+               where id = %s and payment_status is distinct from 'paid'
+                 and status is distinct from 'cancelled'
+               returning *""", [oid])
+        if not row:
+            raise HTTPException(409, "This order can no longer be changed")
+        row["items"] = fetch_all(
+            "select product_id, name, price, qty from order_items where order_id = %s", [oid])
+        _after_commit(oid, "manager alert", lambda: _alert_managers(row))
+        _after_commit(oid, "manager bell", lambda: _notify_new_order_admins(row))
+        _after_commit(oid, "customer confirmation", lambda: _send_order_whatsapp(row, request))
+        _after_commit(oid, "customer e-mail",
+                      lambda: _send_order_email(row, _guest_email_for(row), request))
+        _after_commit(oid, "audit row", lambda: log_action(
+            user_id=row["user_id"], action="payment_switched_to_cod",
+            detail={"order_id": oid, "total": row["total"]}, request=request))
+        return {"method": "cod"}
+
+    # Card. Reuse the intent this order already has when Ziina still considers it
+    # live: handing out a second payment page for the same order is how somebody ends
+    # up paying twice, and only one of the two ids would be the one the sweep asks
+    # about afterwards.
+    success_url, cancel_url = _payment_urls(oid, order["track_token"], request)
+    if order["ziina_payment_id"]:
+        try:
+            live = get_payment_intent(order["ziina_payment_id"])
+            if live.get("status") == "completed":
+                # they had paid after all, and nobody had noticed yet
+                mark_paid(order, request, by="resume")
+                return {"paid": True}
+            if live.get("status") not in FAILED_STATUSES and live.get("redirect_url"):
+                return {"redirect_url": live["redirect_url"]}
+        except HTTPException:
+            pass   # couldn't ask; fall through and start a fresh one
+
+    intent = create_payment_intent(
+        amount_fils=round(float(order["total"]) * 100),
+        success_url=success_url, cancel_url=cancel_url,
+        message=f"دكّان كنعان — طلب #{oid[:8]}",
+    )
+    execute("update orders set ziina_payment_id = %s, payment_method = 'ziina' where id = %s",
+            [intent.get("id"), oid])
+    log_action(user_id=order["user_id"], action="payment_resumed",
+               detail={"order_id": oid, "total": order["total"]}, request=request)
+    return {"redirect_url": intent.get("redirect_url")}
+
+
 @router.patch("/{oid}/status")
 def set_status(oid: str, request: Request, _m=Depends(require_manager), payload: dict = Body(default={})):
     status = payload.get("status")

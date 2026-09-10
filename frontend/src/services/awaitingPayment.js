@@ -42,6 +42,17 @@ export function forgetAwaited() {
   } catch { /* nothing to do about it */ }
 }
 
+// Take one paid order's lines out of the basket, and never before the server cart
+// has landed. Written once because both callers get it wrong in the same way
+// otherwise: the boot pull merges by keeping the larger quantity per product, so
+// removing first has the lines put straight back — and saved to the server, leaving
+// a signed-in customer staring at a basket full of what they have already paid for.
+export async function takeOutOfBasket(cart, items) {
+  await cart.whenSynced()
+  cart.removeOrdered(items)
+}
+
+
 // Costs one request, and only for someone who actually left a payment hanging.
 export async function settleAwaited(cart) {
   const awaited = read()
@@ -60,11 +71,10 @@ export async function settleAwaited(cart) {
     // the larger quantity per product, so removing these lines before it lands has
     // them put right back — and saved to the server, leaving a signed-in customer
     // staring at a basket full of what they have already paid for.
-    await cart.whenSynced()
     // Only what this order paid for. Up to a week can pass between the payment and
     // this answer (MAX_AGE_MS), and emptying the basket wholesale would take out
     // everything added in between.
-    cart.removeOrdered(order.items)
+    await takeOutOfBasket(cart, order.items)
     forgetAwaited()
   } else if (order.status === 'cancelled') {
     forgetAwaited()  // the sweep released it; the basket stays, so they can try again

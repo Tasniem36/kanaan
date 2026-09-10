@@ -52,7 +52,8 @@ import { useRoute, RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useOrdersStore } from '../stores/orders'
 import { useCartStore } from '../stores/cart'
-import { rememberAwaited, forgetAwaited } from '../services/awaitingPayment'
+import { rememberAwaited, forgetAwaited, takeOutOfBasket } from '../services/awaitingPayment'
+import { api } from '../services/api'
 import NeedHelp from '../components/NeedHelp.vue'
 
 const { t } = useI18n()
@@ -73,11 +74,22 @@ const shortId = computed(() => orderId.slice(0, 8))
 async function settle() {
   state.value = 'success'
   forgetAwaited()  // answered here; nothing for the next load to chase
-  // Ziina redirected here, so this is a fresh page load and the boot pull of the
-  // server cart is still in flight. Emptying the basket before it merges would only
-  // see it filled straight back in — see whenSynced in stores/cart.
-  await cart.whenSynced()
-  cart.clear()
+  // Only the lines this order paid for. Straight after checkout that is the whole
+  // basket, which is why this page used to empty it — but a payment resumed from the
+  // tracking page can be hours old, and whatever was added since is not this order's
+  // to throw away.
+  try {
+    const { order } = await api(`/orders/track/${orderId}?t=${encodeURIComponent(token)}`,
+                                { auth: true })
+    await takeOutOfBasket(cart, order.items)
+  } catch {
+    // The lines could not be read. Emptying it is what this page has always done and
+    // is right for the ordinary case: the alternative leaves somebody looking at a
+    // basket full of what they have just bought, and buying it twice costs them money
+    // where losing an unsent addition costs them a tap.
+    await cart.whenSynced()
+    cart.clear()
+  }
 }
 
 // Ziina can take a moment to mark an intent completed, and a card being authorised

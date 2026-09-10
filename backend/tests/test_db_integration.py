@@ -852,3 +852,95 @@ def test_one_request_for_help_is_enough_to_reach_the_follow_up_list(live_db):
     assert row["failures"] == 1, "one on its own, where the rest of the panel needs two"
     assert row["kinds"] == ["help_needed"]
     assert row["reasons"] == ["pay_unresolved"], "or the manager never learns which screen"
+
+
+# --- finishing a payment that was walked away from ---------------------------
+@pytest.fixture
+def unpaid_ziina(live_db, monkeypatch):
+    """The order an abandoned card checkout leaves behind: real, unpaid, holding
+    its stock, and reachable only through its tracking link."""
+    import routers.orders as o
+    from db import execute, fetch_one
+
+    for quiet in ("notify_new_order", "_notify_new_order_admins", "_alert_managers",
+                  "_send_order_whatsapp", "_send_order_email"):
+        monkeypatch.setattr(o, quiet, lambda *a, **k: None)
+    execute("""insert into order_items (order_id, product_id, name, price, qty)
+               values (%s, %s, 'زعتر', 20.00, 2)""", [O_ABANDONED, P_ZAATAR])
+    execute("""update orders set ziina_payment_id = 'pi_old', track_token = 'tok'
+               where id = %s""", [O_ABANDONED])
+    return o, fetch_one("select * from orders where id = %s", [O_ABANDONED])
+
+
+def test_switching_to_cash_takes_the_order_out_of_the_sweep(unpaid_ziina, live_db):
+    """The rescue. unresolved_orders only looks at payment_method = 'ziina', so this
+    is what stops the order being cancelled half an hour after it was placed — and it
+    becomes exactly the order it would have been had they chosen cash at checkout."""
+    import reconcile as rec
+    from db import execute, fetch_one
+    o, _ = unpaid_ziina
+    before = _stock(P_ZAATAR)
+
+    assert o.resume_payment(O_ABANDONED, Req(), t="tok", user=None,
+                            payload={"method": "cod"}) == {"method": "cod"}
+
+    row = fetch_one("select payment_method, payment_status, status from orders where id = %s",
+                    [O_ABANDONED])
+    assert row["payment_method"] == "cod"
+    assert row["payment_status"] == "unpaid", "cash is unpaid until it is handed over"
+    assert _stock(P_ZAATAR) == before, "the goods were always reserved; nothing moves"
+
+    # and the sweep now leaves it alone, however old it gets
+    execute("update orders set created_at = now() - interval '2 hours' where id = %s",
+            [O_ABANDONED])
+    assert not [r for r in rec.unresolved_orders() if str(r["id"]) == O_ABANDONED]
+
+
+def test_resuming_a_card_payment_reuses_the_page_it_already_has(unpaid_ziina, monkeypatch):
+    """Handing out a second payment page for one order is how somebody pays twice —
+    and only one of the two ids would be the one the sweep asks about afterwards."""
+    import routers.orders as o
+    _, _order = unpaid_ziina
+    monkeypatch.setattr(o, "get_payment_intent",
+                        lambda pid: {"status": "pending", "redirect_url": "https://pay.ziina/old"})
+    monkeypatch.setattr(o, "create_payment_intent",
+                        lambda **k: pytest.fail("a live intent must not be replaced"))
+
+    assert o.resume_payment(O_ABANDONED, Req(), t="tok", user=None,
+                            payload={})["redirect_url"] == "https://pay.ziina/old"
+
+
+def test_resuming_settles_an_order_that_turns_out_to_have_been_paid(unpaid_ziina, monkeypatch):
+    """Asking Ziina to resume is also the last chance to notice the money arrived."""
+    import routers.orders as o
+    import background
+    from db import fetch_one
+    _, _order = unpaid_ziina
+    monkeypatch.setattr(o, "get_payment_intent", lambda pid: {"status": "completed"})
+
+    assert o.resume_payment(O_ABANDONED, Req(), t="tok", user=None, payload={}) == {"paid": True}
+    background.wait_all(5)
+    assert fetch_one("select payment_status from orders where id = %s",
+                     [O_ABANDONED])["payment_status"] == "paid"
+
+
+def test_a_released_order_cannot_be_paid_for_from_the_tracking_page(unpaid_ziina):
+    """Its stock went back on the shelf when the sweep let it go. Taking it off again
+    here would sell units this code cannot know are still there — the page sends them
+    back to the basket, which checks stock properly."""
+    from fastapi import HTTPException
+    o, _ = unpaid_ziina
+    o.cancel_and_restore(O_ABANDONED, why="unresolved for over 30m")
+
+    for method in ({"method": "cod"}, {}):
+        with pytest.raises(HTTPException) as e:
+            o.resume_payment(O_ABANDONED, Req(), t="tok", user=None, payload=method)
+        assert e.value.status_code == 409
+
+
+def test_paying_for_an_order_that_is_not_yours_is_a_404(unpaid_ziina):
+    from fastapi import HTTPException
+    o, _ = unpaid_ziina
+    with pytest.raises(HTTPException) as e:
+        o.resume_payment(O_ABANDONED, Req(), t="wrong-token", user=None, payload={})
+    assert e.value.status_code == 404
