@@ -307,7 +307,8 @@ def test_a_settled_payment_is_recorded_with_who_noticed_it(monkeypatch, quiet, s
     orders_mod.mark_paid(_order(), by="sweep")
     assert rows[0]["action"] == "payment_confirmed"
     assert rows[0]["user_id"] == "owner"
-    assert rows[0]["detail"] == {"order_id": ORDER_ID, "total": 100, "by": "sweep"}
+    assert rows[0]["detail"] == {"order_id": ORDER_ID, "number": f"#{ORDER_ID[:8]}",
+                                 "total": 100, "by": "sweep"}
 
 
 def test_a_settle_that_did_nothing_records_nothing(monkeypatch, quiet, settling):
@@ -320,10 +321,14 @@ def test_a_settle_that_did_nothing_records_nothing(monkeypatch, quiet, settling)
 
 def test_a_released_order_is_recorded_with_the_reason_it_was_released(monkeypatch, settling):
     rows = _rows_logged(monkeypatch)
-    settling(**{"is distinct from 'cancelled'": {"user_id": "owner", "total": 90}})
+    settling(**{"is distinct from 'cancelled'":
+                {"user_id": "owner", "total": 90, "ref": "EPBV9SH"}})
     assert orders_mod.cancel_and_restore(ORDER_ID, why="expired") is True
     assert rows[0]["action"] == "payment_released"
-    assert rows[0]["detail"] == {"order_id": ORDER_ID, "total": 90, "why": "expired"}
+    # named the way the customer knows it, so the shop reading this row and the
+    # customer on the phone are talking about the same order
+    assert rows[0]["detail"] == {"order_id": ORDER_ID, "number": "DK-EPBV9SH",
+                                 "total": 90, "why": "expired"}
 
 
 def test_releasing_an_order_that_was_already_cancelled_records_nothing(monkeypatch, settling):

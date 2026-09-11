@@ -270,7 +270,10 @@ function whyText(w) {
 
 function detailText(a) {
   const d = a.detail || {}
-  const ref = `#${String(d.order_id || '').slice(0, 8)}`
+  // The number the customer knows the order by, so the log reads the same as the
+  // till and the tracking page. Rows written before the number was recorded here
+  // only have the id, and fall back to the eight characters they always showed.
+  const ref = d.number || `#${String(d.order_id || '').slice(0, 8)}`
   // The row the shop reads when an order disappeared. Without the reason it says
   // only that one did, which is the part a manager could already see.
   if (a.action === 'payment_released')
@@ -279,8 +282,8 @@ function detailText(a) {
     return [ref, d.total].filter(Boolean).join(' · ')
   if (a.action === 'help_needed') return reasonLabel(d.reason || '')
   if (a.action === 'order_placed')
-    return `#${String(d.order_id || '').slice(0, 8)} · ${d.total}` + (d.discount_code ? ` · ${d.discount_code}` : '') + (d.payment_method ? ` · ${d.payment_method}` : '')
-  if (a.action === 'payment_confirmed') return `#${String(d.order_id || '').slice(0, 8)} · ${d.total}`
+    return `${ref} · ${d.total}` + (d.discount_code ? ` · ${d.discount_code}` : '') + (d.payment_method ? ` · ${d.payment_method}` : '')
+  if (a.action === 'payment_confirmed') return `${ref} · ${d.total}`
   if (a.action === 'product_view') return d.name || ''
   if (a.action === 'cart_add' || a.action === 'wishlist_add' || a.action === 'stock_alert') return d.name || ''
   // a term that found nothing is a product worth stocking, so the count is the point

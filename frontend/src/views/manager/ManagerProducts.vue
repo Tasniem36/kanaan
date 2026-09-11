@@ -118,6 +118,7 @@ import { computed, reactive, ref, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useCatalogStore } from '../../stores/catalog'
 import { pName, pIsOnSale, saleState } from '../../utils/product'
+import { foldArabic } from '../../utils/text'
 import { useConfirmStore } from '../../stores/confirm'
 import { useToastStore } from '../../stores/toast'
 import ImagePicker from '../../components/ImagePicker.vue'
@@ -138,18 +139,10 @@ const CATS = ['all', 'pantry', 'pottery']
 const cat = ref('all')
 const q = ref('')
 
-// A manager types what is on the jar, not what the database has. أ and ا are the
-// same letter to them, so are ة and ه at the end of a word — and nobody types the
-// shadda in فخّار, so the diacritics come off both sides before comparing.
-const TASHKEEL = /[\u064B-\u0652\u0670]/g
-const norm = (v) => String(v || '').toLowerCase()
-  .replace(TASHKEEL, '')
-  .replace(/[أإآ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').trim()
-
 const matches = (p) => {
-  const needle = norm(q.value)
+  const needle = foldArabic(q.value)
   if (!needle) return true
-  return [p.name, p.name_en, p.type, p.tag].some((v) => norm(v).includes(needle))
+  return [p.name, p.name_en, p.type, p.tag].some((v) => foldArabic(v).includes(needle))
 }
 
 const found = computed(() => catalog.byStock.filter(matches))

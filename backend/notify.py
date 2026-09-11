@@ -8,6 +8,8 @@ import os
 
 import requests
 
+from order_ref import display_ref
+
 # Order times are shown in the shop's own time, not the server's. python:3.12-slim
 # carries no system timezone database, so ZoneInfo("Asia/Dubai") raises there and this
 # used to fall back to leaving the timestamp alone — which is UTC out of Postgres, and
@@ -120,7 +122,7 @@ def notify_new_order(order: dict) -> dict:
     items = "، ".join(f"{i['name']} ×{i['qty']}" for i in order.get("items", []))
     when = _order_time(order)
     text = (
-        f"🛒 طلبٌ جديد #{str(order['id'])[:8]}\n"
+        f"🛒 طلبٌ جديد {display_ref(order.get('ref'), order['id'])}\n"
         f"{order['customer_name']} · {order['phone']}\n"
         f"{order['city']}، {order['street']}، {order['house']}\n"
         f"{items}\n"

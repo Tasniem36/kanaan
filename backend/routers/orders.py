@@ -13,6 +13,7 @@ from validate import is_email, normalize_uae_phone
 from audit import log_action
 from ziina import create_payment_intent, get_payment_intent
 from notify import notify_new_order
+from order_ref import display_ref, phone_hint
 from notifications import notify_managers, notify_users
 import whatsapp
 from delivery import compute_fee as compute_delivery_fee
@@ -60,7 +61,9 @@ def _notify_new_order_admins(order):
     notify_managers(
         type="new_order",
         title="طلبٌ جديد 🛒",
-        body=f"#{oid[:8]} · {order.get('customer_name', '')} · {order.get('total', '')}",
+        # The number the customer has, so a manager reading this off a lock screen can
+        # answer the phone with it
+        body=f"{display_ref(order.get('ref'), oid)} · {order.get('customer_name', '')} · {order.get('total', '')}",
         order_id=oid,
     )
 
@@ -140,7 +143,7 @@ def cancel_and_restore(order_id, *, why=None, request=None):
             """update orders set status = 'cancelled'
                where id = %s and status is distinct from 'cancelled'
                  and payment_status is distinct from 'paid'
-               returning user_id, total""",
+               returning user_id, total, ref""",
             [order_id],
         )
         row = cur.fetchone()
@@ -156,7 +159,8 @@ def cancel_and_restore(order_id, *, why=None, request=None):
     # and only by the caller that won the cancel, so a reload doesn't claim two.
     _after_commit(order_id, "audit row", lambda: log_action(
         user_id=row["user_id"], action="payment_released",
-        detail={"order_id": str(order_id), "total": row["total"], "why": why}, request=request))
+        detail={"order_id": str(order_id), "number": display_ref(row.get("ref"), order_id),
+                "total": row["total"], "why": why}, request=request))
     return True
 
 
@@ -174,11 +178,6 @@ def new_ref(exists):
         if not exists(ref):
             return ref
     raise HTTPException(503, "Could not allocate an order number — please try again")
-
-
-def display_ref(ref, oid):
-    """What the customer sees. Orders from before ref existed fall back to the id."""
-    return f"DK-{ref}" if ref else f"#{str(oid)[:8]}"
 
 
 def _order_email_body(order, track_url):
@@ -471,8 +470,9 @@ def create_order(request: Request, user=Depends(optional_user), payload: dict = 
         order["items"] = lines
 
     log_action(user_id=user_id, action="order_placed",
-               detail={"order_id": str(order["id"]), "total": order["total"],
-                       "payment_method": payment_method, "discount_code": discount_code}, request=request)
+               detail={"order_id": str(order["id"]), "number": display_ref(order.get("ref"), order["id"]),
+                       "total": order["total"], "payment_method": payment_method,
+                       "discount_code": discount_code}, request=request)
 
     if payment_method == "ziina":
         app_url = os.getenv("APP_URL") or request.headers.get("origin") or ""
@@ -483,7 +483,7 @@ def create_order(request: Request, user=Depends(optional_user), payload: dict = 
                 amount_fils=round(final_total * 100),
                 success_url=f"{app_url}/pay/return?order={oid}&t={tok}",
                 cancel_url=f"{app_url}/pay/return?order={oid}&t={tok}&cancel=1",
-                message=f"دكّان كنعان — طلب #{oid[:8]}",
+                message=f"دكّان كنعان — طلب {display_ref(order.get('ref'), oid)}",
             )
             execute("update orders set ziina_payment_id = %s where id = %s", [intent.get("id"), oid])
             # No confirmation e-mail here. Nothing has been paid yet — the shopper is
@@ -547,6 +547,17 @@ def list_orders(request: Request, user=Depends(current_user)):
             oid = str(o["id"])
             o["items"] = by_items.get(oid, [])
             o["events"] = by_events.get(oid, [])
+            # The number the customer was told to quote — the one on the confirmation
+            # e-mail, the WhatsApp and the lookup form. طلباتي showed the id prefix
+            # instead, so a signed-in customer's own order history called their order
+            # something nothing else in the shop had ever called it.
+            o["number"] = display_ref(o.get("ref"), o["id"])
+            # The display form of the phone, so طلباتي shows it back the way the
+            # tracking page does. Not a redaction — the row is the customer's own
+            # order and still carries `phone`; the manager's copy has no hint because
+            # theirs is the one that has to be dialled.
+            if not is_manager:
+                o["phone_hint"] = phone_hint(o["phone"])
     return {"orders": orders}
 
 
@@ -566,6 +577,13 @@ def lookup_order(request: Request, payload: dict = Body(default={})):
     if not ref or not contact:
         raise HTTPException(400, "Order number and phone or e-mail are required")
 
+    # Only the number. Orders predating it were named in their confirmation e-mail by
+    # the first eight characters of their id, and that was tempting to accept here too
+    # — but the e-mail carrying that name carries the tracking link beside it (both
+    # arrived in the same commit), so nobody holding one needs this form. Matching on
+    # an id prefix would have widened a deliberately narrow endpoint to an identifier
+    # that is semi-public: order ids sit in /track and /pay/return URLs, the number
+    # does not.
     order = fetch_one(
         """select o.id, o.phone, o.track_token, u.email from orders o
            left join users u on u.id = o.user_id
@@ -624,10 +642,7 @@ def track_order(oid: str, request: Request, t: str = Query(""), user=Depends(opt
               "payment_method", "payment_status", "delivery_fee", "discount_amount", "created_at")
     safe = {k: order[k] for k in fields}
     safe["number"] = display_ref(order.get("ref"), order["id"])
-    # the phone is shown back partially, so they can check what they typed without
-    # the full number sitting behind a link that might be forwarded
-    phone = order["phone"] or ""
-    safe["phone_hint"] = (phone[:4] + "*" * (len(phone) - 8) + phone[-4:]) if len(phone) > 8 else phone
+    safe["phone_hint"] = phone_hint(order["phone"])
     # product_id is here for the basket, not the page: when a payment settles minutes
     # later, services/awaitingPayment.js takes exactly these lines back out and leaves
     # anything added since (a product id is public catalogue data either way).
@@ -720,7 +735,8 @@ def mark_paid(order, request=None, *, by="return"):
     # reported, and only when this call was the one that settled it.
     _after_commit(oid, "audit row", lambda: log_action(
         user_id=upd["user_id"], action="payment_confirmed",
-        detail={"order_id": oid, "total": upd["total"], "by": by}, request=request))
+        detail={"order_id": oid, "number": display_ref(upd.get("ref"), oid),
+                "total": upd["total"], "by": by}, request=request))
     return upd
 
 
@@ -848,7 +864,8 @@ def resume_payment(oid: str, request: Request, t: str = Query(""),
                       lambda: _send_order_email(row, _guest_email_for(row), request))
         _after_commit(oid, "audit row", lambda: log_action(
             user_id=row["user_id"], action="payment_switched_to_cod",
-            detail={"order_id": oid, "total": row["total"]}, request=request))
+            detail={"order_id": oid, "number": display_ref(row.get("ref"), oid),
+                    "total": row["total"]}, request=request))
         return {"method": "cod"}
 
     # Card. Reuse the intent this order already has when Ziina still considers it
@@ -871,12 +888,13 @@ def resume_payment(oid: str, request: Request, t: str = Query(""),
     intent = create_payment_intent(
         amount_fils=round(float(order["total"]) * 100),
         success_url=success_url, cancel_url=cancel_url,
-        message=f"دكّان كنعان — طلب #{oid[:8]}",
+        message=f"دكّان كنعان — طلب {display_ref(order.get('ref'), oid)}",
     )
     execute("update orders set ziina_payment_id = %s, payment_method = 'ziina' where id = %s",
             [intent.get("id"), oid])
     log_action(user_id=order["user_id"], action="payment_resumed",
-               detail={"order_id": oid, "total": order["total"]}, request=request)
+               detail={"order_id": oid, "number": display_ref(order.get("ref"), oid),
+                       "total": order["total"]}, request=request)
     return {"redirect_url": intent.get("redirect_url")}
 
 
@@ -919,7 +937,7 @@ def set_status(oid: str, request: Request, _m=Depends(require_manager), payload:
     if row.get("user_id"):
         notify_users([row["user_id"]], type="order_status",
                      title="تحديث حالة طلبك",
-                     body=f"طلب #{oid[:8]}: {label}", order_id=oid)
+                     body=f"طلب {display_ref(row.get('ref'), oid)}: {label}", order_id=oid)
     _send_order_whatsapp(row, request, status_label=label)
     return {"order": row}
 

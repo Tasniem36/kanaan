@@ -169,7 +169,7 @@
         <button class="m-close" @click="placed = null" :aria-label="t('common.close')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
         <span class="m-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l4 4 10-10"/></svg></span>
         <h3 class="display">{{ t('checkout.placedTitle') }}</h3>
-        <p>{{ t('checkout.received', { id: placed.id.slice(0, 8) }) }}</p>
+        <p>{{ t('checkout.received', { id: placed.number }) }}</p>
         <!-- with no e-mail, this link is genuinely the only way back to the order -->
         <p class="a-muted" style="margin:.5rem 0 .9rem">{{ placed.emailed ? t('checkout.placedEmailed') : t('checkout.placedNoEmail') }}</p>
         <RouterLink class="btn btn-green" :to="{ name: 'track', params: { id: placed.id }, query: { t: placed.token } }" @click="placed = null">
@@ -376,6 +376,9 @@ import ImagePicker from '../components/ImagePicker.vue'
 import Loader from '../components/Loader.vue'
 import { normalizeUaePhone } from '../utils/phone'
 import { pName } from '../utils/product'
+// The number on the confirmation the customer is about to be sent — this screen is
+// where they see it first, so it has to be the one the e-mail and the shop will use.
+import { orderNumber } from '../utils/order'
 
 const { t, locale } = useI18n()
 const cart = useCartStore()
@@ -715,9 +718,10 @@ async function placeOrder() {
     if (wasGuest) {
       // kept on this device so طلباتي can gather it with the rest — see stores/myOrders
       myOrders.remember(result.order)
-      placed.value = { id: result.order.id, token: result.order.track_token, emailed: !!delivery.email }
+      placed.value = { id: result.order.id, number: orderNumber(result.order),
+                       token: result.order.track_token, emailed: !!delivery.email }
     }
-    else showToast(t('checkout.received', { id: result.order.id.slice(0, 8) }))
+    else showToast(t('checkout.received', { id: orderNumber(result.order) }))
   } catch (e) {
     coErr.value = promoMessage(e)
   } finally {

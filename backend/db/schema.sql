@@ -322,6 +322,13 @@ alter table orders add column if not exists track_token text;
 alter table orders add column if not exists ref text;
 create unique index if not exists orders_ref_key on orders (ref) where ref is not null;
 create unique index if not exists orders_track_token_key on orders (track_token) where track_token is not null;
+-- Dropped with the id-prefix fallback in lookup_order that was its only reader.
+drop index if exists orders_id_prefix_idx;
+
+-- Orders placed before these two columns existed are given a number and a token by
+-- backfill.py, which every deploy runs straight after this file. Deliberately not
+-- done here: the number has to come from the same alphabet as new_ref(), and a
+-- second implementation in PL/pgSQL is one that can drift from it silently.
 
 -- Guest checkout creates an account with an EMPTY password_hash: it can't be
 -- logged into (bcrypt rejects it), it exists so the order, the in-app chat and the

@@ -7,86 +7,12 @@
 
       <template v-else-if="order">
         <span class="eyebrow">{{ t('track.eyebrow') }}</span>
-        <h1 class="display">{{ t('track.title', { id: order.number }) }}</h1>
+        <h1 class="display">{{ t('track.title', { id: orderNumber(order) }) }}</h1>
         <p class="a-muted when">{{ fmtDate(order.created_at) }}</p>
 
-        <OrderTimeline :status="order.status" :events="order.events" />
-
-        <ul class="items">
-          <li v-for="(it, i) in order.items" :key="i">
-            <span class="nm">{{ it.name }}</span>
-            <span class="a-muted qt">×{{ it.qty }}</span>
-            <span class="pr">{{ money(it.price * it.qty) }} <span class="dh" role="img" aria-label="درهم"></span></span>
-          </li>
-        </ul>
-
-        <div class="totals">
-          <div v-if="Number(order.discount_amount) > 0" class="row">
-            <span class="a-muted">{{ t('checkout.discountLine') }}</span>
-            <span style="color:var(--red)">− {{ money(order.discount_amount) }} <span class="dh" role="img" aria-label="درهم"></span></span>
-          </div>
-          <div class="row">
-            <span class="a-muted">{{ t('checkout.deliveryFee') }}</span>
-            <span v-if="Number(order.delivery_fee) > 0">{{ money(order.delivery_fee) }} <span class="dh" role="img" aria-label="درهم"></span></span>
-            <span v-else style="color:var(--green)">{{ t('checkout.freeDelivery') }}</span>
-          </div>
-          <div class="row total">
-            <span>{{ t('checkout.total') }}</span>
-            <span>{{ money(order.total) }} <span class="dh" role="img" aria-label="درهم"></span></span>
-          </div>
-          <!-- What actually happened to the money. Reading this off payment_method
-               alone told somebody looking at an order they had never paid for that it
-               was "الدفع الإلكتروني", with nothing to say it was still owed — the same
-               mistake the confirmation e-mail used to make. -->
-          <div class="row">
-            <span class="a-muted">{{ t('checkout.payMethod') }}</span>
-            <span :class="{ owed: awaitingPayment, settled: order.payment_status === 'paid' }">
-              {{ payLabel }}
-            </span>
-          </div>
-        </div>
-
-        <section v-if="releasedUnpaid" class="released" aria-labelledby="rel-h">
-          <h2 id="rel-h">{{ t('track.releasedTitle') }}</h2>
-          <p class="a-muted">{{ t('track.releasedMsg') }}</p>
-          <!-- Said separately and plainly: the first thing somebody thinks on
-               reading "cancelled" is whether they have been charged for it. -->
-          <p class="a-muted">{{ t('track.releasedReassure') }}</p>
-          <RouterLink to="/" class="btn btn-green">{{ t('track.orderAgain') }}</RouterLink>
-        </section>
-
-        <!-- An abandoned card checkout leaves a real order that nobody has paid for,
-             and this page is the only one its customer can reach. Their way back in
-             used to be building the whole basket again. -->
-        <section v-if="awaitingPayment" class="paynow" aria-labelledby="paynow-h">
-          <h2 id="paynow-h">{{ t('track.awaitingTitle') }}</h2>
-          <p class="a-muted">{{ t('track.awaitingMsg') }}</p>
-          <!-- The amount stands on its own rather than inside the sentence: it is
-               the one thing they need to recognise before choosing, and the same
-               figure as the total above. -->
-          <p class="paynow-amount">
-            {{ money(order.total) }} <span class="dh" role="img" aria-label="درهم"></span>
-          </p>
-          <p v-if="payErr" class="err">{{ payErr }}</p>
-          <div class="paynow-acts">
-            <button class="btn btn-green" :disabled="!!paying" @click="choosePayment('ziina')">
-              {{ paying === 'ziina' ? t('common.loading') : t('track.payNow') }}
-            </button>
-            <button class="btn btn-ghost" :disabled="!!paying" @click="choosePayment('cod')">
-              {{ paying === 'cod' ? t('common.loading') : t('track.payOnDelivery') }}
-            </button>
-          </div>
-        </section>
-
-        <div class="deliv">
-          <h2>{{ t('track.deliverTo') }}</h2>
-          <p>{{ order.customer_name }}<span v-if="order.phone_hint" class="a-muted" dir="ltr"> · {{ order.phone_hint }}</span></p>
-          <p class="a-muted">{{ t('account.addrLine', { city: order.city, street: order.street, house: order.house }) }}</p>
-          <p v-if="order.notes" class="a-muted">{{ order.notes }}</p>
-        </div>
-
-        <p class="a-muted help">{{ t('track.wrongDetails') }}</p>
-        <a class="btn btn-green" :href="whatsappLink(waText)" target="_blank" rel="noopener">{{ t('track.whatsapp') }}</a>
+        <!-- Everything below the heading is the same component طلباتي renders, so a
+             guest and a signed-in customer read the same order the same way. -->
+        <OrderDetails :order="order" :token="tokenOf()" @changed="load(order.id, tokenOf())" />
       </template>
 
       <!-- No id in the URL, or a link that didn't open anything: look the order up
@@ -104,7 +30,7 @@
           <ul>
             <li v-for="o in myOrders.list" :key="o.id">
               <RouterLink :to="{ name: 'track', params: { id: o.id }, query: { t: o.token } }" class="mine-row">
-                <span class="mine-ref" dir="ltr">{{ o.number || refOf(o) }}</span>
+                <span class="mine-ref" dir="ltr">{{ orderNumber(o) }}</span>
                 <span class="mine-when a-muted">{{ fmtDate(o.created_at || o.at) }}</span>
                 <span v-if="o.status" class="mine-status" :class="'s-' + o.status">{{ statusLabel(o) }}</span>
                 <span v-else-if="myOrders.loading" class="mine-status a-muted">…</span>
@@ -137,18 +63,16 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '../services/api'
 import Loader from '../components/Loader.vue'
-import OrderTimeline from '../components/OrderTimeline.vue'
+import OrderDetails from '../components/OrderDetails.vue'
 import NeedHelp from '../components/NeedHelp.vue'
-import { whatsappLink } from '../utils/contact'
 import { useMyOrdersStore } from '../stores/myOrders'
-import { useCartStore } from '../stores/cart'
-import { useConfirmStore } from '../stores/confirm'
 import { dateTime } from '../utils/datetime'
+import { orderNumber, statusLabelKey } from '../utils/order'
 
 // Public order status page. The token in the URL is the credential — no account
 // needed, which is the whole point for a guest who checked out without one.
@@ -163,88 +87,13 @@ const form = reactive({ ref: '', contact: '' })
 const finding = ref(false)
 const lookupErr = ref('')
 const myOrders = useMyOrdersStore()
-const cart = useCartStore()
-const confirm = useConfirmStore()
 
-// 'pending' means two different things: a cash order being processed, and a card
-// order still waiting to be paid. OrderTimeline draws the same distinction.
-const statusLabel = (o) => t(o.status === 'pending' && o.payment_method === 'cod'
-  ? 'status.pendingCod' : 'status.' + o.status)
-// Awaiting payment: a card order that was never paid for and is still alive. Cash
-// orders are unpaid by definition until they are handed over, and a released order
-// has had its stock put back — neither is something to collect money for here.
-const awaitingPayment = computed(() => !!order.value
-  && order.value.payment_status !== 'paid'
-  && order.value.payment_method !== 'cod'
-  && order.value.status !== 'cancelled')
-
-const payLabel = computed(() => {
-  const o = order.value
-  if (!o) return ''
-  if (o.payment_method === 'cod') return t('checkout.cod')
-  if (o.payment_status === 'paid') return t('track.paidOnline')
-  // "awaiting payment" on a released order is not true any more — nobody is waiting
-  // for it, the shop has taken the goods back
-  return o.status === 'cancelled' ? t('track.notPaid') : t('track.awaitingPayment')
-})
-
-// Released for not being paid for. The sweep says so in the shop's log but tells the
-// customer nothing, so without this they come back to a cancelled order and no reason
-// for it — and this is exactly the screen somebody lands on when they took too long.
-const releasedUnpaid = computed(() => !!order.value
-  && order.value.status === 'cancelled'
-  && order.value.payment_status !== 'paid'
-  && order.value.payment_method !== 'cod')
-
-const paying = ref('')
-const payErr = ref('')
-
-// Card sends them back to the payment page they walked away from; cash turns this
-// into an ordinary cash-on-delivery order, which is also what takes it out of the
-// sweep that would otherwise cancel it. Either way the page reloads and says what
-// the order now is, rather than assuming the answer.
-async function choosePayment(method) {
-  // Cash commits: the order goes to the shop to prepare, and these buttons go away
-  // because there is no longer a payment waiting to be finished. Card does not — a
-  // payment page nobody completes changes nothing — so only this one asks.
-  // (Switching a cash order back to card is deliberately not offered yet; the
-  // endpoint would take it, but an unpaid card order is on the sweep's clock and a
-  // customer who tapped it out of curiosity would lose an order the shop had.)
-  if (method === 'cod') {
-    const ok = await confirm.ask({
-      title: t('track.codConfirmTitle'),
-      message: t('track.codConfirmMsg'),
-      confirmText: t('track.codConfirmYes'),
-    })
-    if (!ok) return
-  }
-  paying.value = method
-  payErr.value = ''
-  try {
-    const r = await api(`/orders/${order.value.id}/pay?t=${encodeURIComponent(tokenOf())}`,
-                        { method: 'POST', body: { method }, auth: true })
-    if (r.redirect_url) { window.location.href = r.redirect_url; return }
-    // The order is real now, and the basket has been holding these same items since
-    // the payment was abandoned — that is deliberate, so an interrupted checkout can
-    // be retried, but from here it would have them buying the lot a second time.
-    // Only this order's lines: the basket may have moved on since.
-    await cart.whenSynced()
-    cart.removeOrdered(order.value.items)
-    await load(order.value.id, tokenOf())
-  } catch (e) {
-    payErr.value = e.message
-    // 409 means it was released or settled while they were looking at it — the page
-    // is out of date, and what it shows next matters more than the message
-    if (e.status === 409) await load(order.value.id, tokenOf())
-  } finally {
-    paying.value = ''
-  }
-}
+// The status badge on the طلباتي rows below the lookup form — the one place this
+// page still labels an order itself. Everything about an opened order is said by
+// OrderDetails, so the two pages cannot word it differently.
+const statusLabel = (o) => t(statusLabelKey(o))
 
 const tokenOf = () => String(route.query.t || '')
-
-// the order number, before the live one has arrived
-const refOf = (o) => (o.ref ? `DK-${o.ref}` : `#${String(o.id).slice(0, 8)}`)
 
 // Exchange the order number + a contact detail for the order's own tracking link,
 // then show it the same way the e-mailed link does.
@@ -286,11 +135,7 @@ async function load(id, token) {
   }
 }
 
-const money = (n) => new Intl.NumberFormat(locale.value === 'ar' ? 'ar-AE' : 'en-AE',
-  { maximumFractionDigits: 2 }).format(Number(n || 0))
 const fmtDate = (d) => dateTime(d, locale.value)
-// whatsappLink encodes it, so this is the plain sentence
-const waText = computed(() => t('track.whatsappText', { id: order.value?.number || '' }))
 
 // Driven by the route, not by mount: opening an order from the طلباتي list goes
 // /track → /track/:id, which is the same component, so no mount hook fires again and
@@ -313,23 +158,6 @@ watch(() => [route.params.id, String(route.query.t || '')], ([id, tok]) => {
 </script>
 
 <style scoped>
-.released { margin: 1rem 0 .4rem; padding: .95rem 1rem; border-radius: 14px;
-  background: rgba(156,43,43,.07); border: 1px solid rgba(156,43,43,.25); }
-.released h2 { font-family: 'Amiri', serif; color: var(--green, #3c4a27); font-size: 1.05rem; margin: 0 0 .3rem; }
-.released .a-muted { font-size: .84rem; line-height: 1.5; margin: 0 0 .7rem; }
-.paynow { margin: 1rem 0 .4rem; padding: .95rem 1rem; border-radius: 14px;
-  background: rgba(184,144,47,.10); border: 1px solid rgba(184,144,47,.38); }
-.paynow h2 { font-family: 'Amiri', serif; color: var(--green, #3c4a27); font-size: 1.05rem; margin: 0 0 .3rem; }
-.paynow .a-muted { font-size: .84rem; line-height: 1.5; margin: 0 0 .7rem; }
-.paynow-amount { font-family: 'Amiri', serif; font-size: 1.5rem; font-weight: 700;
-  color: var(--green, #3c4a27); margin: 0 0 .7rem; }
-.paynow-acts { display: flex; gap: .5rem; flex-wrap: wrap; }
-.paynow-acts .btn { flex: 1 1 auto; font-size: .86rem; padding: .6rem 1rem; }
-.btn-ghost { background: #fff; color: var(--green, #3c4a27); border: 1px solid rgba(60,74,39,.3); }
-.paynow .err { color: var(--red, #9c2b2b); font-size: .82rem; margin: 0 0 .5rem; }
-.owed { color: #b4862c; font-weight: 700; }
-.settled { color: var(--green, #3c4a27); font-weight: 700; }
-
 .tw { min-height: 100vh; background: var(--cream); display: grid; place-items: start center; padding: 2.2rem 1.1rem 3rem; }
 .tcard {
   width: min(560px, 100%); background: var(--paper);
@@ -341,17 +169,7 @@ watch(() => [route.params.id, String(route.query.t || '')], ([id, tok]) => {
 .brand .g { color: var(--gold); }
 h1 { font-size: clamp(1.4rem, 4vw, 1.9rem); color: var(--green); margin: .45rem 0 .2rem; }
 .when { font-size: .82rem; margin-bottom: 1.4rem; }
-.items { list-style: none; margin: 1.6rem 0 0; text-align: start; }
-.items li { display: flex; align-items: center; gap: .5rem; padding: .45rem 0; border-bottom: 1px solid rgba(60,74,39,.08); font-size: .92rem; }
-.items .nm { flex: 1; }
-.items .qt { font-size: .82rem; }
-.items .pr { font-weight: 700; color: var(--terra-deep); white-space: nowrap; }
-.totals { margin-top: .8rem; text-align: start; font-size: .9rem; }
-.totals .row { display: flex; justify-content: space-between; gap: .6rem; padding: .18rem 0; }
-.totals .total { font-weight: 700; border-top: 1px solid rgba(60,74,39,.12); margin-top: .3rem; padding-top: .4rem; }
-.deliv { margin-top: 1.4rem; text-align: start; background: var(--cream-2); border-radius: 14px; padding: .8rem 1rem; }
-.deliv h2 { font-size: .82rem; color: var(--green); margin-bottom: .3rem; letter-spacing: .03em; }
-.deliv p { font-size: .88rem; }
+/* the lookup form's hint — the order's own detail styles live in OrderDetails.vue */
 .help { margin: 1.3rem 0 .7rem; font-size: .84rem; }
 /* طلباتي — what this device remembers ordering, above the lookup form */
 .mine { margin: 1.6rem 0 .4rem; text-align: start; }

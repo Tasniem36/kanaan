@@ -2,25 +2,41 @@
   <section>
     <div class="orders-head">
       <h1>{{ t('manager.allOrders') }}</h1>
+      <!-- A customer rings quoting DK-EPBV9SH. Without this the till had no field to
+           type it into: the tabs page ten customers at a time, so the only way to
+           find the order was to scroll for it. -->
+      <div class="psearch">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input class="a-input" v-model="q" :placeholder="t('manager.searchOrders')" :aria-label="t('manager.searchOrders')">
+        <button v-if="q" class="pclear" :aria-label="t('search.clear')" @click="q = ''">×</button>
+      </div>
     </div>
     <Loader v-if="ordersStore.loading && !ordersStore.orders.length" :label="t('common.loading')" />
     <p v-else-if="!ordersStore.orders.length" class="a-muted">{{ t('manager.noOrders') }}</p>
 
     <template v-else>
-      <!-- status tabs -->
-      <div class="otabs">
-        <button v-for="tab in STATUS_TABS" :key="tab.key" class="otab" :class="{ on: activeTab === tab.key }" @click="activeTab = tab.key">
-          {{ t(tab.label) }} <span class="otab-cnt">{{ counts[tab.key] }}</span>
-        </button>
-      </div>
-      <!-- payment-type filter -->
-      <div class="pfilter">
-        <button class="pchip" :class="{ on: payFilter === 'all' }" @click="payFilter = 'all'">{{ t('manager.payAll') }}</button>
-        <button class="pchip" :class="{ on: payFilter === 'cod' }" @click="payFilter = 'cod'">{{ t('manager.payCod') }}</button>
-        <button class="pchip" :class="{ on: payFilter === 'ziina' }" @click="payFilter = 'ziina'">{{ t('manager.payZiina') }}</button>
-      </div>
+      <!-- The tabs step aside while a search is running rather than narrowing it: a
+           manager holding a number can't be expected to know which tab the order is
+           sitting in, and a highlighted «الجديدة» above a delivered order is a lie. -->
+      <template v-if="!searching">
+        <!-- status tabs -->
+        <div class="otabs">
+          <button v-for="tab in STATUS_TABS" :key="tab.key" class="otab" :class="{ on: activeTab === tab.key }" @click="activeTab = tab.key">
+            {{ t(tab.label) }} <span class="otab-cnt">{{ counts[tab.key] }}</span>
+          </button>
+        </div>
+        <!-- payment-type filter -->
+        <div class="pfilter">
+          <button class="pchip" :class="{ on: payFilter === 'all' }" @click="payFilter = 'all'">{{ t('manager.payAll') }}</button>
+          <button class="pchip" :class="{ on: payFilter === 'cod' }" @click="payFilter = 'cod'">{{ t('manager.payCod') }}</button>
+          <button class="pchip" :class="{ on: payFilter === 'ziina' }" @click="payFilter = 'ziina'">{{ t('manager.payZiina') }}</button>
+        </div>
+      </template>
+      <p v-else class="search-note a-muted">{{ t('manager.searchAllTabs', { n: matchCount }) }}</p>
 
-      <p v-if="!visibleGroups.length" class="a-muted">{{ t('manager.noOrdersFilter') }}</p>
+      <p v-if="!visibleGroups.length" class="a-muted">
+        {{ searching ? t('manager.searchNoOrders') : t('manager.noOrdersFilter') }}
+      </p>
     </template>
 
     <!-- orders grouped by customer -->
@@ -37,7 +53,7 @@
       >
         <div class="a-row order-top">
           <div>
-            <div><span style="font-family:monospace;color:var(--green)">#{{ o.id.slice(0, 8) }}</span> <span class="a-muted">· {{ fmtDate(o.created_at) }}</span></div>
+            <div><span style="font-family:monospace;color:var(--green)" dir="ltr">{{ orderNumber(o) }}</span> <span class="a-muted">· {{ fmtDate(o.created_at) }}</span></div>
             <div style="margin:.25rem 0"><span class="a-pill" :class="payClass(o)">{{ payLabel(o) }}</span></div>
             <div class="a-muted">📍 {{ t('manager.orderAddr', { city: o.city, street: o.street, house: o.house }) }}<span v-if="o.notes"> ({{ o.notes }})</span></div>
           </div>
@@ -65,7 +81,7 @@
     <Dialog :open="!!detail" :title="t('manager.detailsTitle')" max-width="560px" @close="detailId = null">
       <template v-if="detail">
         <div class="d-head">
-          <span style="font-family:monospace;color:var(--green)">#{{ detail.id.slice(0, 8) }}</span>
+          <span style="font-family:monospace;color:var(--green)" dir="ltr">{{ orderNumber(detail) }}</span>
           <span class="a-muted">{{ fmtDate(detail.created_at) }}</span>
           <span class="a-pill" :class="statusClass(detail.status)">{{ t(`status.${detail.status}`) }}</span>
         </div>
@@ -136,6 +152,12 @@ import Loader from '../../components/Loader.vue'
 import Dialog from '../../components/Dialog.vue'
 import { useInfiniteScroll } from '../../composables/useInfiniteScroll'
 import { dateTime } from '../../utils/datetime'
+// The till calls an order what its customer calls it. This page used to print the
+// first eight characters of the internal id, so a customer reading DK-EPBV9SH down
+// the phone was quoting a number the shop had never seen — and the WhatsApp the
+// manager sends back quoted one the customer had never seen.
+import { orderNumber } from '../../utils/order'
+import { foldArabic } from '../../utils/text'
 
 const { t, locale } = useI18n()
 const ordersStore = useOrdersStore()
@@ -170,7 +192,7 @@ function waDigits(phone) {
 const waLink = (o) => {
   const text = t('manager.waMessage', {
     name: o.customer_name,
-    id: o.id.slice(0, 8),
+    id: orderNumber(o),
     status: t(`status.${o.status}`),
   })
   return `https://wa.me/${waDigits(o.phone)}?text=${encodeURIComponent(text)}`
@@ -192,9 +214,44 @@ const STATUS_TABS = [
 ]
 const activeTab = ref('new')
 const payFilter = ref('all') // all | cod | ziina
+const q = ref('')
+const searching = computed(() => q.value.trim().length > 0)
 
 const matchesPay = (o) => payFilter.value === 'all' || o.payment_method === payFilter.value
 const tabStatuses = computed(() => STATUS_TABS.find((tb) => tb.key === activeTab.value)?.statuses || [])
+
+// The number as a manager types it, against the number as the shop stores it: DK-, a
+// leading #, spaces and case are all noise on something read down a phone line.
+const bareRef = (s) => String(s || '').toUpperCase().replace(/[\s#]/g, '').replace(/^DK-/, '')
+const digitsOf = (s) => String(s || '').replace(/\D/g, '')
+// 0501234567, 501234567, +971501234567 and 00971501234567 are one phone number, and
+// the shop holds a mix: checkout normalises to +971…, older rows still carry the
+// local 05… form (the same spread waDigits below has to cope with). Comparing raw
+// digits matched neither way round — a manager typing the number the customer just
+// read out found nothing — so the country code and the trunk 0 come off both sides.
+const localDigits = (s) => digitsOf(s).replace(/^00/, '').replace(/^971/, '').replace(/^0+/, '')
+// Only a query that is all digits and phone punctuation is treated as a phone.
+// Otherwise "DK-7DF2MCP" reduces to "72" and matches numbers at random.
+const IS_PHONE = /^[\d\s+()-]+$/
+
+function matchesQuery(o) {
+  const raw = q.value.trim()
+  if (!raw) return true
+  const needle = bareRef(raw)
+  if (needle && bareRef(orderNumber(o)).includes(needle)) return true
+  const dialled = localDigits(raw)
+  // 4 digits: enough to be the tail of a number somebody read out, short enough to
+  // still be typed from memory
+  if (IS_PHONE.test(raw) && dialled.length >= 4 && localDigits(o.phone).includes(dialled)) return true
+  const name = foldArabic(raw)
+  return !!name && foldArabic(o.customer_name).includes(name)
+}
+
+// A search reaches across every tab and both payment filters; without one, the tab
+// and the filter decide. The two are never applied at once — see the template.
+const shown = (o) => (searching.value
+  ? matchesQuery(o)
+  : tabStatuses.value.includes(o.status) && matchesPay(o))
 
 // per-tab counts, respecting the active payment filter
 const counts = computed(() => {
@@ -211,7 +268,7 @@ const counts = computed(() => {
 const groups = computed(() => {
   const map = new Map()
   for (const o of ordersStore.orders) {
-    if (!tabStatuses.value.includes(o.status) || !matchesPay(o)) continue
+    if (!shown(o)) continue
     const key = o.user_id || o.phone || o.id
     if (!map.has(key)) map.set(key, { key, name: o.customer_name, phone: o.phone, orders: [], total: 0 })
     const g = map.get(key)
@@ -221,9 +278,14 @@ const groups = computed(() => {
   return [...map.values()]
 })
 
+// orders, not customers — a search for one number that lands in a group of six
+// should say it found one
+const matchCount = computed(() => groups.value.reduce((n, g) => n + g.orders.length, 0))
+
 const { visible: visibleGroups, sentinel, hasMore, reset } = useInfiniteScroll(() => groups.value, 10)
-// restart paging from the top whenever the tab or payment filter changes
-watch([activeTab, payFilter], reset)
+// restart paging from the top whenever the tab, payment filter or search changes —
+// otherwise a search starts halfway down someone else's scroll position
+watch([activeTab, payFilter, q], reset)
 
 // date + time of the order, in the manager's local timezone
 const fmtDate = (d) => dateTime(d, locale.value)
@@ -233,7 +295,7 @@ async function changeStatus(o, e) {
   if (status === o.status) return
   const ok = await confirm.ask({
     title: t('manager.statusConfirmTitle'),
-    message: t('manager.statusConfirmMsg', { id: o.id.slice(0, 8), status: t(`status.${status}`) }),
+    message: t('manager.statusConfirmMsg', { id: orderNumber(o), status: t(`status.${status}`) }),
     confirmText: t('manager.statusConfirmYes'),
   })
   if (!ok) { e.target.value = o.status; return }   // reverted → put the dropdown back
@@ -244,7 +306,7 @@ async function changeStatus(o, e) {
 async function deleteOrder(o) {
   const ok = await confirm.ask({
     title: t('manager.delOrderTitle'),
-    message: t('manager.delOrderMsg', { id: o.id.slice(0, 8) }),
+    message: t('manager.delOrderMsg', { id: orderNumber(o) }),
     confirmText: t('manager.delOrderYes'),
     danger: true,
   })
@@ -259,6 +321,15 @@ onMounted(() => ordersStore.fetch())
 <style scoped>
 .orders-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
 h1 { font-family: 'Amiri', serif; color: var(--green); font-size: 1.9rem; }
+/* the same search box as the products page, so the two manager screens don't each
+   have their own idea of what one looks like */
+.psearch { position: relative; flex: 1 1 210px; max-width: 320px; display: flex; align-items: center; }
+.psearch svg { position: absolute; inset-inline-start: .6rem; width: 15px; height: 15px;
+  fill: none; stroke: var(--muted, #8a7f64); stroke-width: 2; stroke-linecap: round; pointer-events: none; }
+.psearch .a-input { width: 100%; padding-inline-start: 2rem; padding-inline-end: 1.8rem; font-size: .85rem; }
+.pclear { position: absolute; inset-inline-end: .45rem; font-size: 1.1rem; line-height: 1;
+  color: var(--muted, #8a7f64); background: none; border: 0; padding: .1rem .25rem; }
+.search-note { font-size: .84rem; margin-bottom: .8rem; }
 /* status tabs */
 .otabs { display: flex; gap: .4rem; flex-wrap: wrap; border-bottom: 2px solid rgba(60,74,39,.12); margin-bottom: .8rem; }
 .otab {

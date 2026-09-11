@@ -12,7 +12,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l4 4 10-10"/></svg>
         </div>
         <h1>{{ t('pay.success') }}</h1>
-        <p class="muted">{{ t('pay.successMsg', { id: shortId }) }}</p>
+        <p class="muted">{{ t('pay.successMsg', { id: number }) }}</p>
         <RouterLink to="/" class="btn btn-green">{{ t('pay.backHome') }}</RouterLink>
       </template>
 
@@ -47,10 +47,11 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useOrdersStore } from '../stores/orders'
+import { orderNumber } from '../utils/order'
 import { useCartStore } from '../stores/cart'
 import { rememberAwaited, forgetAwaited, takeOutOfBasket } from '../services/awaitingPayment'
 import { api } from '../services/api'
@@ -66,12 +67,18 @@ const orderId = String(route.query.order || '')
 // guests have no session here — the tracking token from the return URL is what
 // authorises confirming/cancelling their own payment
 const token = String(route.query.t || '')
-const shortId = computed(() => orderId.slice(0, 8))
+// The order number, filled in from the order itself as soon as this page can read it.
+// Until then the id prefix stands in — display_ref falls back to the same thing and
+// the lookup form accepts it, so it names the order rather than standing in for a name.
+const number = ref(`#${orderId.slice(0, 8)}`)
 
 // The basket is emptied here, not before the redirect to Ziina — so a payment that
 // was abandoned, refused, or simply backed out of leaves it intact to try again.
 // Only money actually arriving clears it.
 async function settle() {
+  // Said before anything is fetched. This screen answers "did my money arrive", and
+  // no request on it may stand between that answer and someone who has just paid —
+  // services/api.js has no timeout, so one that hangs would hang the spinner.
   state.value = 'success'
   forgetAwaited()  // answered here; nothing for the next load to chase
   // Only the lines this order paid for. Straight after checkout that is the whole
@@ -81,6 +88,7 @@ async function settle() {
   try {
     const { order } = await api(`/orders/track/${orderId}?t=${encodeURIComponent(token)}`,
                                 { auth: true })
+    number.value = orderNumber(order)
     await takeOutOfBasket(cart, order.items)
   } catch {
     // The lines could not be read. Emptying it is what this page has always done and

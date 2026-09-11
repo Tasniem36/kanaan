@@ -268,7 +268,7 @@ def test_a_paid_order_is_never_released_by_the_payment_path(live_db):
     back to release it — putting stock back for an order that was paid for and
     burying it as cancelled. Only the locked row knows, so the claim asks it."""
     import routers.orders as o
-    from db import fetch_one
+    from db import execute, fetch_one
 
     before = _stock(P_OIL)
     assert o.cancel_and_restore(O_PREP, why="expired") is False
@@ -998,6 +998,115 @@ def test_a_managers_own_account_page_shows_only_their_own_orders(live_db):
     assert len(shop) > 0, "the till still sees the shop"
     assert own == [], "the manager placed none of these orders"
     assert all(str(r["user_id"]) == U_CUST for r in shop), "and the seed's are the customer's"
+
+
+def test_the_orders_list_names_an_order_the_way_everything_else_names_it(live_db):
+    """طلباتي showed the id prefix while the confirmation e-mail, the WhatsApp, the
+    lookup form and the tracking page all said DK-…, so a signed-in customer could
+    not quote their own order back to the shop. One name, from one place."""
+    import routers.orders as o
+
+    rows = o.list_orders(Req(mine="1"), user={"id": U_CUST, "role": "customer"})["orders"]
+    done = next(r for r in rows if str(r["id"]) == O_DONE)
+    tracked = o.track_order(O_DONE, Req(), t="", user={"id": U_CUST, "role": "customer"})["order"]
+
+    assert done["number"] == tracked["number"]
+    assert done["phone_hint"] == tracked["phone_hint"], "shown back the same way on both pages"
+    assert "*" in done["phone_hint"], "and masked, not the number in full"
+
+
+def test_the_till_keeps_the_phone_it_has_to_dial(live_db):
+    """The masking is for the customer's own copy of their order. A manager whose
+    delivery can't find the door needs the number itself."""
+    import routers.orders as o
+
+    shop = o.list_orders(Req(), user={"id": U_MGR, "role": "manager"})["orders"]
+    assert shop and all("phone_hint" not in r for r in shop)
+    assert all(r["phone"] for r in shop)
+
+
+def test_orders_from_before_order_numbers_existed_are_given_one(live_db):
+    """ref and track_token were added to orders that already existed, which left every
+    one of them with neither until backfill.py ran. Their customer could not reach
+    them at all: the lookup form matches on ref and the status page needs the token.
+
+    Runs the real thing migrate.py runs on every deploy — this used to be a second
+    implementation in PL/pgSQL inside schema.sql, free to drift from new_ref()."""
+    from db import execute, fetch_all
+    from backfill import backfill_order_tracking
+    from routers.orders import _REF_ALPHABET, _REF_LEN
+
+    execute("update orders set ref = null, track_token = null")
+    with live_db.connection() as conn:
+        assert backfill_order_tracking(conn) == 4, "every seeded order was reached"
+
+    rows = fetch_all("select ref, track_token from orders")
+    assert rows, "the seed put orders here to backfill"
+    assert all(r["ref"] and len(r["ref"]) == _REF_LEN for r in rows)
+    # the same alphabet checkout draws from, read off it rather than copied — a
+    # backfilled order is quoted down the same phone line as a new one
+    assert all(set(r["ref"]) <= set(_REF_ALPHABET) for r in rows), "readable down a phone line"
+    assert len({r["ref"] for r in rows}) == len(rows), "one number each, or two orders answer to it"
+    assert all(r["track_token"] for r in rows)
+    assert len({r["track_token"] for r in rows}) == len(rows)
+
+
+def test_the_backfill_leaves_an_order_that_already_has_a_number_alone(live_db):
+    """It runs on every deploy, so the second run must be a no-op: renumbering an
+    order would invalidate the number on its customer's confirmation e-mail, and a
+    new token would break the tracking link they were told to save."""
+    from db import fetch_all
+    from backfill import backfill_order_tracking
+
+    with live_db.connection() as conn:
+        backfill_order_tracking(conn)
+    before = {str(r["id"]): (r["ref"], r["track_token"])
+              for r in fetch_all("select id, ref, track_token from orders")}
+
+    with live_db.connection() as conn:
+        assert backfill_order_tracking(conn) == 0, "nothing left to do"
+    after = {str(r["id"]): (r["ref"], r["track_token"])
+             for r in fetch_all("select id, ref, track_token from orders")}
+    assert after == before
+
+
+def test_a_backfilled_order_can_be_found_by_the_number_it_was_given(live_db):
+    """The point of the backfill: an order that had no number is reachable through
+    the lookup form afterwards, on the number plus the phone it was placed with."""
+    import routers.orders as o
+    from db import execute, fetch_one
+    from backfill import backfill_order_tracking
+
+    execute("update orders set ref = null, track_token = null")
+    with live_db.connection() as conn:
+        backfill_order_tracking(conn)
+    # checkout stores the phone normalised; the seed's is in the local form nobody
+    # would have in the table by the time a lookup runs
+    execute("update orders set phone = %s where id = %s", ["+971501234567", O_DONE])
+    number = fetch_one("select ref from orders where id = %s", [O_DONE])["ref"]
+
+    found = o.lookup_order(Req(), payload={"ref": f"DK-{number}", "contact": "0501234567"})
+    assert str(found["id"]) == O_DONE
+    assert found["token"], "and it hands back the token that opens the status page"
+
+
+def test_an_order_id_is_not_a_way_into_the_lookup_form(live_db):
+    """An order id travels in /track and /pay/return URLs, so it is nothing like as
+    private as the number on a confirmation. It opens nothing here, whole or as the
+    eight-character prefix the pre-DK- confirmation e-mails printed."""
+    import routers.orders as o
+    from db import execute
+    from fastapi import HTTPException
+    from backfill import backfill_order_tracking
+
+    with live_db.connection() as conn:
+        backfill_order_tracking(conn)
+    execute("update orders set phone = %s where id = %s", ["+971501234567", O_DONE])
+
+    for typed in (O_DONE, O_DONE[:8], f"#{O_DONE[:8]}"):
+        with pytest.raises(HTTPException) as e:
+            o.lookup_order(Req(), payload={"ref": typed, "contact": "0501234567"})
+        assert e.value.status_code == 404, f"{typed!r} opened an order"
 
 
 def test_mine_does_not_widen_anything_for_a_customer(live_db):
