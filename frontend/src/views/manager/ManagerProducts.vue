@@ -5,6 +5,22 @@
       <button class="a-btn" @click="openAdd"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> {{ t('manager.addProduct') }}</button>
     </div>
 
+    <!-- The shop has two kinds of thing and one long table of them. Finding the
+         za'atar to restock it meant scrolling past every plate. -->
+    <div class="p-filter">
+      <div class="pchips">
+        <button v-for="c in CATS" :key="c" class="pchip" :class="{ on: cat === c }" @click="cat = c">
+          {{ c === 'all' ? t('manager.catAll') : t(`nav.${c}`) }}
+          <span class="pchip-cnt">{{ counts[c] }}</span>
+        </button>
+      </div>
+      <div class="psearch">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input class="a-input" v-model="q" :placeholder="t('manager.searchProducts')" :aria-label="t('manager.searchProducts')">
+        <button v-if="q" class="pclear" :aria-label="t('search.clear')" @click="q = ''">×</button>
+      </div>
+    </div>
+
     <div class="table-wrap">
       <table class="a-table">
           <thead><tr><th>{{ t('manager.colProduct') }}</th><th>{{ t('manager.colPrice') }}</th><th class="tc">{{ t('manager.colStock') }}</th><th class="tc">{{ t('manager.colRestock') }}</th><th></th></tr></thead>
@@ -28,6 +44,9 @@
                 </div>
               </td>
               <td style="white-space:nowrap"><button class="ed-btn" @click="toggleActive(p)">{{ p.is_active ? t('manager.hide') : t('manager.show') }}</button> <button class="ed-btn" @click="openEdit(p)">{{ t('manager.edit') }}</button> <button class="rm-btn" @click="removeProduct(p)">{{ t('manager.remove') }}</button></td>
+            </tr>
+            <tr v-if="!catalog.loading && !visibleProducts.length">
+              <td colspan="5" class="a-muted" style="text-align:center;padding:1.2rem">{{ t('manager.noProductsFound') }}</td>
             </tr>
             <tr v-if="hasMore"><td colspan="5"><div ref="sentinel" class="load-more"><span class="ld-spin"></span></div></td></tr>
           </tbody>
@@ -95,7 +114,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, onMounted } from 'vue'
+import { computed, reactive, ref, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useCatalogStore } from '../../stores/catalog'
 import { pName, pIsOnSale, saleState } from '../../utils/product'
@@ -113,7 +132,40 @@ const confirm = useConfirmStore()
 const toast = useToastStore()
 
 // infinite scroll — reveal 10 rows, load 10 more on scroll
-const { visible: visibleProducts, sentinel, hasMore } = useInfiniteScroll(() => catalog.byStock, 10)
+// The two product_category values, plus everything. The column is a Postgres enum
+// of exactly these, so between them the tabs can never hide a product.
+const CATS = ['all', 'pantry', 'pottery']
+const cat = ref('all')
+const q = ref('')
+
+// A manager types what is on the jar, not what the database has. أ and ا are the
+// same letter to them, so are ة and ه at the end of a word — and nobody types the
+// shadda in فخّار, so the diacritics come off both sides before comparing.
+const TASHKEEL = /[\u064B-\u0652\u0670]/g
+const norm = (v) => String(v || '').toLowerCase()
+  .replace(TASHKEEL, '')
+  .replace(/[أإآ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').trim()
+
+const matches = (p) => {
+  const needle = norm(q.value)
+  if (!needle) return true
+  return [p.name, p.name_en, p.type, p.tag].some((v) => norm(v).includes(needle))
+}
+
+const found = computed(() => catalog.byStock.filter(matches))
+const filtered = computed(() =>
+  found.value.filter((p) => cat.value === 'all' || p.category === cat.value))
+// counted after the search, so the chips say where the thing being looked for is
+const counts = computed(() => ({
+  all: found.value.length,
+  pantry: found.value.filter((p) => p.category === 'pantry').length,
+  pottery: found.value.filter((p) => p.category === 'pottery').length,
+}))
+
+const { visible: visibleProducts, sentinel, hasMore, reset } = useInfiniteScroll(() => filtered.value, 10)
+// back to the first page whenever the list underneath changes, or a search would
+// start halfway down someone else's scroll position
+watch([cat, q], reset)
 
 const restockQty = reactive({})
 const showAdd = ref(false)
@@ -194,6 +246,20 @@ onMounted(() => catalog.fetch())
 </script>
 
 <style scoped>
+.p-filter { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; margin-bottom: .8rem; }
+.pchips { display: flex; gap: .4rem; flex-wrap: wrap; }
+.pchip { display: inline-flex; align-items: center; gap: .35rem; padding: .4rem .8rem;
+  border-radius: 999px; font-size: .82rem; font-weight: 700; background: #fff;
+  color: var(--green); border: 1px solid rgba(60,74,39,.22); }
+.pchip.on { background: var(--green); color: #fff; border-color: var(--green); }
+.pchip-cnt { font-size: .72rem; opacity: .75; }
+.psearch { position: relative; flex: 1 1 210px; max-width: 320px; display: flex; align-items: center; }
+.psearch svg { position: absolute; inset-inline-start: .6rem; width: 15px; height: 15px;
+  fill: none; stroke: var(--muted, #8a7f64); stroke-width: 2; stroke-linecap: round; pointer-events: none; }
+.psearch .a-input { width: 100%; padding-inline-start: 2rem; padding-inline-end: 1.8rem; font-size: .85rem; }
+.pclear { position: absolute; inset-inline-end: .45rem; font-size: 1.1rem; line-height: 1;
+  color: var(--muted, #8a7f64); background: none; border: 0; padding: .1rem .25rem; }
+
 .was { color: var(--muted, #8a7f64); opacity: .8; margin-inline-start: .35rem; font-size: .9em; }
 .on-sale { color: var(--terra, #a85a32); }
 .sale-hint { display: block; font-size: .74rem; color: var(--muted, #8a7f64); margin-top: .3rem; }
