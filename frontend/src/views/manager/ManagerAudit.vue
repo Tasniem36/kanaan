@@ -246,8 +246,38 @@ function pillClass(action) {
   return 'pill-ok'
 }
 
+// Why an order was let go, in words. cancel_and_restore records either Ziina's own
+// word for it or the sentence the shop concluded from its silence, so both are
+// translated where we know them and shown as they are where we don't — a manager
+// reading "expired" against "unresolved for over 1440m" is being told two very
+// different things about the same customer.
+const WHY = {
+  failed: 'whyFailed',
+  cancelled: 'whyCustomer',
+  canceled: 'whyCustomer',
+  expired: 'whyExpired',
+  'cancelled by the customer': 'whyCustomer',
+  'the payment could not be started': 'whyNoStart',
+}
+
+function whyText(w) {
+  if (!w) return ''
+  const stale = /^unresolved for over (\d+)m$/.exec(w)
+  if (stale) return t('manager.whyUnresolved', { n: stale[1] })
+  const key = WHY[w]
+  return key ? t(`manager.${key}`) : w
+}
+
 function detailText(a) {
   const d = a.detail || {}
+  const ref = `#${String(d.order_id || '').slice(0, 8)}`
+  // The row the shop reads when an order disappeared. Without the reason it says
+  // only that one did, which is the part a manager could already see.
+  if (a.action === 'payment_released')
+    return [ref, d.total, whyText(d.why)].filter(Boolean).join(' · ')
+  if (a.action === 'payment_resumed' || a.action === 'payment_switched_to_cod')
+    return [ref, d.total].filter(Boolean).join(' · ')
+  if (a.action === 'help_needed') return reasonLabel(d.reason || '')
   if (a.action === 'order_placed')
     return `#${String(d.order_id || '').slice(0, 8)} · ${d.total}` + (d.discount_code ? ` · ${d.discount_code}` : '') + (d.payment_method ? ` · ${d.payment_method}` : '')
   if (a.action === 'payment_confirmed') return `#${String(d.order_id || '').slice(0, 8)} · ${d.total}`
