@@ -2,7 +2,9 @@
   <!-- role=status, not alert: it updates as the basket grows and a screen reader
        should mention it in passing, not interrupt what is being read. -->
   <div v-if="threshold > 0 && settings.deliveryLoaded" class="fd" :class="[variant, { done, hidden }]" role="status">
-    <p class="fd-msg">{{ message }}</p>
+    <!-- the row that collapses; the track below rides the band's edge and is
+         positioned out of flow, so it must stay outside it -->
+    <div class="fd-inner"><p class="fd-msg">{{ message }}</p></div>
     <!-- no progress line on an empty basket: a bar sitting at 0% reads as failure
          rather than an invitation -->
     <div v-if="cart.count" class="fd-track"><span class="fd-fill" :style="{ width: pct + '%' }"></span></div>
@@ -58,24 +60,51 @@ const hidden = ref(false)
 const TOP = 80        // near the top nothing has been scrolled past, so always show
 const JITTER = 6      // a fingertip resting on a phone moves a pixel or two
 
+// Folding is a layout change, not a paint: the band sits in the normal flow of the
+// sticky block, so opening it pushes the page down and closing it pulls the page up
+// by its full height. The browser keeps the view steady by shifting the scroll
+// offset itself, and that arrives here as a scroll event of about thirty pixels —
+// five times JITTER, pointing whichever way the fold went. Acted on, it folds the
+// band the other way, which shifts the layout again, which sends another event: the
+// band ends up steering itself, and adding something to the basket makes it flutter
+// under the header instead of opening once.
+//
+// So a fold suspends the reading. No decision is taken while one is running, and
+// lastY is kept level with the moving page — without that, the whole shift would be
+// waiting as a single phantom delta on the first event after the window closed, and
+// the flutter would just be deferred rather than gone.
+const SETTLE = 380    // the .28s fold, plus room for the reflow trailing it
+
 let lastY = 0
 let queued = false
+let settleUntil = 0
+
+// Every change of `hidden` goes through here, so there is no way to fold the band
+// without also telling the listener to disregard what the fold does to the page.
+function fold(next) {
+  if (hidden.value === next) return
+  hidden.value = next
+  settleUntil = performance.now() + SETTLE
+}
 
 function onScroll() {
   if (queued) return
   queued = true
   requestAnimationFrame(() => {
     const y = window.scrollY
-    if (y < TOP) hidden.value = false
-    else if (Math.abs(y - lastY) > JITTER) hidden.value = y > lastY
-    lastY = y
+    if (performance.now() >= settleUntil) {
+      if (y < TOP) fold(false)
+      else if (Math.abs(y - lastY) > JITTER) fold(y > lastY)
+    }
+    lastY = y   // in step either way — this is the half that stops a suspended
+                // fold from landing later as one large delta
     queued = false
   })
 }
 
 // Adding something to the basket changes what the band says, and that is exactly
 // the moment worth showing: they are one jar closer than the last time they looked.
-watch(() => cart.count, () => { hidden.value = false })
+watch(() => cart.count, () => fold(false))
 
 onMounted(() => {
   if (!settings.deliveryLoaded) settings.fetchDelivery()
@@ -97,18 +126,25 @@ onBeforeUnmount(() => window.removeEventListener('scroll', onScroll))
 /* --- the band under the header ------------------------------------------- */
 .fd.strip {
   position: relative;
+  display: grid;
+  grid-template-rows: 1fr;
   padding: .36rem 1rem .46rem;
   text-align: center;
   background: linear-gradient(180deg, rgba(184,144,47,.16), rgba(184,144,47,.06));
   border-top: 1px solid rgba(184,144,47,.28);
   overflow: hidden;
-  max-height: 4rem;
-  transition: max-height .28s ease, opacity .2s ease, padding .28s ease;
+  transition: grid-template-rows .28s ease, opacity .2s ease, padding .28s ease,
+              border-top-width .28s ease;
 }
+/* The row is measured, not guessed. max-height stood at 4rem against a band that is
+   nearer 2, so the fold spent its first half on the message and its second half on
+   empty space — which is why a short line looked like it jumped and then stalled.
+   0fr/1fr animates the height the content actually has, at either font size. */
+.fd.strip > .fd-inner { min-height: 0; overflow: hidden; }
 /* folded away rather than slid up: the band sits under the header inside the same
    sticky block, so anything that moved it would slide it behind the bar */
 .fd.strip.hidden {
-  max-height: 0; opacity: 0;
+  grid-template-rows: 0fr; opacity: 0;
   padding-top: 0; padding-bottom: 0; border-top-width: 0;
 }
 @media (prefers-reduced-motion: reduce) { .fd.strip { transition: none; } }
