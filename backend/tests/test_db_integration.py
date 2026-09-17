@@ -20,6 +20,9 @@ import threading
 import pytest
 from fastapi import Response
 
+import background
+from order_ref import display_ref
+
 DSN = os.getenv("TEST_PG_DSN")
 SCRATCH = "dukkan_pytest"
 
@@ -1117,3 +1120,210 @@ def test_mine_does_not_widen_anything_for_a_customer(live_db):
     cust = {"id": U_CUST, "role": "customer"}
     assert (o.list_orders(Req(), user=cust)["orders"]
             == o.list_orders(Req(mine="1"), user=cust)["orders"])
+
+
+# --- guest checkout, against the real table ----------------------------------
+# An e-mail typed at checkout is unverified, so it must never attach an order to a
+# registered account (routers/orders._guest_account). Everything below is about what
+# that costs and what it must not cost: the order still reaches its customer, by every
+# channel it reached them by before.
+U_REAL = "44444444-4444-4444-4444-444444444444"
+REAL_EMAIL = "someone@example.com"
+
+GUEST_BODY = {"customer_name": "زائر", "phone": "0509876543", "city": "دبي",
+              "street": "ش", "house": "7", "items": [{"product_id": P_OIL, "qty": 1}]}
+
+
+@pytest.fixture
+def guest_checkout(live_db, monkeypatch):
+    """Guest checkout switched on, with the outgoing channels captured rather than
+    sent. Returns (orders module, mails, whatsapps)."""
+    import routers.orders as o
+    from db import execute
+
+    execute("""insert into users (id, email, password_hash, full_name, phone, role)
+               values (%s, %s, %s, %s, %s, 'customer')""",
+            [U_REAL, REAL_EMAIL, "$2b$10$a.real.bcrypt.hash", "صاحبة الحساب", "+971500000001"])
+
+    monkeypatch.setattr(o, "get_checkout_config", lambda: {"guest_allowed": True})
+    for quiet in ("_alert_managers", "_notify_new_order_admins", "notify_new_order"):
+        monkeypatch.setattr(o, quiet, lambda *a, **k: None)
+    monkeypatch.setattr(o, "log_action", lambda **k: None)   # writes from a thread
+
+    mails, whatsapps = [], []
+    monkeypatch.setattr(o, "send_email", lambda to, subject, body: mails.append((to, subject, body)))
+    monkeypatch.setattr(o.whatsapp, "configured", lambda: True)
+    monkeypatch.setattr(o.whatsapp, "notify_all", lambda: False)
+    monkeypatch.setattr(o.whatsapp, "send_order_placed", lambda **kw: whatsapps.append(kw))
+    monkeypatch.setattr(o.whatsapp, "send_order_status", lambda **kw: whatsapps.append(kw))
+    return o, mails, whatsapps
+
+
+def _place(o, **over):
+    return o.create_order(Req(), user=None, payload={**GUEST_BODY, **over})["order"]
+
+
+def _row(oid):
+    from db import fetch_one
+    return fetch_one("select * from orders where id = %s", [oid])
+
+
+# 1 — a guest who gives no address at all
+def test_a_guest_with_no_e_mail_hangs_off_nothing(guest_checkout):
+    o, mails, whatsapps = guest_checkout
+    from db import fetch_one
+
+    order = _place(o)
+    row = _row(order["id"])
+    assert row["user_id"] is None and row["guest_email"] is None
+    assert fetch_one("select count(*)::int as n from users")["n"] == 3, "no account invented"
+    assert mails == [], "nowhere to send one"
+    background.wait_all(5)
+    assert len(whatsapps) == 1, "the phone is always there, so this always goes"
+
+
+# 2 — a guest whose address nobody has used before
+def test_a_new_address_still_opens_the_password_less_account(guest_checkout):
+    o, mails, _ = guest_checkout
+    from db import fetch_one
+
+    order = _place(o, email="fresh@example.com")
+    row = _row(order["id"])
+    acct = fetch_one("select * from users where email = %s", ["fresh@example.com"])
+    assert acct is not None and acct["password_hash"] == "", "claimable through /register, not before"
+    assert str(row["user_id"]) == str(acct["id"]), "one history for a returning guest"
+    assert row["guest_email"] == "fresh@example.com"
+    assert [to for to, _s, _b in mails] == ["fresh@example.com"]
+
+
+# 3 — a guest whose address belongs to a registered customer
+def test_an_address_with_a_real_account_attaches_to_nothing(guest_checkout):
+    o, _mails, _w = guest_checkout
+    from db import fetch_one
+
+    row = _row(_place(o, email=REAL_EMAIL)["id"])
+    assert row["user_id"] is None, "a stranger's order must not land in somebody's حسابي"
+    assert row["guest_email"] == REAL_EMAIL, "but the address they typed is kept"
+    assert fetch_one("select count(*)::int as n from users")["n"] == 3, "no second row for it"
+
+
+def test_the_registered_account_is_not_written_into(guest_checkout):
+    """_guest_account fills in a name or phone the row is missing. Reached through a
+    real account that is a stranger editing somebody's profile."""
+    o, _m, _w = guest_checkout
+    from db import execute, fetch_one
+
+    execute("update users set full_name = '', phone = '' where id = %s", [U_REAL])
+    _place(o, email=REAL_EMAIL)
+    after = fetch_one("select full_name, phone from users where id = %s", [U_REAL])
+    assert after["full_name"] == "" and after["phone"] == ""
+
+
+def test_the_two_answers_are_indistinguishable(guest_checkout):
+    """Otherwise checkout tells you which addresses have accounts."""
+    o, _m, _w = guest_checkout
+
+    taken = _place(o, email=REAL_EMAIL)
+    free = _place(o, email="nobody@example.com")
+    assert taken.keys() == free.keys()
+    assert taken["status"] == free["status"] and taken["total"] == free["total"]
+
+
+# 4, 7, 8 — the money lands, and the customer hears about it on both channels
+def test_a_settled_payment_mails_the_address_on_the_order(guest_checkout, monkeypatch):
+    """The case the column exists for: no account, so nothing else knows where to
+    write, and the mail goes out when the payment settles rather than at checkout."""
+    o, mails, whatsapps = guest_checkout
+    monkeypatch.setattr(o, "create_payment_intent",
+                        lambda **k: {"id": "pi-live", "redirect_url": "https://pay.ziina/x"})
+
+    order = _place(o, email=REAL_EMAIL, payment_method="ziina")
+    assert mails == [], "nothing is confirmed before the money arrives"
+
+    paid = o.mark_paid(_row(order["id"]))
+    assert paid["payment_status"] == "paid"
+    background.wait_all(5)
+    assert [to for to, _s, _b in mails] == [REAL_EMAIL]
+    assert len(whatsapps) == 1, "and the phone hears about it too"
+    assert str(order["id"])[:8] in whatsapps[0]["track_url"]
+
+
+def test_a_guest_order_is_never_left_without_a_confirmation(guest_checkout, monkeypatch):
+    """The regression this whole change turns on. Attaching to the registered account
+    made _can_sign_in true, which skipped the e-mail AND the WhatsApp — so the person
+    who actually ordered heard nothing at all."""
+    o, mails, whatsapps = guest_checkout
+    monkeypatch.setattr(o, "create_payment_intent", lambda **k: {"id": "pi-2", "redirect_url": "u"})
+
+    order = _place(o, email=REAL_EMAIL, payment_method="ziina")
+    o.mark_paid(_row(order["id"]))
+    background.wait_all(5)
+    assert mails and whatsapps, "silence on both channels is the bug"
+
+
+# 5 — the payment is cancelled
+def test_a_cancelled_payment_confirms_nothing(guest_checkout, monkeypatch):
+    o, mails, whatsapps = guest_checkout
+    monkeypatch.setattr(o, "create_payment_intent", lambda **k: {"id": "pi-3", "redirect_url": "u"})
+
+    order = _place(o, email=REAL_EMAIL, payment_method="ziina")
+    before = _stock(P_OIL)
+    assert o.cancel_and_restore(order["id"], why="cancelled by the customer") is True
+    background.wait_all(5)
+    assert _stock(P_OIL) == before + 1, "the litre goes back on the shelf"
+    assert mails == [], "an order nobody paid for is not confirmed to anybody"
+    assert _row(order["id"])["guest_email"] == REAL_EMAIL, "the address stays for a retry"
+
+
+# 6 — the payment is left hanging and the sweep releases it
+def test_an_expired_payment_is_released_and_confirms_nothing(guest_checkout, monkeypatch):
+    import reconcile as rec
+    o, mails, _w = guest_checkout
+    monkeypatch.setattr(o, "create_payment_intent", lambda **k: {"id": "pi-4", "redirect_url": "u"})
+    from db import execute
+
+    order = _place(o, email=REAL_EMAIL, payment_method="ziina")
+    execute("update orders set created_at = now() - interval '3 hours' where id = %s", [order["id"]])
+    assert any(str(r["id"]) == str(order["id"]) for r in rec.unresolved_orders()), (
+        "a guest order with no account must still be swept"
+    )
+    o.cancel_and_restore(order["id"], why="expired")
+    background.wait_all(5)
+    assert _row(order["id"])["status"] == "cancelled"
+    assert mails == []
+
+
+# 9 — finding it again with no account and no link
+def test_the_order_is_found_by_its_number_and_the_phone(guest_checkout):
+    o, _m, _w = guest_checkout
+    order = _place(o, email=REAL_EMAIL)
+    found = o.lookup_order(Req(), payload={"ref": _row(order["id"])["ref"], "contact": "0509876543"})
+    assert str(found["id"]) == str(order["id"])
+
+
+def test_the_order_is_found_by_the_address_that_was_typed(guest_checkout):
+    """There is no account row to read an address off, so this is the coalesce."""
+    o, _m, _w = guest_checkout
+    order = _place(o, email=REAL_EMAIL)
+    found = o.lookup_order(Req(), payload={"ref": _row(order["id"])["ref"], "contact": REAL_EMAIL})
+    assert str(found["id"]) == str(order["id"])
+
+
+def test_the_tracking_token_still_opens_it(guest_checkout):
+    o, _m, _w = guest_checkout
+    order = _place(o, email=REAL_EMAIL)
+    row = _row(order["id"])
+    opened = o.track_order(str(order["id"]), Req(), t=row["track_token"], user=None)["order"]
+    assert opened["number"] == display_ref(row["ref"], row["id"])
+
+
+# 10 — and none of it reaches the account whose address was typed
+def test_the_registered_customer_never_sees_the_order(guest_checkout):
+    o, _m, _w = guest_checkout
+    order = _place(o, email=REAL_EMAIL)
+
+    theirs = o.list_orders(Req(mine="1"), user={"id": U_REAL, "role": "customer"})["orders"]
+    assert all(str(x["id"]) != str(order["id"]) for x in theirs), (
+        "a stranger's name, phone and address inside somebody's order history"
+    )
+    assert theirs == [], "that account has ordered nothing"

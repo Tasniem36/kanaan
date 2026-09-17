@@ -23,7 +23,7 @@ def stub_order(monkeypatch):
     """Stand in for the whole transactional body of create_order, capturing what
     SQL it ran so the guest-account path can be asserted on."""
     calls = []
-    state = {"order": None}
+    state = {"order": None, "existing_user": None}
 
     class FakeCur:
         description = True
@@ -34,7 +34,8 @@ def stub_order(monkeypatch):
         def fetchall(self):
             sql = calls[-1][0]
             if "from users where email" in sql:
-                return []                      # no existing account for this e-mail
+                # no account for this address unless a test puts one there
+                return [state["existing_user"]] if state["existing_user"] else []
             if "insert into users" in sql:
                 return [{"id": "new-user", "email": GUEST["email"], "full_name": "تسنيم",
                          "phone": "+971501234567", "role": "customer"}]
@@ -141,6 +142,138 @@ def test_an_order_with_no_e_mail_hangs_off_no_account(client, stub_order):
     inserted = next(p for sql, p in calls if sql.startswith("insert into orders"))
     assert inserted[0] is None, "user_id"
     assert not any(sql.startswith("insert into users") for sql, _ in calls)
+
+
+# --- an address that belongs to somebody else --------------------------------
+# A row with a password is a real account whose owner verified that address when they
+# registered. An e-mail typed at guest checkout proves nothing about who typed it, and
+# one wrong character on a common address is enough — so it must not be able to file an
+# order inside that account.
+REGISTERED = {"id": "real-account", "email": GUEST["email"], "full_name": "صاحب الحساب",
+              "phone": "+971509999999", "role": "customer", "password_hash": "$2b$10$realhash"}
+UNCLAIMED = {**REGISTERED, "id": "shadow-account", "password_hash": ""}
+
+
+def _order_insert(calls):
+    """The INSERT that wrote the order, read as {column: value} — so these tests say
+    which column they mean instead of counting placeholders."""
+    sql, params = next((s, p) for s, p in calls if s.startswith("insert into orders"))
+    names = [c.strip() for c in sql.split("(", 1)[1].split(")", 1)[0].split(",")]
+    return dict(zip(names, params))
+
+
+def test_an_address_with_a_real_account_does_not_attach_the_order_to_it(client, stub_order):
+    calls, _sent, state = stub_order
+    state["existing_user"] = REGISTERED
+    assert client.post("/api/orders", json=GUEST).status_code == 200
+    assert _order_insert(calls)["user_id"] is None, (
+        "a stranger's order must not be filed inside a registered customer's حسابي"
+    )
+    assert not any(s.startswith("insert into users") for s, _ in calls), (
+        "and no account may be created for an address that already has one"
+    )
+
+
+def test_the_refusal_is_invisible_to_whoever_typed_the_address(client, stub_order):
+    """Otherwise checkout answers "does this person shop here?" for any address typed
+    into it. The order goes through, and goes through identically."""
+    calls, _sent, state = stub_order
+    state["existing_user"] = REGISTERED
+    taken = client.post("/api/orders", json=GUEST)
+    calls.clear()
+    state["existing_user"] = None
+    free = client.post("/api/orders", json={**GUEST, "email": "nobody@example.com"})
+    assert taken.status_code == free.status_code == 200
+    assert taken.json().keys() == free.json().keys()
+    assert taken.json()["order"] == free.json()["order"]
+
+
+def test_a_password_less_row_from_an_earlier_guest_order_is_still_reused(client, stub_order):
+    """The convenience this lookup exists for. Nobody can sign into that row, so
+    nobody's account is being written into, and the customer keeps one history."""
+    calls, _sent, state = stub_order
+    state["existing_user"] = UNCLAIMED
+    client.post("/api/orders", json=GUEST)
+    assert _order_insert(calls)["user_id"] == "shadow-account"
+    assert not any(s.startswith("insert into users") for s, _ in calls), "the row already exists"
+
+
+def test_a_real_account_is_not_written_into_either(client, stub_order):
+    """_guest_account fills in a name or phone the row is missing. On a registered
+    account that is a stranger setting a detail on somebody's profile."""
+    calls, _sent, state = stub_order
+    state["existing_user"] = {**REGISTERED, "full_name": "", "phone": ""}
+    client.post("/api/orders", json=GUEST)
+    assert not any(s.startswith("update users") for s, _ in calls)
+
+
+# --- the address the confirmation goes to ------------------------------------
+def test_the_order_keeps_the_address_the_guest_typed(client, stub_order):
+    """On the order, not only on the account it hangs off: a card order's copy is sent
+    when the payment settles, days after this request, and this order may have no
+    account at all to read an address from."""
+    calls, _sent, _state = stub_order
+    client.post("/api/orders", json=GUEST)
+    assert _order_insert(calls)["guest_email"] == GUEST["email"]
+
+
+def test_the_guest_whose_address_has_an_account_still_gets_their_copy(client, stub_order):
+    calls, _sent, state = stub_order
+    state["existing_user"] = REGISTERED
+    client.post("/api/orders", json=GUEST)
+    row = _order_insert(calls)
+    assert row["user_id"] is None and row["guest_email"] == GUEST["email"], (
+        "no account, so the address on the order is the only way to reach them"
+    )
+
+
+@pytest.mark.parametrize("email", ["", "   "])
+def test_a_guest_who_gives_no_address_stores_none(client, stub_order, email):
+    calls, _sent, _state = stub_order
+    client.post("/api/orders", json={**GUEST, "email": email})
+    assert _order_insert(calls)["guest_email"] is None, "'' would look like an address to mail"
+
+
+def test_a_signed_in_customers_order_carries_no_guest_e_mail(client, app, stub_order):
+    """They have حسابي to find the order in and were never sent this mail. Leaving the
+    column NULL is what keeps it that way — _guest_email_for answers from it first."""
+    from security import optional_user
+    app.dependency_overrides[optional_user] = lambda: {"id": "me", "role": "customer"}
+    calls, _sent, _state = stub_order
+    client.post("/api/orders", json=GUEST)
+    assert _order_insert(calls)["guest_email"] is None
+
+
+# --- what the settle path reads, days later ----------------------------------
+def test_the_settle_path_mails_the_address_on_the_order(monkeypatch):
+    """Asked of the order, so it needs no account and no second query."""
+    monkeypatch.setattr(orders, "fetch_one",
+                        lambda *a, **k: pytest.fail("the column answers without a lookup"))
+    assert orders._guest_email_for(
+        {"user_id": None, "guest_email": "guest@example.com"}) == "guest@example.com"
+
+
+def test_an_order_from_before_the_column_falls_back_to_its_account(monkeypatch):
+    """Orders already in the table have guest_email NULL. Their confirmation still has
+    to go out the way it did before this column existed."""
+    monkeypatch.setattr(orders, "fetch_one", lambda sql, params=None:
+                        {"password_hash": ""} if "password_hash" in sql else {"email": "old@example.com"})
+    assert orders._guest_email_for({"user_id": "shadow", "guest_email": None}) == "old@example.com"
+
+
+def test_a_customer_who_can_sign_in_is_still_not_mailed(monkeypatch):
+    """A NULL column must not read as "no account either" — the fallback still decides."""
+    monkeypatch.setattr(orders, "fetch_one", lambda sql, params=None: {"password_hash": "$2b$10$real"})
+    assert orders._guest_email_for({"user_id": "real-account", "guest_email": None}) is None
+
+
+def test_a_claimed_guest_account_does_not_silence_the_order_it_placed(monkeypatch):
+    """A guest whose shadow account is claimed through /register between placing the
+    order and the payment settling. _can_sign_in turns true at that moment, and the
+    account lookup alone would drop the copy for an order they placed as a guest."""
+    monkeypatch.setattr(orders, "fetch_one", lambda sql, params=None: {"password_hash": "$2b$10$claimed"})
+    assert orders._guest_email_for(
+        {"user_id": "claimed", "guest_email": "guest@example.com"}) == "guest@example.com"
 
 
 def test_a_signed_in_customer_needs_no_e_mail(client, app, stub_order):
@@ -324,6 +457,26 @@ def test_the_order_number_plus_a_matching_contact_finds_it(client, lookup_row, c
     res = client.post("/api/orders/lookup", json={"ref": "DK-K7M2XPQ", "contact": contact})
     assert res.status_code == 200, res.text
     assert res.json() == {"id": OID, "token": "tok-abc"}
+
+
+def test_the_address_typed_at_checkout_finds_the_order_with_no_account(client, monkeypatch):
+    """The guest whose address belongs to a registered customer has no user_id, so
+    there is no account row to read an address off. The confirmation they are holding
+    went to what they typed, and that is what the form has to accept."""
+    seen = {}
+
+    def fake(sql, params=None):
+        seen["sql"] = " ".join(sql.split())
+        return {"id": OID, "phone": "+971501234567", "track_token": "tok-abc",
+                "email": "guest@example.com"}
+
+    monkeypatch.setattr(orders, "fetch_one", fake)
+    res = client.post("/api/orders/lookup",
+                      json={"ref": "DK-K7M2XPQ", "contact": "guest@example.com"})
+    assert res.status_code == 200, res.text
+    assert "coalesce(u.email, o.guest_email)" in seen["sql"], (
+        "an order with no account must still be findable by the address it was placed with"
+    )
 
 
 @pytest.mark.parametrize("contact", ["0509999999", "someone@else.com", "x"])

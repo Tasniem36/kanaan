@@ -118,6 +118,15 @@ alter table orders add column if not exists ziina_payment_id text;
 alter table orders add column if not exists hidden boolean not null default false;
 alter table orders add column if not exists discount_code text;
 alter table orders add column if not exists discount_amount numeric(10, 2) not null default 0;
+-- The address a guest typed at checkout, kept on the order rather than only on the
+-- account the order hangs off. Two reasons it has to live here:
+--   * an unverified e-mail must never attach an order to a registered account, so
+--     some guest orders have no user_id to read an address from (_guest_account);
+--   * a card order's confirmation is sent when the payment settles, which can be days
+--     after the request that typed the address has gone.
+-- Never a credential: nothing authenticates or authorises on it. Orders placed before
+-- this column existed leave it NULL and fall back to their account's address.
+alter table orders add column if not exists guest_email text;
 
 -- ---------- order_status_events (when each status was reached) --------------
 -- Powers the customer-facing tracking timeline: one row per transition, so the

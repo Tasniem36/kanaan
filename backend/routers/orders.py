@@ -247,7 +247,21 @@ def _guest_email_for(order):
     unchanged — it is asked of the order now rather than of the request that created
     it, because a card order's mail is sent when the payment settles, long after that
     request has gone.
+
+    The order's own column answers first. It is set for every guest who typed an
+    address, including the one whose address turned out to belong to a registered
+    account — that order has no user_id at all, so there is nowhere else left to read
+    it from, and without this it is the one guest who would get no copy.
+
+    It also outranks the account lookup where both exist, which decides one case the
+    lookup used to get wrong: a guest whose shadow account is claimed through
+    /register between placing the order and the payment settling. `_can_sign_in`
+    turns true at that moment and the copy for an order they placed as a guest would
+    silently stop. The address is on the order because they asked for it there.
     """
+    typed = (order.get("guest_email") or "").strip()
+    if typed:
+        return typed
     uid = order.get("user_id")
     if not uid or _can_sign_in(uid):
         return None
@@ -310,16 +324,33 @@ def _checkout_failed(request, user, reason, **extra):
 
 
 def _guest_account(run, email, full_name, phone, request):
-    """The account a guest order hangs off.
+    """The account a guest order hangs off, or None when it must hang off nothing.
 
-    Reuses the row for that e-mail when there is one — so a customer who once
-    ordered as a guest, or who already has a real account, keeps a single history.
-    Otherwise creates one with an empty password_hash: unusable for login until
-    they claim it through /register (see routers/auth.py).
+    Reuses the row for that e-mail when it is one guest checkout opened itself —
+    password-less, so a customer who ordered as a guest before keeps a single
+    history. Otherwise creates one the same way: empty password_hash, unusable for
+    login until claimed through /register (see routers/auth.py).
+
+    A row that already has a password is a real account whose owner verified that
+    address at registration, and an e-mail typed at checkout proves nothing about
+    who typed it. Attaching there would file a stranger's name, phone and delivery
+    address inside somebody's حسابي, send them the notification for it, and — because
+    both the e-mail and the WhatsApp are skipped for an order whose account can sign
+    in — leave the person who actually ordered with no confirmation at all. One typo
+    on a common address is enough to do it. /register guards the same row the same
+    way (`where coalesce(users.password_hash, '') = ''`); this is that guard.
+
+    Refused in silence, with no trace in the response: the answer a guest gets must
+    not depend on whether the address they typed has an account, or checkout becomes
+    a way to ask which of them do. The order still goes through — it keeps the
+    address in orders.guest_email, so the confirmation is still sent, and its phone
+    and tracking token still reach it.
     """
     rows = run("select id, email, full_name, phone, role, password_hash from users where email = %s", [email])
     if rows:
         u = rows[0]
+        if (u["password_hash"] or "").strip():
+            return None
         # fill in details the row is missing (an earlier guest order may have had none)
         if not (u["full_name"] or "").strip() or not (u["phone"] or "").strip():
             run("""update users set full_name = coalesce(nullif(full_name, ''), %s),
@@ -383,7 +414,11 @@ def create_order(request: Request, user=Depends(optional_user), payload: dict = 
         if user:
             user_id = user["id"]
         elif guest_email:
-            user_id = _guest_account(run, guest_email, customer_name, phone_norm, request)["id"]
+            # None when that address belongs to a registered account: the order stands
+            # on its own, exactly like a guest order placed without an e-mail at all
+            # (the branch below) — a path this endpoint already takes every day.
+            acct = _guest_account(run, guest_email, customer_name, phone_norm, request)
+            user_id = acct["id"] if acct else None
         else:
             user_id = None
 
@@ -446,10 +481,14 @@ def create_order(request: Request, user=Depends(optional_user), payload: dict = 
         order = run(
             """insert into orders (user_id, customer_name, phone, city, street, house, notes, total,
                                    payment_method, discount_code, discount_amount, delivery_fee,
-                                   track_token, ref)
-               values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) returning *""",
+                                   guest_email, track_token, ref)
+               values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) returning *""",
+            # guest_email is the address a guest asked for their copy at, and is only
+            # ever set for a guest: a signed-in customer's order leaves it NULL, so
+            # nothing here can start mailing someone who has حسابي to look in.
             [user_id, customer_name, phone_norm, city, street, house, payload.get("notes"),
              final_total, payment_method, discount_code, discount, delivery_fee,
+             guest_email or None,
              secrets.token_urlsafe(16),
              new_ref(lambda r: bool(run("select 1 from orders where ref = %s", [r])))],
         )[0]
@@ -584,8 +623,14 @@ def lookup_order(request: Request, payload: dict = Body(default={})):
     # an id prefix would have widened a deliberately narrow endpoint to an identifier
     # that is semi-public: order ids sit in /track and /pay/return URLs, the number
     # does not.
+    # The account's address, or the one typed at checkout when there is no account to
+    # read it from. A guest whose address turned out to belong to a registered
+    # customer has no user_id at all (see _guest_account), and matching on u.email
+    # alone would leave them with only their phone to find their own order by — while
+    # the confirmation they are holding was sent to the address this ignores.
     order = fetch_one(
-        """select o.id, o.phone, o.track_token, u.email from orders o
+        """select o.id, o.phone, o.track_token, coalesce(u.email, o.guest_email) as email
+           from orders o
            left join users u on u.id = o.user_id
            where o.ref = %s""", [ref])
     not_found = HTTPException(404, "We could not find an order with those details")
