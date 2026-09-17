@@ -3,7 +3,7 @@ import { createPinia } from 'pinia'
 import App from './App.vue'
 import { routes, scrollBehavior, registerGuards } from './router'
 import { i18n } from './i18n'
-import { reportError } from './services/report'
+import { reportError, isForeignScript } from './services/report'
 import './style.css'
 
 // vite-ssg owns the app/router lifecycle: it prerenders the public routes to static
@@ -27,8 +27,13 @@ export const createApp = ViteSSG(
         const r = e?.reason
         reportError(`Unhandled: ${r?.message || r}`, r?.stack)
       })
+      // Only this listener is filtered by filename. The two above have none to judge
+      // — a Vue error is ours by definition, and a rejected promise carries no script
+      // URL at all, so a genuine bug of ours reaching either must still be reported.
       window.addEventListener('error', (e) => {
-        if (e?.message) reportError(e.message, `${e.filename || ''}:${e.lineno || ''}`)
+        if (!e?.message) return   // a failed <img>/<script> fires here too, with none
+        if (isForeignScript(e.filename)) return
+        reportError(e.message, `${e.filename || ''}:${e.lineno || ''}`)
       })
     }
   },
