@@ -65,9 +65,20 @@ export const useCartStore = defineStore('cart', {
     loadFromServer() {
       const auth = useAuthStore()
       if (!auth.isAuthenticated) return Promise.resolve()
+      // The session this pull belongs to. A basket is the one thing here that is
+      // nobody else's business, and this request is the one place the answer can
+      // outlive the question: the reply is a whole round-trip behind the token that
+      // asked for it.
+      const asked = auth.token
       syncing = (async () => {
         try {
           const { items } = await api('/cart')
+          // Signed out while it was in flight, or signed in as somebody else. Either
+          // way the basket that came back is the last customer's, and applying it now
+          // would hand their shopping to whoever is holding the browser — then
+          // persist() would write it to localStorage, where the next reload finds it
+          // and it stops looking like a glitch and starts looking like their cart.
+          if (auth.token !== asked) return
           if (items && typeof items === 'object') {
             const merged = { ...items }
             for (const [id, line] of Object.entries(this.items)) {
@@ -128,6 +139,17 @@ export const useCartStore = defineStore('cart', {
     clear() {
       this.items = {}
       this.persist()
+    },
+    // Sign-out: the basket, and the pull that was fetching it.
+    //
+    // Dropping the promise as well as the lines is what stops whenSynced() resolving
+    // against the previous session. Its callers are the two paths that take a paid
+    // order back out of the basket, and they wait on it precisely because a merge
+    // that lands after a removal undoes the removal — so a stale promise there means
+    // one customer's payment quietly restoring another's basket.
+    dropSession() {
+      syncing = null
+      this.clear()
     },
   },
 })

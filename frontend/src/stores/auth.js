@@ -110,7 +110,7 @@ export const useAuthStore = defineStore('auth', {
       this.user = null
       localStorage.removeItem('token')
       localStorage.removeItem('user')
-      useCartStore().clear()
+      useCartStore().dropSession()
       useWishlistStore().clear()
       // before the reset, so the poll interval and its listener actually go: they're
       // held in state, and $reset would only overwrite the handles. This is also what

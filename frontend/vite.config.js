@@ -36,6 +36,14 @@ export default defineConfig(({ mode }) => {
       includedRoutes: () => ['/', '/login', '/register', '/forgot-password'],
       formatting: 'minify',
     },
+    // Unit tests for the stores. jsdom for localStorage, which the basket and the
+    // session are both persisted to — several of these are about what is left in it.
+    test: {
+      environment: 'jsdom',
+      include: ['src/**/*.test.js'],
+      setupFiles: ['src/test-setup.js'],
+      restoreMocks: true,
+    },
     server: { proxy: proxy() },
     // `vite preview` (serving the built dist) uses the same proxy, so a local
     // production build can talk to the same API.
