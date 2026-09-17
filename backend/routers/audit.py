@@ -9,6 +9,7 @@ from audit import log_action
 from db import fetch_all
 from ratelimit import rate_limit
 from security import optional_user, require_manager
+from errorlog import report_error
 
 # What the storefront itself may add to the trail. Everything else in the log is
 # written server-side from a real action; these are moments only the browser knows
@@ -376,6 +377,7 @@ def audit_geo(request: Request, _m=Depends(require_manager)):
                 result[ip] = loc
         except Exception as e:  # offline / rate-limited → leave those unresolved
             print("[audit.geo]", e)
+            report_error("audit.geo", e)
     for ip in todo:
         result.setdefault(ip, None)  # private or failed lookups
     return {"geo": result}

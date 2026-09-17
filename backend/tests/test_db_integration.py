@@ -1327,3 +1327,27 @@ def test_the_registered_customer_never_sees_the_order(guest_checkout):
         "a stranger's name, phone and address inside somebody's order history"
     )
     assert theirs == [], "that account has ordered nothing"
+
+
+# --- the server's own failures reach the page that shows them ----------------
+def test_a_reported_failure_lands_where_the_manager_reads(live_db):
+    """Everything else about the reporter is tested with the database patched out,
+    which cannot catch an insert the real table refuses."""
+    import errorlog
+    import routers.errors as errors
+
+    errorlog._last.clear()
+    assert errorlog.report_error("order-after-commit", RuntimeError("Meta refused the template"),
+                                 note="order 4f2a1b9c — customer confirmation") is True
+
+    rows = errors.list_errors()["errors"]
+    assert len(rows) == 1
+    row = rows[0]
+    assert "Meta refused the template" in row["message"]
+    assert "order 4f2a1b9c" in row["message"], "which order, not just that one failed"
+    assert "RuntimeError" in row["detail"], "the traceback came with it"
+    assert row["user_id"] is None and row["email"] is None, "nobody's report but ours"
+    assert row["name"] == errorlog._SERVER, (
+        "the contact column is the only rendered place that can say this was the shop's "
+        "own machinery — without it the page calls a server failure 'a guest visitor'"
+    )

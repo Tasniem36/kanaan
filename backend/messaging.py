@@ -14,6 +14,7 @@ from email.message import EmailMessage
 from email.utils import formataddr, formatdate, make_msgid, parseaddr
 
 import requests
+from errorlog import report_error
 
 BRAND = "دكّان كنعان"
 _warned_alignment = False
@@ -94,6 +95,7 @@ def send_email(to: str, subject: str, body: str) -> bool:
         return True
     except Exception as e:  # noqa: BLE001
         print("[email] send failed:", e)
+        report_error("email", e)
         return False
 
 
@@ -116,4 +118,5 @@ def send_sms(to: str, body: str) -> bool:
         return True
     except Exception as e:  # noqa: BLE001
         print("[sms] send error:", e)
+        report_error("sms", e)
         return False

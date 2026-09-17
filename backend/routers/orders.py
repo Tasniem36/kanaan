@@ -19,6 +19,7 @@ import whatsapp
 from delivery import compute_fee as compute_delivery_fee
 from routers.discounts import error_body, evaluate_code
 from routers.settings import get_checkout_config
+from errorlog import report_error
 
 router = APIRouter()
 
@@ -52,6 +53,7 @@ def _alert_managers(order):
             notify_new_order(order)
         except Exception as e:  # noqa: BLE001 — never break an order over an alert
             print("[order-alert]", e)
+            report_error("order-alert", e)
 
     return background.spawn(_safe, name="order-alert")
 
@@ -219,6 +221,7 @@ def _send_order_email(order, email, request):
                    _order_email_body(order, _track_url(order, request)))
     except Exception as e:  # noqa: BLE001 — never break checkout over a mail failure
         print("[order-email]", e)
+        report_error("order-email", e)
 
 
 def _can_sign_in(user_id) -> bool:
@@ -235,6 +238,7 @@ def _can_sign_in(user_id) -> bool:
         row = fetch_one("select password_hash from users where id = %s", [user_id])
     except Exception as e:  # noqa: BLE001
         print("[order-whatsapp] account lookup failed:", e)
+        report_error("order-whatsapp.account", e)
         return False
     return bool(row and (row.get("password_hash") or "").strip())
 
@@ -269,6 +273,7 @@ def _guest_email_for(order):
         row = fetch_one("select email from users where id = %s", [uid])
     except Exception as e:  # noqa: BLE001 — a missing e-mail must not fail a payment
         print("[order-email] account lookup failed:", e)
+        report_error("order-email.account", e)
         return None
     return (row or {}).get("email")
 
@@ -303,6 +308,7 @@ def _send_order_whatsapp(order, request=None, *, status_label=None):
                     else {"total": order["total"]})
     except Exception as e:  # noqa: BLE001 — a row missing fields is not worth a 500
         print("[order-whatsapp]", e)
+        report_error("order-whatsapp", e)
         return None
 
     send = whatsapp.send_order_status if status_label else whatsapp.send_order_placed
@@ -312,6 +318,7 @@ def _send_order_whatsapp(order, request=None, *, status_label=None):
             send(**args)
         except Exception as e:  # noqa: BLE001 — never break an order over a message
             print("[order-whatsapp]", e)
+            report_error("order-whatsapp", e)
 
     return background.spawn(_safe, name="order-whatsapp")
 
@@ -711,6 +718,7 @@ def _after_commit(oid, what, do):
         do()
     except Exception as e:  # noqa: BLE001 — nothing here can unmake the change above
         print(f"[order {str(oid)[:8]}] {what} failed:", e)
+        report_error("order-after-commit", e, note=f"order {str(oid)[:8]} — {what}")
 
 
 def mark_paid(order, request=None, *, by="return"):

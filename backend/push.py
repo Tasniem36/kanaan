@@ -9,6 +9,7 @@ import os
 
 import background
 from db import fetch_all, execute
+from errorlog import report_error
 
 _SUBJECT = os.getenv("VAPID_SUBJECT", "mailto:admin@dukkan-kanaan.com")
 _PRIVATE = os.getenv("VAPID_PRIVATE_KEY")
@@ -46,9 +47,13 @@ def _worker(user_ids, payload):
             if code in (404, 410):  # subscription expired/gone → remove it
                 execute("delete from push_subscriptions where id = %s", [s["id"]])
             else:
+                # Not an expired subscription — the shop tried to reach a device it
+                # still has every reason to believe in, and didn't.
                 print("[push] send failed:", code, str(e)[:200])
+                report_error("push.send", e, note=f"HTTP {code}")
         except Exception as e:  # noqa: BLE001
             print("[push] error:", str(e)[:200])
+            report_error("push", e)
 
 
 def push_to_users(user_ids, *, title, body=None, url="/", tag="dukkan"):
@@ -67,3 +72,4 @@ def _safe(ids, payload):
         _worker(ids, payload)
     except Exception as e:  # noqa: BLE001 — never let push break anything
         print("[push] worker error:", str(e)[:200])
+        report_error("push.worker", e)

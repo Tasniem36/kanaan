@@ -1,6 +1,7 @@
 """In-app notification helpers. Insert rows into `notifications` for the bell feed.
 Never raises — a failed notification must never break the request that triggered it."""
 from db import execute, fetch_all
+from errorlog import report_error
 
 
 def notify_users(user_ids, *, type, title, body=None, order_id=None):
@@ -17,6 +18,7 @@ def notify_users(user_ids, *, type, title, body=None, order_id=None):
         )
     except Exception as e:  # noqa: BLE001 — auditing/notifying is best-effort
         print("[notify]", e)
+        report_error("notify", e)
     # also fire a device push (best-effort). Deep-link orders; messages open the app.
     try:
         import push
@@ -28,6 +30,7 @@ def notify_users(user_ids, *, type, title, body=None, order_id=None):
         push.push_to_users(ids, title=title, body=body, url=url, tag=type)
     except Exception as e:  # noqa: BLE001
         print("[notify.push]", e)
+        report_error("notify.push", e)
 
 
 def notify_managers(*, type, title, body=None, order_id=None):
@@ -35,5 +38,6 @@ def notify_managers(*, type, title, body=None, order_id=None):
         mgrs = fetch_all("select id from users where role = 'manager'")
     except Exception as e:  # noqa: BLE001
         print("[notify] managers lookup failed:", e)
+        report_error("notify.managers", e)
         return
     notify_users([m["id"] for m in mgrs], type=type, title=title, body=body, order_id=order_id)

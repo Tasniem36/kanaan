@@ -21,6 +21,7 @@ from urllib.parse import parse_qsl, urlencode, urlparse
 
 import background
 from db import execute, fetch_one
+from errorlog import report_error
 
 
 def _client_ip(request):
@@ -103,6 +104,7 @@ def _is_staff(user_id) -> bool:
         row = fetch_one("select role from users where id = %s", [user_id])
     except Exception as e:  # noqa: BLE001
         print("[audit] role lookup failed:", e)
+        report_error("audit.role", e)
         return False
     staff = bool(row and row.get("role") == "manager")
     with _roles_lock:
@@ -234,6 +236,7 @@ def log_action(*, user_id=None, action, detail=None, request=None, dedupe=None):
             )
         except Exception as e:  # never let auditing break a request
             print("[audit]", e)
+            report_error("audit", e)
 
     # Through background, not a bare thread: reconcile.py settles payments from a
     # script, and interpreter shutdown would kill this insert wherever it had got to

@@ -32,6 +32,7 @@ import background
 from db import fetch_all
 from ziina import get_payment_intent
 from routers.orders import REFUSED_STATUSES, cancel_and_restore, mark_paid
+from errorlog import report_error
 
 # How long an order may sit with an unresolved intent before that is read as
 # abandoned and its stock goes back on the shelf. Pressing cancel on Ziina's page
@@ -94,6 +95,7 @@ def _act(what: str, oid: str, do):
         return do()
     except Exception as e:  # noqa: BLE001 — one order must not end the sweep
         print(f"✗ {oid[:8]} could not be {what}: {_why(e)}")
+        report_error("reconcile", e, note=f"{oid[:8]} could not be {what}")
         return _FAILED
 
 
@@ -129,6 +131,7 @@ def reconcile(*, apply: bool = False) -> dict:
             # the next run asks again.
             counts["unreachable"] += 1
             print(f"· {oid[:8]} could not be checked: {_why(e)}")
+            report_error("reconcile", e, note=f"{oid[:8]} could not be checked")
             continue
 
         if status == "completed":

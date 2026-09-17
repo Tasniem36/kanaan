@@ -9,6 +9,7 @@ import os
 import requests
 
 from order_ref import display_ref
+from errorlog import report_error
 
 # Order times are shown in the shop's own time, not the server's. python:3.12-slim
 # carries no system timezone database, so ZoneInfo("Asia/Dubai") raises there and this
@@ -49,6 +50,7 @@ def _send_telegram_to(token: str, chat_id: str, text: str) -> dict:
         return {"ok": True}
     except Exception as e:
         print(f"[notify] telegram error for {chat_id}:", e)
+        report_error("telegram", e, note=f"chat {chat_id}")
         return {"ok": False, "error": str(e)}
 
 
@@ -85,6 +87,7 @@ def _send_whatsapp(text: str) -> dict:
         return {"configured": True, "ok": True}
     except Exception as e:
         print("[notify] whatsapp error:", e)
+        report_error("notify.whatsapp", e)
         return {"configured": True, "ok": False, "error": str(e)}
 
 

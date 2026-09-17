@@ -29,6 +29,8 @@ import os
 
 import requests
 
+from errorlog import report_error
+
 GRAPH = "https://graph.facebook.com/v21.0"
 
 
@@ -83,6 +85,7 @@ def _send_template(phone: str, template: str, params: list[str]) -> dict:
         )
     except requests.RequestException as e:
         print("[whatsapp] error:", e)
+        report_error("whatsapp", e)
         return {"configured": True, "ok": False, "error": str(e)}
     try:
         data = res.json() if res.content else {}
