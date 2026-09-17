@@ -88,21 +88,19 @@ export function registerGuards(router) {
     const auth = useAuthStore()
     if (!auth.ready) await auth.fetchMe() // resolve session once on first navigation
 
-    // sync the server cart + saved products: on login/boot pull (once per token);
-    // on logout clear both locally so they never leak to the next user (the server
-    // copies are kept — pushToServer is a no-op when signed out).
-    const cart = useCartStore()
-    const wishlist = useWishlistStore()
+    // Pull the server cart + saved products once per token, on login/boot. Clearing
+    // them on the way out is auth.logout()'s job — a sign-out doesn't always reach a
+    // guard. Forgetting the token here still matters: sign out and straight back in
+    // and the new JWT can be byte-identical to the old one (same subject, same
+    // second), which would read as "already synced" and skip the pull.
     if (auth.isAuthenticated) {
       if (auth.token !== cartSyncedToken) {
         cartSyncedToken = auth.token
-        cart.loadFromServer()
-        wishlist.loadIds()
+        useCartStore().loadFromServer()
+        useWishlistStore().loadIds()
       }
-    } else if (cartSyncedToken) {
+    } else {
       cartSyncedToken = null
-      cart.clear()
-      wishlist.clear()
     }
 
     if (to.meta.requiresAuth && !auth.isAuthenticated) {

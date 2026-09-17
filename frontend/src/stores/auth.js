@@ -1,5 +1,10 @@
 import { defineStore } from 'pinia'
 import { api } from '../services/api'
+import { useCartStore } from './cart'
+import { useWishlistStore } from './wishlist'
+import { useInboxStore } from './inbox'
+import { useAddressesStore } from './addresses'
+import { useOrdersStore } from './orders'
 
 // decode a JWT payload (client-side, unverified — only for reading role/sub for UI)
 function decodeToken(token) {
@@ -82,11 +87,39 @@ export const useAuthStore = defineStore('auth', {
         this.ready = true
       }
     },
+    // Ends the session AND drops everything on this device that belonged to it, so a
+    // signed-out browser holds nothing of the last customer for whoever picks it up
+    // next. It has to happen here rather than on the navigation that follows a
+    // sign-out: signing out from the page you're already on ('/' from the menu) is a
+    // duplicate navigation, which vue-router resolves without ever running a guard —
+    // and the 401 path above signs you out with no navigation at all.
+    //
+    // The token is cleared FIRST: cart and wishlist only write back while signed in,
+    // so emptying them after this cannot be pushed over the server copies, which are
+    // kept and come back in full on the next sign-in.
+    //
+    // The rest is in-memory only, so a reload would take care of it — but a sign-out
+    // followed by a sign-in in the same tab never reloads, and the next customer
+    // would be looking at what's left. Not one of these is safe to leave on the
+    // grounds that nothing renders it today: the bell already does (it remounts and
+    // switches to the messages tab before the fetch it fires can answer), and the
+    // other two are only out of sight because every template that reads them
+    // remembers to ask whether anyone is signed in. What isn't there can't leak.
     logout() {
       this.token = null
       this.user = null
       localStorage.removeItem('token')
       localStorage.removeItem('user')
+      useCartStore().clear()
+      useWishlistStore().clear()
+      // before the reset, so the poll interval and its listener actually go: they're
+      // held in state, and $reset would only overwrite the handles. This is also what
+      // stops a 401 mid-poll from coming straight back round every 20 seconds.
+      const inbox = useInboxStore()
+      inbox.stopPolling()
+      inbox.$reset()          // notifications, unread badge, support thread
+      useAddressesStore().$reset()  // name, phone, street
+      useOrdersStore().$reset()     // manager: every customer's order, with their details
     },
   },
 })
