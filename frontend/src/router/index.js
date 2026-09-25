@@ -2,6 +2,7 @@ import { START_LOCATION } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useCartStore } from '../stores/cart'
 import { useWishlistStore } from '../stores/wishlist'
+import { isStaleChunkError } from '../services/report'
 import HomeView from '../views/HomeView.vue'
 
 // Plain route table. vite-ssg builds the router from this (createWebHistory in the
@@ -71,15 +72,19 @@ export function scrollBehavior(to, from, savedPosition) {
 let cartSyncedToken = null
 export function registerGuards(router) {
   // After a deploy, a still-open tab may try to lazy-load an old chunk whose name
-  // changed → "Failed to fetch dynamically imported module". Reload once to pull the
-  // fresh files (guarded against a reload loop; cleared on the next good navigation).
+  // changed → "Failed to fetch dynamically imported module", or, for the stylesheet
+  // that comes with it, "Unable to preload CSS for …". Reload once to pull the fresh
+  // files (guarded against a reload loop; cleared on the next good navigation).
+  //
+  // Which messages count is services/report.js's isStaleChunkError, not a second
+  // pattern list here — the CSS spelling was missing from both lists at once, and
+  // one of them silently deciding something different from the other is how that
+  // happened. The two are the same decision: reload it, don't log it.
   router.onError((err) => {
-    const msg = String(err?.message || '')
-    if (/dynamically imported module|Importing a module script failed|error loading dynamically/i.test(msg)) {
-      if (!sessionStorage.getItem('chunk-reloaded')) {
-        sessionStorage.setItem('chunk-reloaded', '1')
-        window.location.reload()
-      }
+    if (!isStaleChunkError(err?.message)) return
+    if (!sessionStorage.getItem('chunk-reloaded')) {
+      sessionStorage.setItem('chunk-reloaded', '1')
+      window.location.reload()
     }
   })
   router.afterEach(() => sessionStorage.removeItem('chunk-reloaded'))

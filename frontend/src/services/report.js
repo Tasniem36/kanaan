@@ -14,11 +14,36 @@ const IGNORE = [
   'postMessage: Java object is gone',
   'iabjs://',
   'navigation_performance_logger',
-  'Failed to fetch dynamically imported module',
-  'Importing a module script failed',
-  'error loading dynamically imported module',
   'ResizeObserver loop',
 ]
+
+// A tab left open across a deploy, asking for a chunk whose hash has changed. The
+// router reloads the page once on these and the customer never sees it, so they are
+// not worth a row in the manager's log.
+//
+// Vite words the failure differently per asset kind, and the list has to be complete
+// in *both* places that act on it — the router's reload and this module's drop. It
+// wasn't: the three JS spellings were in each list and the CSS one in neither, so a
+// stale tab hitting a route whose stylesheet had been renamed got no reload (it sat
+// on a dead navigation) and filed an error report about it. That is the pair these
+// lines exist to keep together, which is why it is one exported predicate now rather
+// than the same knowledge written out twice.
+// One spelling per browser, kept deliberately loose: the substring, not the whole
+// sentence. Chrome says "Failed to fetch dynamically imported module: <url>" and
+// Firefox "error loading dynamically imported module" — both are the middle phrase,
+// so matching that alone covers a wording we haven't seen yet. (The router's regex
+// was already this broad; the list it now shares must not be narrower than what it
+// replaced, or a deploy would strand the tabs it used to rescue.)
+const STALE_CHUNK = [
+  'dynamically imported module',     // Chrome, Firefox
+  'importing a module script failed', // Safari
+  'unable to preload css',            // Vite's CSS preload helper, every browser
+]
+
+export function isStaleChunkError(text) {
+  const s = String(text || '').toLowerCase()
+  return STALE_CHUNK.some((p) => s.includes(p))
+}
 
 // Extension schemes. An extension's content script runs in the page and its throws
 // reach window.onerror looking like ours, but no origin comparison catches them —
@@ -60,7 +85,8 @@ export function reportError(message, detail) {
   try {
     if (typeof window === 'undefined') return
     const text = `${message || ''} ${detail || ''}`
-    if (IGNORE.some((p) => text.includes(p))) return   // third-party / handled noise
+    if (IGNORE.some((p) => text.includes(p))) return   // third-party noise
+    if (isStaleChunkError(text)) return                // handled by the router's reload
     const now = Date.now()
     if (now - last < 1500) return   // throttle bursts
     last = now
