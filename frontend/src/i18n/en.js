@@ -703,6 +703,10 @@ export default {
     whatsappText: 'Hello, about my order {id}',
     notFoundTitle: 'We could not find that order',
     notFoundMsg: 'The link is wrong or has expired. Make sure you open it exactly as we e-mailed it.',
+    // The shop couldn't be reached — nothing to do with the customer's link, so it
+    // must not read like the two lines above it.
+    unreachableTitle: 'We could not reach the shop',
+    unreachableMsg: 'This one is on us, not on you — your link and your order are both fine. Try again in a moment, or message us and we will check the order for you.',
     placed: 'Order received',
     preparing: 'Preparing',
     shipped: 'Shipped',

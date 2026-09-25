@@ -19,8 +19,8 @@
            from the number on the confirmation e-mail plus a contact detail. -->
       <template v-else>
         <span class="eyebrow">{{ t('track.eyebrow') }}</span>
-        <h1 class="display">{{ hadLink ? t('track.notFoundTitle') : t('track.lookupTitle') }}</h1>
-        <p class="a-muted">{{ hadLink ? t('track.notFoundMsg') : t('track.lookupMsg') }}</p>
+        <h1 class="display">{{ t(headingKey) }}</h1>
+        <p class="a-muted">{{ t(messageKey) }}</p>
 
         <!-- Orders placed from this device, gathered without an account: each one
              carries its own tracking token, which is all the status page needs. See
@@ -54,8 +54,11 @@
         <p class="a-muted help">{{ t('track.lookupHint') }}</p>
         <!-- They have an order number and still cannot reach their order: a lost
              e-mail, a typo, or the wrong phone on the order. Only the shop can fix
-             any of those, so stop asking them to guess and put them in touch. -->
-        <NeedHelp v-if="lookupErr" where="track_lookup" :subject="t('help.orderSubject')" />
+             any of those, so stop asking them to guess and put them in touch. The
+             shop being unreachable is the same dead end by another route, and the
+             one case where the form below cannot help either — it calls the same
+             API that just failed. -->
+        <NeedHelp v-if="lookupErr || unreachable" where="track_lookup" :subject="t('help.orderSubject')" />
         <RouterLink to="/" class="back">{{ t('pay.backHome') }}</RouterLink>
       </template>
     </div>
@@ -63,10 +66,11 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '../services/api'
+import { reportError } from '../services/report'
 import Loader from '../components/Loader.vue'
 import OrderDetails from '../components/OrderDetails.vue'
 import NeedHelp from '../components/NeedHelp.vue'
@@ -83,6 +87,19 @@ const order = ref(null)
 const loading = ref(true)
 // a link was followed but didn't open an order → show "not found" above the form
 const hadLink = ref(false)
+// ...unless the shop could not be asked at all, which is a different thing to say
+const unreachable = ref(false)
+
+// Three states share this heading: the shop could not be reached, the link opened
+// nothing, or nobody followed a link and just wants the lookup form.
+const headingKey = computed(() => (
+  unreachable.value ? 'track.unreachableTitle'
+    : hadLink.value ? 'track.notFoundTitle'
+      : 'track.lookupTitle'))
+const messageKey = computed(() => (
+  unreachable.value ? 'track.unreachableMsg'
+    : hadLink.value ? 'track.notFoundMsg'
+      : 'track.lookupMsg'))
 const form = reactive({ ref: '', contact: '' })
 const finding = ref(false)
 const lookupErr = ref('')
@@ -123,13 +140,33 @@ async function lookup() {
 
 async function load(id, token) {
   loading.value = true
+  unreachable.value = false
   try {
     const { order: row } = await api(
       `/orders/track/${id}?t=${encodeURIComponent(String(token || ''))}`,
       { auth: true }) // a signed-in customer opening their own order works without the token
     order.value = row
-  } catch {
-    order.value = null // wrong/expired link — the form below lets them look it up
+  } catch (e) {
+    order.value = null
+    // Two different failures were being told as one, and the wrong one of the two.
+    //
+    // A 4xx is an answer: this link does not open an order. "The link is wrong or
+    // expired" is true, and the lookup form below is the way on.
+    //
+    // A 5xx, or a fetch that never landed, is not an answer about the link at all —
+    // the shop could not be asked. Saying the link is wrong there accuses the
+    // customer's own link of a fault it may not have, and sends them to re-type an
+    // order number into a form that calls the same API and fails the same way. Their
+    // order is fine and they are told to go looking for it.
+    //
+    // api() reports 5xx itself but never sees a fetch that threw, and neither ever
+    // reached the error log from here — this page swallowed both. It is the shop's
+    // own failure on a page a customer only opens when something already worries
+    // them, so it goes in the log the manager reads (see services/report.js).
+    unreachable.value = !e?.status || e.status >= 500
+    if (unreachable.value) {
+      reportError(`track: could not load order (${e?.status || 'network'})`, e?.message)
+    }
   } finally {
     loading.value = false
   }
@@ -148,6 +185,7 @@ watch(() => [route.params.id, String(route.query.t || '')], ([id, tok]) => {
     // opened straight to a single order.
     order.value = null
     hadLink.value = false
+    unreachable.value = false
     loading.value = false
     myOrders.fetchStatuses()
     return

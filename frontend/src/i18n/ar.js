@@ -705,6 +705,10 @@ export default {
     whatsappText: 'مرحباً، بخصوص طلبي رقم {id}',
     notFoundTitle: 'لم نجد هذا الطلب',
     notFoundMsg: 'الرابط غير صحيح أو انتهت صلاحيّته. تأكّد من فتح الرابط كما أرسلناه في البريد.',
+    // The shop couldn't be reached — nothing to do with the customer's link, so it
+    // must not read like the two lines above it.
+    unreachableTitle: 'تعذّر الوصول إلى المتجر',
+    unreachableMsg: 'العطل عندنا لا عندك، ورابطك وطلبك بخير. أعد المحاولة بعد قليل، أو راسلنا وسنطمئنك على طلبك.',
     placed: 'تمّ استلام الطلب',
     preparing: 'قيد التجهيز',
     shipped: 'تمّ الشحن',
