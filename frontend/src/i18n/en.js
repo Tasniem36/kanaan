@@ -242,7 +242,7 @@ export default {
     guestWarn: 'Continuing as a guest —',
     placedSignupNudge: 'Create an account with the same e-mail to keep your orders:',
     placedTitle: 'We have your order!',
-    placedNoEmail: 'Keep this link — without an e-mail it is your only way to follow the order. You can also find it by order number and phone.',
+    placedNoEmail: 'With no e-mail there is no confirmation message, but the order is kept on this device and waiting for you on the tracking page. You can also find it by order number and phone.',
     placedEmailed: 'We e-mailed you a tracking link. Keep it to follow the order without signing in.',
     trackOrder: 'Track your order',
   },

@@ -170,7 +170,12 @@
         <span class="m-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l4 4 10-10"/></svg></span>
         <h3 class="display">{{ t('checkout.placedTitle') }}</h3>
         <p>{{ t('checkout.received', { id: placed.number }) }}</p>
-        <!-- with no e-mail, this link is genuinely the only way back to the order -->
+        <!-- With no e-mail there is no confirmation to keep, so say what the ways back
+             actually are: this device remembers the order (myOrders.remember, called
+             just above in the checkout handler) and طلباتي on /track lists it, and the
+             order number plus a phone finds it on any device. Telling them to "save
+             this link" named something that isn't on screen — there is a button here,
+             not a URL. -->
         <p class="a-muted" style="margin:.5rem 0 .9rem">{{ placed.emailed ? t('checkout.placedEmailed') : t('checkout.placedNoEmail') }}</p>
         <RouterLink class="btn btn-green" :to="{ name: 'track', params: { id: placed.id }, query: { t: placed.token } }" @click="placed = null">
           {{ t('checkout.trackOrder') }}
