@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>دكّان كنعان — نعود قريبًا</title>
-<meta name="description" content="دكّان كنعان في استراحةٍ قصيرة. موعد عودتنا الثلاثاء ٣ نوفمبر ٢٠٢٦.">
+<meta name="description" content="دكّان كنعان يأخذ استراحة قصيرة. موعد عودتنا الثلاثاء ٣ نوفمبر ٢٠٢٦.">
 <meta name="theme-color" content="#f5efe3">
 <!-- No "noindex": the 503 this page is served with already tells a crawler the
      closure is temporary. Telling it not to index as well is how a shop comes back
@@ -31,12 +31,27 @@
     padding:1.6rem 1.1rem 2.4rem;
     font-family:"Tajawal",system-ui,Tahoma,sans-serif;
     color:var(--ink); line-height:1.85;
+    /* the branches hang off the corners; clip rather than scroll sideways */
+    overflow-x:clip;
     background:
       radial-gradient(90rem 42rem at 50% -14rem, #fffdf8 0%, rgba(255,253,248,0) 62%),
       radial-gradient(44rem 26rem at 50% 118%, rgba(184,144,47,.11) 0%, rgba(184,144,47,0) 70%),
       var(--cream);
   }
+
+  /* Olive branches growing in from the bottom corners. Decoration only, so they are
+     hidden from the accessibility tree and never catch a tap meant for the page. */
+  .deco{
+    position:fixed; bottom:-1.5rem; z-index:0;
+    width:min(21rem,44vw); height:auto;
+    opacity:.16; pointer-events:none; user-select:none;
+  }
+  .deco-r{right:-3rem}
+  .deco-l{left:-3rem; transform:scaleX(-1)}
+  @media (max-width:40rem){ .deco{opacity:.11;width:min(14rem,46vw)} }
+
   .card{
+    position:relative; z-index:1;
     width:min(35rem,100%);
     background:var(--paper);
     border:1px solid rgba(60,74,39,.14);
@@ -61,7 +76,7 @@
   .body{margin:0 auto;max-width:28rem}
   .body p{margin:0 0 .8rem;font-size:.97rem;color:#4a4f3c}
   .body p:last-child{margin-bottom:0}
-  /* the return date — the one fact somebody came to this page to find */
+
   /* Given room of its own: this and the WhatsApp button are the two things anybody
      is here for, and they were competing with the paragraph above them. */
   .when{
@@ -71,10 +86,16 @@
   }
   /* Reads as a heading, not a caption: it labels the one fact the page exists to
      deliver, and at caption weight it was the faintest thing inside its own frame. */
-  .when .lbl{display:block;font-size:.84rem;font-weight:700;letter-spacing:.12em;color:var(--green)}
+  .when .lbl{
+    display:flex;align-items:center;justify-content:center;gap:.6rem;
+    font-size:.84rem;font-weight:700;letter-spacing:.12em;color:var(--green)
+  }
+  .when .lbl i{display:block;height:1px;width:1.5rem;background:rgba(184,144,47,.75)}
   .when .val{display:block;font-family:"Amiri",serif;font-weight:700;
-             font-size:clamp(1.18rem,4.3vw,1.5rem);color:var(--green-2);margin-top:.25rem}
+             font-size:clamp(1.18rem,4.3vw,1.5rem);color:var(--green-2);margin-top:.3rem}
   .when .left{display:block;font-size:.84rem;color:var(--gold);font-weight:700;margin-top:.3rem}
+  .when .left:not(:empty)::before{content:"🌿 ";font-size:.82em}
+
   .until{margin:0 0 1.15rem;font-size:.95rem;color:var(--green);font-weight:500}
   .wa{
     display:inline-flex;align-items:center;justify-content:center;gap:.55rem;
@@ -87,32 +108,42 @@
   .wa:hover{background:var(--green-2);transform:translateY(-1px)}
   .wa svg{width:1.15rem;height:1.15rem;flex:none}
   .wa-note{margin:.7rem auto 0;max-width:25rem;font-size:.86rem;color:var(--green-soft)}
-  .sig{
-    margin:1.35rem 0 0;font-family:"Amiri",serif;font-size:1.02rem;
-    line-height:1.6;color:var(--green)
-  }
-  .sig b{display:block;font-weight:700}
-  /* Quieter than the button above them on purpose — Instagram is not where someone
-     with an unanswered order should be sent first. */
-  .links{margin:1.25rem 0 0;font-size:.79rem;color:var(--green-soft);opacity:.8}
-  .links a{color:var(--green-soft);text-decoration:none;border-bottom:1px solid rgba(111,124,78,.35);padding-bottom:1px}
-  .links a:hover{color:var(--green);border-bottom-color:var(--green)}
-  .links span{opacity:.5;margin:0 .45rem}
+
   /* A visitor who reads no Arabic still needs all of this, not a summary of it. */
   .en{
-    margin:1.6rem 0 -.2rem;padding-top:1.2rem;
+    margin:1.7rem 0 -.2rem;padding-top:1.3rem;
     border-top:1px solid rgba(60,74,39,.12);
     direction:ltr;text-align:center;
     font-size:.86rem;line-height:1.72;color:#5d6250
   }
   .en h2{font-family:"Amiri",serif;font-size:1.12rem;font-weight:700;
-         color:var(--green);margin:0 0 .5rem;line-height:1.4}
+         color:var(--green);margin:0 0 .6rem;line-height:1.4}
   .en p{margin:0 0 .65rem}
   .en .date{font-weight:700;color:var(--green-2)}
-  .en .sig-en{margin-top:.85rem;font-family:"Amiri",serif;color:var(--green);font-size:.95rem}
   /* left to itself this is browser-blue, which is the one colour on the page that
      belongs to no part of the shop */
   .en a{color:var(--green);font-weight:700;text-decoration:underline;text-underline-offset:3px}
+
+  /* Instagram: the one place still being updated while the shop is shut, so it is
+     an invitation rather than a link in a footer. */
+  .ig{
+    display:flex;align-items:center;gap:.7rem;
+    margin:1.05rem auto .2rem;max-width:23rem;
+    background:var(--cream-2);border:1px solid rgba(184,144,47,.3);
+    border-radius:14px;padding:.7rem .9rem;
+    text-align:left;color:var(--green);
+    font-size:.82rem;line-height:1.55;
+    transition:border-color .18s ease, transform .18s ease
+  }
+  /* The whole panel is the target, so it needs none of the underline-and-bold the
+     inline links above it wear — that styling made it read as a sentence with a
+     link in it rather than as something to press. */
+  .en a.ig{text-decoration:none;font-weight:500}
+  .ig:hover{border-color:var(--gold);transform:translateY(-1px)}
+  .ig svg{width:1.3rem;height:1.3rem;flex:none;color:var(--gold)}
+  .sig-en{margin-top:1.1rem;font-family:"Amiri",serif;color:var(--green);font-size:.98rem;line-height:1.6}
+  .sig-en b{display:block;font-weight:700;font-size:1.05rem}
+
   /* On a phone the whole message should fit the hand holding it. The first
      paragraph says why we are away and the last one thanks them for waiting —
      those two carry it. The middle one elaborates, and elaboration is what a
@@ -123,6 +154,38 @@
 </style>
 </head>
 <body>
+  <!-- One branch, drawn once and mirrored by CSS into the other corner. -->
+  <svg class="deco deco-r" viewBox="0 0 220 180" fill="none" aria-hidden="true" focusable="false">
+    <path d="M6 176C44 162 80 138 106 106C130 76 144 44 152 12" stroke="#6f7c4e" stroke-width="2.6" stroke-linecap="round"/>
+    <ellipse cx="36" cy="150" rx="20" ry="7.8" transform="rotate(-22 36 150)" fill="#3c4a27"/>
+    <ellipse cx="62" cy="172" rx="17.5" ry="7" transform="rotate(26 62 172)" fill="#56643a"/>
+    <ellipse cx="74" cy="128" rx="18.5" ry="7.4" transform="rotate(-30 74 128)" fill="#3c4a27"/>
+    <ellipse cx="99" cy="146" rx="16" ry="6.5" transform="rotate(28 99 146)" fill="#56643a"/>
+    <ellipse cx="105" cy="98" rx="17" ry="7" transform="rotate(-38 105 98)" fill="#3c4a27"/>
+    <ellipse cx="129" cy="112" rx="14.5" ry="6" transform="rotate(32 129 112)" fill="#56643a"/>
+    <ellipse cx="128" cy="68" rx="15" ry="6.2" transform="rotate(-46 128 68)" fill="#3c4a27"/>
+    <ellipse cx="149" cy="78" rx="12.5" ry="5.4" transform="rotate(36 149 78)" fill="#56643a"/>
+    <ellipse cx="143" cy="36" rx="12.5" ry="5.4" transform="rotate(-54 143 36)" fill="#3c4a27"/>
+    <circle cx="63" cy="146" r="5.2" fill="#b8902f"/>
+    <circle cx="97" cy="120" r="4.6" fill="#cda94f"/>
+    <circle cx="124" cy="88" r="4" fill="#b8902f"/>
+  </svg>
+  <svg class="deco deco-l" viewBox="0 0 220 180" fill="none" aria-hidden="true" focusable="false">
+    <path d="M6 176C44 162 80 138 106 106C130 76 144 44 152 12" stroke="#6f7c4e" stroke-width="2.6" stroke-linecap="round"/>
+    <ellipse cx="36" cy="150" rx="20" ry="7.8" transform="rotate(-22 36 150)" fill="#3c4a27"/>
+    <ellipse cx="62" cy="172" rx="17.5" ry="7" transform="rotate(26 62 172)" fill="#56643a"/>
+    <ellipse cx="74" cy="128" rx="18.5" ry="7.4" transform="rotate(-30 74 128)" fill="#3c4a27"/>
+    <ellipse cx="99" cy="146" rx="16" ry="6.5" transform="rotate(28 99 146)" fill="#56643a"/>
+    <ellipse cx="105" cy="98" rx="17" ry="7" transform="rotate(-38 105 98)" fill="#3c4a27"/>
+    <ellipse cx="129" cy="112" rx="14.5" ry="6" transform="rotate(32 129 112)" fill="#56643a"/>
+    <ellipse cx="128" cy="68" rx="15" ry="6.2" transform="rotate(-46 128 68)" fill="#3c4a27"/>
+    <ellipse cx="149" cy="78" rx="12.5" ry="5.4" transform="rotate(36 149 78)" fill="#56643a"/>
+    <ellipse cx="143" cy="36" rx="12.5" ry="5.4" transform="rotate(-54 143 36)" fill="#3c4a27"/>
+    <circle cx="63" cy="146" r="5.2" fill="#b8902f"/>
+    <circle cx="97" cy="120" r="4.6" fill="#cda94f"/>
+    <circle cx="124" cy="88" r="4" fill="#b8902f"/>
+  </svg>
+
   <main class="card">
     <svg class="sprig" width="104" height="70" viewBox="0 0 108 72" fill="none" aria-hidden="true">
       <path d="M54 70C54 54 54 34 54 9" stroke="#6f7c4e" stroke-width="1.9" stroke-linecap="round"/>
@@ -143,22 +206,18 @@
          not open still needs to be told plainly that it is closed and not broken —
          which is what this one short line above it is for. -->
     <span class="eyebrow">استراحة مؤقّتة</span>
-    <h1>دكّان كنعان بأخذ استراحة قصيرة 🌿</h1>
+    <h1>دكّان كنعان يأخذ استراحة قصيرة 🌿</h1>
 
     <div class="body">
-      <p>منرجع نستقبلكم يوم الثلاثاء ٣ نوفمبر ٢٠٢٦، وبنكون محضّرين لكم كل شي طيّب كالعادة.</p>
-      <!-- Deliberately does not promise "منتجات جديدة". Naming products that are not
-           decided yet turns a nice line into something a customer can arrive in
-           November and find missing. "عم تتحضّر" keeps the surprise and owes nobody
-           anything specific. -->
-      <p class="long">وخلال هالفترة، في أشياء جديدة عم تتحضّر — تفاصيل صغيرة ومفاجآت منتشوّق نشارككم ياها.</p>
-      <p>شكرًا لصبركم وثقتكم ودعمكم الدائم 🌿</p>
+      <p>عم نشتغل على تطوير تجربتكم، وتحضير منتجات جديدة وتفاصيل مميّزة، لنرجعلكم بشي أحلى وأطيب كالعادة.</p>
+      <p class="long">وخلال هالفترة، في شوي مفاجآت جديدة، فخليكم قريبين!</p>
+      <p>شكرًا لثقتكم ومحبّتكم ودعمكم الدائم 💚</p>
     </div>
 
     <div class="when">
       <!-- Not «نفتح أبوابنا»: there are no doors. This is a website, and a phrase
            borrowed from a shop with a shutter reads as someone else's words. -->
-      <span class="lbl">موعد عودتنا</span>
+      <span class="lbl"><i aria-hidden="true"></i>موعد عودتنا<i aria-hidden="true"></i></span>
       <span class="val">الثلاثاء ٣ نوفمبر ٢٠٢٦</span>
       <span class="left" id="left"></span>
     </div>
@@ -174,24 +233,29 @@
     </a>
     <p class="wa-note">لأي استفسار أو طلب سابق، إحنا هون لمساعدتك.</p>
 
-    <p class="sig">بكلّ محبّة،<b>دكّان كنعان 🌿</b></p>
-
-    <p class="links">
-      <a href="https://instagram.com/dukkan_kanaan">إنستغرام</a>
-      <span aria-hidden="true">·</span>
-      <a href="mailto:dukkan.kanaan@gmail.com">البريد</a>
-    </p>
-
     <div class="en">
-      <h2>A Little Pause, Something New Is Growing</h2>
+      <h2>🌿 A Little Pause, Something New Is Growing 🌿</h2>
       <p>We’re taking a short break to improve your experience, refine our store, and prepare something special for you.</p>
-      <p class="long">Behind the scenes, new things are in the works — thoughtful details, and a few surprises we can’t wait to share with you.</p>
-      <p>Thank you for your patience, trust, and continued support. We look forward to welcoming you back with something even more special.</p>
-      <p><span class="date">Our return date — Tuesday, 3 November 2026.</span><br>
-         New orders are paused until then, and the orders already placed are still
-         being looked after. For those, or any question,
-         <a href="https://wa.me/971522981187">message us on WhatsApp</a> and we’ll be happy to help.</p>
-      <p class="sig-en">With love,<br>Dukkan Kanaan 🌿</p>
+      <p class="long">Behind the scenes, new products and thoughtful details are in the works — and we can’t wait to share them with you.</p>
+      <p>Thank you for your patience, trust, and continued support.</p>
+      <!-- The date and the state of existing orders, kept in English too. The card
+           above carries both, but only in Arabic script and Arabic numerals, so
+           without this line a reader of neither cannot learn when we are back or
+           whether the order they have already paid for is safe. -->
+      <p><span class="date">We reopen on Tuesday, 3 November 2026.</span><br>
+         New orders are paused until then; orders already placed are still being
+         looked after — <a href="https://wa.me/971522981187">message us on WhatsApp</a>.</p>
+
+      <a class="ig" href="https://instagram.com/dukkan_kanaan">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="3" width="18" height="18" rx="5"/>
+          <circle cx="12" cy="12" r="4"/>
+          <circle cx="17.4" cy="6.6" r="1.1" fill="currentColor" stroke="none"/>
+        </svg>
+        <span>Follow us on Instagram for a little sneak peek of what’s coming next.</span>
+      </a>
+
+      <p class="sig-en">With love,<b>Dukkan Kanaan 🌿</b></p>
     </div>
   </main>
 
@@ -203,10 +267,10 @@
   function arabic(n){ return String(n).replace(/\d/g, function (d) { return AR[+d] }) }
 
   function wordFor(days){
-    if (days === 1) return 'بقي يومٌ واحد';
-    if (days === 2) return 'بقي يومان';
-    if (days <= 10) return 'بقيت ' + arabic(days) + ' أيّام';
-    return 'بقي ' + arabic(days) + ' يومًا';
+    if (days === 1) return 'باقي يوم واحد';
+    if (days === 2) return 'باقي يومين';
+    if (days <= 10) return 'باقي ' + arabic(days) + ' أيّام';
+    return 'باقي ' + arabic(days) + ' يومًا';
   }
 
   function tick(){
@@ -216,7 +280,7 @@
       // The hour has come but this page is still being served, so the switch that
       // lifts it hasn't run yet (it checks every hour). Keep looking, quietly, so
       // whoever is sitting here lands on the shop rather than on a stale promise.
-      el.textContent = 'نعود اليوم — لحظاتٍ من فضلكم';
+      el.textContent = 'منرجع اليوم — لحظات ومنكون معكم';
       return true;
     }
     el.textContent = wordFor(Math.ceil(ms / 86400000));
