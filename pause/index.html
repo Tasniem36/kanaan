@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>دكّان كنعان — نعود قريبًا</title>
-<meta name="description" content="دكّان كنعان مغلق مؤقّتًا. نفتح أبوابنا يوم الثلاثاء ٣ نوفمبر ٢٠٢٦.">
+<meta name="description" content="دكّان كنعان في استراحةٍ قصيرة. موعد عودتنا الثلاثاء ٣ نوفمبر ٢٠٢٦.">
 <meta name="theme-color" content="#f5efe3">
 <!-- No "noindex": the 503 this page is served with already tells a crawler the
      closure is temporary. Telling it not to index as well is how a shop comes back
@@ -30,14 +30,14 @@
     display:grid; place-items:center;
     padding:1.6rem 1.1rem 2.4rem;
     font-family:"Tajawal",system-ui,Tahoma,sans-serif;
-    color:var(--ink); line-height:1.8;
+    color:var(--ink); line-height:1.85;
     background:
       radial-gradient(90rem 42rem at 50% -14rem, #fffdf8 0%, rgba(255,253,248,0) 62%),
       radial-gradient(44rem 26rem at 50% 118%, rgba(184,144,47,.11) 0%, rgba(184,144,47,0) 70%),
       var(--cream);
   }
   .card{
-    width:min(34.5rem,100%);
+    width:min(35rem,100%);
     background:var(--paper);
     border:1px solid rgba(60,74,39,.14);
     border-radius:26px;
@@ -48,27 +48,30 @@
   .sprig{display:block;margin:0 auto .7rem}
   .brand{font-family:"Aref Ruqaa",serif;font-size:2.05rem;line-height:1.25;color:var(--green);margin:0}
   .brand .g{color:var(--gold)}
-  .rule{display:flex;align-items:center;justify-content:center;gap:.6rem;margin:1.05rem 0 1.25rem}
+  .rule{display:flex;align-items:center;justify-content:center;gap:.6rem;margin:1.05rem 0 1.2rem}
   .rule i{display:block;height:1px;width:3.2rem;background:linear-gradient(to left,rgba(184,144,47,0),rgba(184,144,47,.6))}
   .rule i+i{background:linear-gradient(to right,rgba(184,144,47,0),rgba(184,144,47,.6))}
   .rule b{width:5px;height:5px;background:var(--gold);transform:rotate(45deg)}
   .eyebrow{
     display:inline-block;font-size:.7rem;font-weight:700;letter-spacing:.22em;
-    color:var(--green-soft);margin-bottom:.5rem
+    color:var(--green-soft);margin-bottom:.45rem
   }
-  h1{font-family:"Amiri",serif;font-weight:700;font-size:clamp(1.65rem,5.4vw,2.2rem);
-     line-height:1.4;color:var(--green);margin:0 0 .6rem}
-  .lede{margin:0 auto;max-width:27rem;font-size:1rem;color:#4a4f3c}
+  h1{font-family:"Amiri",serif;font-weight:700;font-size:clamp(1.5rem,4.9vw,2rem);
+     line-height:1.45;color:var(--green);margin:0 0 .85rem}
+  .body{margin:0 auto;max-width:28rem}
+  .body p{margin:0 0 .8rem;font-size:.97rem;color:#4a4f3c}
+  .body p:last-child{margin-bottom:0}
   /* the return date — the one fact somebody came to this page to find */
   .when{
-    margin:1.5rem auto 1.3rem;max-width:24rem;
+    margin:1.5rem auto 1.1rem;max-width:24rem;
     background:var(--cream-2);border:1px solid rgba(184,144,47,.34);
     border-radius:18px;padding:1rem .9rem .85rem
   }
   .when .lbl{display:block;font-size:.76rem;font-weight:700;letter-spacing:.14em;color:var(--green-soft)}
   .when .val{display:block;font-family:"Amiri",serif;font-weight:700;
-             font-size:clamp(1.2rem,4.4vw,1.5rem);color:var(--green-2);margin-top:.25rem}
+             font-size:clamp(1.18rem,4.3vw,1.5rem);color:var(--green-2);margin-top:.25rem}
   .when .left{display:block;font-size:.84rem;color:var(--gold);font-weight:700;margin-top:.3rem}
+  .until{margin:0 0 1.15rem;font-size:.95rem;color:var(--green);font-weight:500}
   .wa{
     display:inline-flex;align-items:center;justify-content:center;gap:.55rem;
     background:var(--green);color:#fdfbf6;text-decoration:none;
@@ -79,21 +82,35 @@
   }
   .wa:hover{background:var(--green-2);transform:translateY(-1px)}
   .wa svg{width:1.15rem;height:1.15rem;flex:none}
-  .wa-note{margin:.75rem 0 0;font-size:.84rem;color:var(--green-soft)}
-  .links{margin:1.35rem 0 0;font-size:.85rem;color:var(--green-soft)}
+  .wa-note{margin:.7rem auto 0;max-width:25rem;font-size:.86rem;color:var(--green-soft)}
+  .sig{
+    margin:1.35rem 0 0;font-family:"Amiri",serif;font-size:1.02rem;
+    line-height:1.6;color:var(--green)
+  }
+  .sig b{display:block;font-weight:700}
+  .links{margin:1.15rem 0 0;font-size:.85rem;color:var(--green-soft)}
   .links a{color:var(--green);text-decoration:underline;text-underline-offset:3px}
   .links span{opacity:.5;margin:0 .45rem}
-  /* A visitor who reads no Arabic still needs the date and a way to reach the shop. */
+  /* A visitor who reads no Arabic still needs all of this, not a summary of it. */
   .en{
-    margin:1.5rem 0 -.2rem;padding-top:1.15rem;
+    margin:1.6rem 0 -.2rem;padding-top:1.2rem;
     border-top:1px solid rgba(60,74,39,.12);
     direction:ltr;text-align:center;
-    font-size:.82rem;line-height:1.65;color:#5d6250
+    font-size:.86rem;line-height:1.72;color:#5d6250
   }
-  .en b{color:var(--green);font-weight:700}
+  .en h2{font-family:"Amiri",serif;font-size:1.12rem;font-weight:700;
+         color:var(--green);margin:0 0 .5rem;line-height:1.4}
+  .en p{margin:0 0 .65rem}
+  .en .date{font-weight:700;color:var(--green-2)}
+  .en .sig-en{margin-top:.85rem;font-family:"Amiri",serif;color:var(--green);font-size:.95rem}
   /* left to itself this is browser-blue, which is the one colour on the page that
      belongs to no part of the shop */
   .en a{color:var(--green);font-weight:700;text-decoration:underline;text-underline-offset:3px}
+  /* On a phone the whole message should fit the hand holding it. The first
+     paragraph says why we are away and the last one thanks them for waiting —
+     those two carry it. The middle one elaborates, and elaboration is what a
+     small screen can afford to lose. */
+  @media (max-width:30rem){ .long{display:none} }
   @media (max-width:26rem){ .card{padding:2rem 1.2rem 1.7rem;border-radius:22px} }
   @media (prefers-reduced-motion:reduce){ *{transition:none!important} }
 </style>
@@ -115,12 +132,21 @@
 
     <div class="rule" aria-hidden="true"><i></i><b></b><i></i></div>
 
+    <!-- The headline is warm on purpose, but somebody arriving at a site that will
+         not open still needs to be told plainly that it is closed and not broken —
+         which is what this one short line above it is for. -->
     <span class="eyebrow">إغلاقٌ مؤقّت</span>
-    <h1>أغلقنا الدكّان قليلًا</h1>
-    <p class="lede">
-      نأخذ استراحةً قصيرة، ونعود بدكّانٍ أجمل وبضاعةٍ أطيب.
-      شكرًا لصبركم — ونحن نشتاق إليكم من الآن.
-    </p>
+    <h1>استراحةٌ قصيرة… وشيءٌ جميلٌ ينمو</h1>
+
+    <div class="body">
+      <p>نأخذ استراحةً قصيرة لنُحسّن تجربتكم، ونُنقّح دكّاننا، ونُعدّ لكم شيئًا مميّزًا.</p>
+      <!-- Deliberately does not promise "منتجات جديدة". Naming products that are not
+           decided yet turns a nice line into something a customer can arrive in
+           November and find missing. "قيد التحضير" keeps the surprise and owes nobody
+           anything specific. -->
+      <p class="long">خلف الكواليس، أشياءُ جديدةٌ قيد التحضير — تفاصيلُ صغيرةٌ مدروسة، ومفاجآتٌ نتشوّق لمشاركتكم إيّاها.</p>
+      <p>شكرًا لصبركم وثقتكم ودعمكم الدائم. نتطلّع إلى عودتكم إلينا ومعنا ما هو أجمل.</p>
+    </div>
 
     <div class="when">
       <!-- Not «نفتح أبوابنا»: there are no doors. This is a website, and a phrase
@@ -130,11 +156,15 @@
       <span class="left" id="left"></span>
     </div>
 
+    <p class="until">وحتى ذلك الحين، نحن هنا من أجلكم.</p>
+
     <a class="wa" href="https://wa.me/971522981187?text=%D9%85%D8%B1%D8%AD%D8%A8%D9%8B%D8%A7%D8%8C%20%D8%A3%D8%B3%D8%A3%D9%84%20%D8%B9%D9%86%20%D8%B7%D9%84%D8%A8%D9%8A">
       <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.46 1.32 4.96L2 22l5.25-1.38a9.9 9.9 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2Zm0 18.15h-.01a8.2 8.2 0 0 1-4.19-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.17 8.17 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.25-8.24 2.2 0 4.27.86 5.83 2.42a8.19 8.19 0 0 1 2.41 5.83c0 4.54-3.7 8.23-8.24 8.23Zm4.52-6.16c-.25-.12-1.47-.72-1.69-.81-.23-.08-.39-.12-.56.13-.16.24-.64.8-.78.97-.14.16-.29.18-.54.06-.25-.13-1.05-.39-1.99-1.23-.74-.66-1.23-1.47-1.38-1.72-.14-.25-.01-.38.11-.5.11-.11.25-.29.37-.43.13-.15.17-.25.25-.41.08-.17.04-.31-.02-.43-.06-.12-.56-1.34-.76-1.84-.2-.48-.4-.42-.56-.43h-.48c-.16 0-.43.06-.65.31-.22.25-.85.83-.85 2.03s.87 2.35.99 2.51c.12.17 1.71 2.61 4.14 3.66.58.25 1.03.4 1.38.51.58.19 1.11.16 1.53.1.47-.07 1.47-.6 1.67-1.18.21-.58.21-1.07.15-1.18-.06-.1-.22-.16-.47-.28Z"/></svg>
       راسلونا على واتساب
     </a>
-    <p class="wa-note">لأيّ سؤالٍ عن طلبٍ سابق — نحن هنا.</p>
+    <p class="wa-note">لأيّ طلبٍ سابق أو استفسار، لا تتردّدوا — يسعدنا أن نساعدكم.</p>
+
+    <p class="sig">بكلّ محبّة،<b>دكّان كنعان 🌿</b></p>
 
     <p class="links">
       <a href="https://instagram.com/dukkan_kanaan">إنستغرام</a>
@@ -143,10 +173,14 @@
     </p>
 
     <div class="en">
-      <b>Dukkan Kanaan is closed for a short break.</b><br>
-      We reopen on Tuesday 3 November 2026. For anything urgent —
-      including a question about an order you already placed —
-      message us on <a href="https://wa.me/971522981187">WhatsApp</a>.
+      <h2>A Little Pause, Something New Is Growing</h2>
+      <p>We’re taking a short break to improve your experience, refine our store, and prepare something special for you.</p>
+      <p class="long">Behind the scenes, new things are in the works — thoughtful details, and a few surprises we can’t wait to share with you.</p>
+      <p>Thank you for your patience, trust, and continued support. We look forward to welcoming you back with something even more special.</p>
+      <p><span class="date">Our return date — Tuesday, 3 November 2026.</span><br>
+         Until then, we’re still here for you. For existing orders or any inquiries,
+         <a href="https://wa.me/971522981187">message us on WhatsApp</a> and we’ll be happy to help.</p>
+      <p class="sig-en">With love,<br>Dukkan Kanaan 🌿</p>
     </div>
   </main>
 
