@@ -15,3 +15,8 @@ backups/
 # Uploaded images live in a volume (MEDIA_DIR), not in the repo — a local dev run
 # writes product and review photos here.
 backend/media/
+
+# Whether the shop is currently closed is a fact about one server, not about the
+# code. Committed, it would close the shop on every machine that deployed, and a
+# `git pull` would quietly put it back up again after someone had opened the shop.
+pause/ON

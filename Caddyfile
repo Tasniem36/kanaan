@@ -2,7 +2,34 @@
 # to the web (nginx) container. Domain is written in directly (Caddy does not read
 # .env, so a {$DOMAIN} placeholder would be empty and fail to parse).
 dukkan-kanaan.com {
-	reverse_proxy web:80
+	# The pause screen. `pause/ON` existing is the whole switch — Caddy tests for the
+	# file per request, so ./scripts/pause.sh opens and closes the shop with no
+	# restart, no rebuild and no deploy. Nothing here changes while the shop is open.
+	root * /srv/pause
+	@paused file {
+		# Spelled out rather than leaning on the root above, so the switch cannot be
+		# broken by someone reordering the directives in this block.
+		root /srv/pause
+		try_files /ON
+	}
+
+	handle @paused {
+		# Every path, so a bookmarked product or an old link lands on the screen too
+		# rather than on whatever the app would have said about being unreachable.
+		rewrite * /index.html
+		file_server {
+			# 503, not 200: this is temporary, and a crawler that reads it as the new
+			# homepage is how three weeks off costs a shop its search results. The
+			# date tells it exactly when to come back (in GMT — Dubai midnight).
+			status 503
+		}
+		header Retry-After "Mon, 02 Nov 2026 20:00:00 GMT"
+		header Cache-Control "no-store"
+	}
+
+	handle {
+		reverse_proxy web:80
+	}
 
 	header {
 		# Force HTTPS for a year (incl. subdomains). Caddy already redirects,

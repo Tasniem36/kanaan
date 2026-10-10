@@ -93,6 +93,9 @@ services:
       - '443:443'
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # The pause screen and the flag that switches it on. Read-only: the flag is
+      # written on the host by scripts/pause.sh, never from inside the container.
+      - ./pause:/srv/pause:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:

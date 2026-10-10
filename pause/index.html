@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>دكّان كنعان — نعود قريبًا</title>
+<meta name="description" content="دكّان كنعان مغلق مؤقّتًا. نفتح أبوابنا يوم الثلاثاء ٣ نوفمبر ٢٠٢٦.">
+<meta name="theme-color" content="#f5efe3">
+<!-- No "noindex": the 503 this page is served with already tells a crawler the
+     closure is temporary. Telling it not to index as well is how a shop comes back
+     in three weeks having lost the search results it had. -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%233c4a27'/%3E%3Cg fill='none' stroke='%23cda94f' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3.2v1.2'/%3E%3Cpath d='M7 11c0-3.4 2.2-5.8 5-5.8s5 2.4 5 5.8'/%3E%3Cpath d='M6.7 13.6l.4-2.6h9.8l.4 2.6'/%3E%3Cpath d='M5.4 19l.9-5.4h11.4l.9 5.4Z'/%3E%3Cpath d='M10.2 19v-2.8h3.6V19'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Aref+Ruqaa:wght@400;700&family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  /* The shop's own palette, copied from frontend/src/style.css. This page is served
+     by Caddy with the app behind it switched off, so it can share nothing with the
+     build — these values are duplicated on purpose and only matter while it shows. */
+  :root{
+    --cream:#f5efe3; --cream-2:#ece2cf; --paper:#faf6ee;
+    --green:#3c4a27; --green-2:#2c3719; --green-soft:#6f7c4e;
+    --gold:#b8902f; --gold-2:#cda94f; --ink:#272a1d;
+    color-scheme: light;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    min-height:100svh;
+    display:grid; place-items:center;
+    padding:1.6rem 1.1rem 2.4rem;
+    font-family:"Tajawal",system-ui,Tahoma,sans-serif;
+    color:var(--ink); line-height:1.8;
+    background:
+      radial-gradient(90rem 42rem at 50% -14rem, #fffdf8 0%, rgba(255,253,248,0) 62%),
+      radial-gradient(44rem 26rem at 50% 118%, rgba(184,144,47,.11) 0%, rgba(184,144,47,0) 70%),
+      var(--cream);
+  }
+  .card{
+    width:min(34.5rem,100%);
+    background:var(--paper);
+    border:1px solid rgba(60,74,39,.14);
+    border-radius:26px;
+    padding:2.4rem 1.7rem 2rem;
+    text-align:center;
+    box-shadow:0 34px 70px -44px rgba(44,55,25,.55);
+  }
+  .sprig{display:block;margin:0 auto .7rem}
+  .brand{font-family:"Aref Ruqaa",serif;font-size:2.05rem;line-height:1.25;color:var(--green);margin:0}
+  .brand .g{color:var(--gold)}
+  .rule{display:flex;align-items:center;justify-content:center;gap:.6rem;margin:1.05rem 0 1.25rem}
+  .rule i{display:block;height:1px;width:3.2rem;background:linear-gradient(to left,rgba(184,144,47,0),rgba(184,144,47,.6))}
+  .rule i+i{background:linear-gradient(to right,rgba(184,144,47,0),rgba(184,144,47,.6))}
+  .rule b{width:5px;height:5px;background:var(--gold);transform:rotate(45deg)}
+  .eyebrow{
+    display:inline-block;font-size:.7rem;font-weight:700;letter-spacing:.22em;
+    color:var(--green-soft);margin-bottom:.5rem
+  }
+  h1{font-family:"Amiri",serif;font-weight:700;font-size:clamp(1.65rem,5.4vw,2.2rem);
+     line-height:1.4;color:var(--green);margin:0 0 .6rem}
+  .lede{margin:0 auto;max-width:27rem;font-size:1rem;color:#4a4f3c}
+  /* the return date — the one fact somebody came to this page to find */
+  .when{
+    margin:1.5rem auto 1.3rem;max-width:24rem;
+    background:var(--cream-2);border:1px solid rgba(184,144,47,.34);
+    border-radius:18px;padding:1rem .9rem .85rem
+  }
+  .when .lbl{display:block;font-size:.76rem;font-weight:700;letter-spacing:.14em;color:var(--green-soft)}
+  .when .val{display:block;font-family:"Amiri",serif;font-weight:700;
+             font-size:clamp(1.2rem,4.4vw,1.5rem);color:var(--green-2);margin-top:.25rem}
+  .when .left{display:block;font-size:.84rem;color:var(--gold);font-weight:700;margin-top:.3rem}
+  .wa{
+    display:inline-flex;align-items:center;justify-content:center;gap:.55rem;
+    background:var(--green);color:#fdfbf6;text-decoration:none;
+    font-weight:700;font-size:.97rem;
+    padding:.82rem 1.5rem;border-radius:999px;
+    box-shadow:0 14px 26px -16px rgba(44,55,25,.85);
+    transition:transform .18s ease, background .18s ease
+  }
+  .wa:hover{background:var(--green-2);transform:translateY(-1px)}
+  .wa svg{width:1.15rem;height:1.15rem;flex:none}
+  .wa-note{margin:.75rem 0 0;font-size:.84rem;color:var(--green-soft)}
+  .links{margin:1.35rem 0 0;font-size:.85rem;color:var(--green-soft)}
+  .links a{color:var(--green);text-decoration:underline;text-underline-offset:3px}
+  .links span{opacity:.5;margin:0 .45rem}
+  /* A visitor who reads no Arabic still needs the date and a way to reach the shop. */
+  .en{
+    margin:1.5rem 0 -.2rem;padding-top:1.15rem;
+    border-top:1px solid rgba(60,74,39,.12);
+    direction:ltr;text-align:center;
+    font-size:.82rem;line-height:1.65;color:#5d6250
+  }
+  .en b{color:var(--green);font-weight:700}
+  /* left to itself this is browser-blue, which is the one colour on the page that
+     belongs to no part of the shop */
+  .en a{color:var(--green);font-weight:700;text-decoration:underline;text-underline-offset:3px}
+  @media (max-width:26rem){ .card{padding:2rem 1.2rem 1.7rem;border-radius:22px} }
+  @media (prefers-reduced-motion:reduce){ *{transition:none!important} }
+</style>
+</head>
+<body>
+  <main class="card">
+    <svg class="sprig" width="104" height="70" viewBox="0 0 108 72" fill="none" aria-hidden="true">
+      <path d="M54 70C54 54 54 34 54 9" stroke="#6f7c4e" stroke-width="1.9" stroke-linecap="round"/>
+      <ellipse cx="40" cy="52" rx="12.5" ry="5.6" transform="rotate(-27 40 52)" fill="#3c4a27" opacity=".93"/>
+      <ellipse cx="68" cy="45" rx="12.5" ry="5.6" transform="rotate(27 68 45)" fill="#3c4a27" opacity=".93"/>
+      <ellipse cx="42" cy="34" rx="11" ry="5" transform="rotate(-32 42 34)" fill="#56643a" opacity=".92"/>
+      <ellipse cx="66" cy="27" rx="11" ry="5" transform="rotate(32 66 27)" fill="#56643a" opacity=".92"/>
+      <ellipse cx="54" cy="13" rx="5" ry="8.5" fill="#6f7c4e" opacity=".9"/>
+      <circle cx="47" cy="60" r="3.9" fill="#b8902f"/>
+      <circle cx="61" cy="56" r="3.2" fill="#cda94f"/>
+    </svg>
+
+    <p class="brand"><span class="g">دكّان</span> كنعان</p>
+
+    <div class="rule" aria-hidden="true"><i></i><b></b><i></i></div>
+
+    <span class="eyebrow">إغلاقٌ مؤقّت</span>
+    <h1>أغلقنا الدكّان قليلًا</h1>
+    <p class="lede">
+      نأخذ استراحةً قصيرة، ونعود بدكّانٍ أجمل وبضاعةٍ أطيب.
+      شكرًا لصبركم — ونحن نشتاق إليكم من الآن.
+    </p>
+
+    <div class="when">
+      <!-- Not «نفتح أبوابنا»: there are no doors. This is a website, and a phrase
+           borrowed from a shop with a shutter reads as someone else's words. -->
+      <span class="lbl">موعد عودتنا</span>
+      <span class="val">الثلاثاء ٣ نوفمبر ٢٠٢٦</span>
+      <span class="left" id="left"></span>
+    </div>
+
+    <a class="wa" href="https://wa.me/971522981187?text=%D9%85%D8%B1%D8%AD%D8%A8%D9%8B%D8%A7%D8%8C%20%D8%A3%D8%B3%D8%A3%D9%84%20%D8%B9%D9%86%20%D8%B7%D9%84%D8%A8%D9%8A">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.46 1.32 4.96L2 22l5.25-1.38a9.9 9.9 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2Zm0 18.15h-.01a8.2 8.2 0 0 1-4.19-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.17 8.17 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.25-8.24 2.2 0 4.27.86 5.83 2.42a8.19 8.19 0 0 1 2.41 5.83c0 4.54-3.7 8.23-8.24 8.23Zm4.52-6.16c-.25-.12-1.47-.72-1.69-.81-.23-.08-.39-.12-.56.13-.16.24-.64.8-.78.97-.14.16-.29.18-.54.06-.25-.13-1.05-.39-1.99-1.23-.74-.66-1.23-1.47-1.38-1.72-.14-.25-.01-.38.11-.5.11-.11.25-.29.37-.43.13-.15.17-.25.25-.41.08-.17.04-.31-.02-.43-.06-.12-.56-1.34-.76-1.84-.2-.48-.4-.42-.56-.43h-.48c-.16 0-.43.06-.65.31-.22.25-.85.83-.85 2.03s.87 2.35.99 2.51c.12.17 1.71 2.61 4.14 3.66.58.25 1.03.4 1.38.51.58.19 1.11.16 1.53.1.47-.07 1.47-.6 1.67-1.18.21-.58.21-1.07.15-1.18-.06-.1-.22-.16-.47-.28Z"/></svg>
+      راسلونا على واتساب
+    </a>
+    <p class="wa-note">لأيّ سؤالٍ عن طلبٍ سابق — نحن هنا.</p>
+
+    <p class="links">
+      <a href="https://instagram.com/dukkan_kanaan">إنستغرام</a>
+      <span aria-hidden="true">·</span>
+      <a href="mailto:dukkan.kanaan@gmail.com">البريد</a>
+    </p>
+
+    <div class="en">
+      <b>Dukkan Kanaan is closed for a short break.</b><br>
+      We reopen on Tuesday 3 November 2026. For anything urgent —
+      including a question about an order you already placed —
+      message us on <a href="https://wa.me/971522981187">WhatsApp</a>.
+    </div>
+  </main>
+
+<script>
+  // The shop's own clock, not the visitor's — the same Asia/Dubai the server counts
+  // its days in. Someone reading this in London must not be told we open a day late.
+  var OPENS = new Date('2026-11-03T00:00:00+04:00');
+  var AR = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+  function arabic(n){ return String(n).replace(/\d/g, function (d) { return AR[+d] }) }
+
+  function wordFor(days){
+    if (days === 1) return 'بقي يومٌ واحد';
+    if (days === 2) return 'بقي يومان';
+    if (days <= 10) return 'بقيت ' + arabic(days) + ' أيّام';
+    return 'بقي ' + arabic(days) + ' يومًا';
+  }
+
+  function tick(){
+    var ms = OPENS - new Date();
+    var el = document.getElementById('left');
+    if (ms <= 0) {
+      // The hour has come but this page is still being served, so the switch that
+      // lifts it hasn't run yet (it checks every hour). Keep looking, quietly, so
+      // whoever is sitting here lands on the shop rather than on a stale promise.
+      el.textContent = 'نعود اليوم — لحظاتٍ من فضلكم';
+      return true;
+    }
+    el.textContent = wordFor(Math.ceil(ms / 86400000));
+    return false;
+  }
+
+  if (tick()) setInterval(function(){ location.reload() }, 300000);
+</script>
+</body>
+</html>

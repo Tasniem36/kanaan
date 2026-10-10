@@ -256,6 +256,59 @@ on top of it. Every settle and release it makes is recorded in the activity
 log, so **السجلّات** in the manager area shows which payments the sweep caught rather
 than the customer's browser (the row says `by: sweep`).
 
+## Closing the shop for a while
+
+Puts a pause screen in front of every visitor — the shop's own branding, the date
+you reopen, and a WhatsApp button. On the server:
+
+```bash
+cd $HOME/app
+./scripts/pause.sh on 2026-11-03     # close, reopening on that date
+./scripts/pause.sh status            # which it currently is
+./scripts/pause.sh off               # open again, now
+```
+
+The switch is the file `pause/ON`; Caddy checks for it on every request, so both
+directions take effect on the next page load — no restart, no rebuild, no deploy.
+If anything looks wrong, `off` is the whole recovery. The file is deliberately not
+in git: committed, it would close the shop on every machine that deployed, and a
+`git pull` would put the screen back up after you had taken it down.
+
+The screen answers with **503**, not 200, which tells Google the closure is
+temporary and to come back on the date in the `Retry-After` header. A shop that
+serves a cheerful 200 instead can spend weeks afterwards being ranked on the words
+"we are closed".
+
+**What keeps running while it is closed.** The `api` and `db` containers are
+untouched — only the public door is shut. So `reconcile.py` still settles payments
+that were already in flight, releases the stock they reserved, and sends customers
+their confirmations. **Leave that cron entry alone while the shop is closed**: it is
+the reason a closed shop still finishes the orders it had already taken. Without it,
+someone who paid the hour before you closed is charged and never confirmed.
+
+**What does not.** Everything public, including order tracking and `/manager`. To
+get at the shop while it is closed, run `./scripts/pause.sh off`, do what you need,
+and switch it back on. To read the database without opening the door at all, see
+the `psql` command under Troubleshooting.
+
+### Reopening by itself
+
+One line, run hourly, which does nothing until the date arrives:
+
+```bash
+crontab -e
+```
+
+```
+0 * * * * cd $HOME/app && ./scripts/pause.sh due >> $HOME/pause.log 2>&1
+```
+
+The date is compared in **Asia/Dubai**, the shop's own clock, not the server's UTC —
+so a shop told to open on 3 November opens at Dubai midnight, not four hours late.
+The job is silent until the day comes, so `pause.log` ends up holding one line: the
+moment the shop reopened. Harmless to leave in place afterwards (it fires each year
+and finds nothing to do), but tidier to remove once you are back.
+
 ## Updating later
 ```bash
 # on your Mac: commit + push changes
