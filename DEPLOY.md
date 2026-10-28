@@ -263,7 +263,7 @@ you reopen, and a WhatsApp button. On the server:
 
 ```bash
 cd $HOME/app
-./scripts/pause.sh on 2026-11-03     # close, reopening on that date
+./scripts/pause.sh on 2026-12-10     # close, reopening on that date
 ./scripts/pause.sh status            # which it currently is
 ./scripts/pause.sh off               # open again, now
 ```
@@ -304,7 +304,7 @@ crontab -e
 ```
 
 The date is compared in **Asia/Dubai**, the shop's own clock, not the server's UTC —
-so a shop told to open on 3 November opens at Dubai midnight, not four hours late.
+so a shop told to open on 10 December opens at Dubai midnight, not four hours late.
 The job is silent until the day comes, so `pause.log` ends up holding one line: the
 moment the shop reopened. Harmless to leave in place afterwards (it fires each year
 and finds nothing to do), but tidier to remove once you are back.

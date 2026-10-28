@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Close the shop behind the pause screen, and open it again.
 #
-#   ./scripts/pause.sh on 2026-11-03   # close now, reopening on that date
+#   ./scripts/pause.sh on 2026-12-10   # close now, reopening on that date
 #   ./scripts/pause.sh off             # open now
 #   ./scripts/pause.sh status          # which it currently is
 #   ./scripts/pause.sh due             # open if the date has arrived (for cron)
